@@ -1,0 +1,45 @@
+# BC Transportation Forms - Python Dependencies
+# Python 3.12 LTS
+
+# Web Framework
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+pydantic>=2.4.0
+pydantic-settings>=2.0.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+alembic>=1.12.0
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.5
+PyJWT>=2.8.0
+cryptography>=41.0.0
+python-keycloak>=3.8.0
+
+# Azure AD / OIDC (Phase 2 - User lookup only, not authentication)
+azure-identity>=1.13.0
+msal>=1.24.0
+
+# AWS S3
+boto3>=1.26.0
+
+# Environment Variables
+python-dotenv>=1.0.0
+
+# Logging
+structlog>=23.1.0
+
+# Validation & Serialization
+pydantic-extra-types>=2.1.0
+
+# HTTP Client
+httpx>=0.24.0
+requests>=2.31.0
+
+# Utilities
+pytz>=2023.3
+python-dateutil>=2.8.2

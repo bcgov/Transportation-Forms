@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Transportation Form - BC Gov</title>
+    
+    <!-- BC Gov Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    
+    <style>
+        /* BC Gov color scheme */
+        :root {
+            --bc-blue: #003366;
+            --bc-blue-light: #38598a;
+            --bc-gold: #fcba19;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+        }
+        
+        .bc-header {
+            background-color: var(--bc-blue);
+            color: white;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        .bc-header h1 {
+            font-size: 1.5rem;
+            margin: 0;
+        }
+        
+        .form-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 900px;
+            margin: 0 auto 2rem;
+        }
+        
+        .btn-bc-primary {
+            background-color: var(--bc-blue);
+            border-color: var(--bc-blue);
+            color: white;
+        }
+        
+        .btn-bc-primary:hover {
+            background-color: var(--bc-blue-light);
+            border-color: var(--bc-blue-light);
+            color: white;
+        }
+        
+        .btn-bc-secondary {
+            background-color: white;
+            border-color: var(--bc-blue);
+            color: var(--bc-blue);
+        }
+        
+        .btn-bc-secondary:hover {
+            background-color: #f8f9fa;
+            border-color: var(--bc-blue-light);
+            color: var(--bc-blue-light);
+        }
+        
+        .form-label {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .required::after {
+            content: " *";
+            color: #dc3545;
+        }
+        
+        .help-text {
+            font-size: 0.875rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+        }
+        
+        .keyword-tag {
+            display: inline-block;
+            background-color: #e9ecef;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            margin: 0.25rem;
+            font-size: 0.875rem;
+        }
+        
+        .keyword-tag .remove {
+            margin-left: 0.5rem;
+            cursor: pointer;
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- BC Gov Header -->
+    <div class="bc-header">
+        <div class="container">
+            <h1>🚗 Transportation Forms Management</h1>
+            <p class="mb-0">Ministry of Transportation and Infrastructure</p>
+        </div>
+    </div>
+    
+    <!-- Main Form Container -->
+    <div class="container">
+        <div class="form-container">
+            <h2 class="mb-4">Create New Form</h2>
+            
+            <form id="formCreate">
+                <!-- Title -->
+                <div class="mb-3">
+                    <label for="title" class="form-label required">Form Title</label>
+                    <input type="text" class="form-control" id="title" name="title" 
+                           placeholder="Enter form title" required>
+                    <div class="help-text">
+                        Provide a clear, descriptive title for this form
+                    </div>
+                </div>
+                
+                <!-- Description -->
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" 
+                              rows="4" placeholder="Describe the purpose and usage of this form"></textarea>
+                    <div class="help-text">
+                        Optional: Detailed description of what this form is used for
+                    </div>
+                </div>
+                
+                <!-- Category -->
+                <div class="mb-3">
+                    <label for="category" class="form-label required">Category</label>
+                    <select class="form-select" id="category" name="category" required>
+                        <option value="">Select a category...</option>
+                        <option value="permits">Permits</option>
+                        <option value="licenses">Licenses</option>
+                        <option value="applications">Applications</option>
+                        <option value="transportation">Transportation</option>
+                        <option value="finance">Finance</option>
+                        <option value="compliance">Compliance</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <div class="help-text">
+                        Select the most appropriate category for this form
+                    </div>
+                </div>
+                
+                <!-- Business Areas -->
+                <div class="mb-3">
+                    <label for="businessAreas" class="form-label">Business Areas</label>
+                    <select class="form-select" id="businessAreas" name="businessAreas" multiple size="5">
+                        <option value="area1">Highway Operations</option>
+                        <option value="area2">Vehicle Licensing</option>
+                        <option value="area3">Road Safety</option>
+                        <option value="area4">Infrastructure Planning</option>
+                        <option value="area5">Commercial Transport</option>
+                        <option value="area6">Public Transit</option>
+                    </select>
+                    <div class="help-text">
+                        Hold Ctrl/Cmd to select multiple business areas
+                    </div>
+                </div>
+                
+                <!-- Keywords -->
+                <div class="mb-3">
+                    <label for="keywords" class="form-label">Keywords</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="keywordInput" 
+                               placeholder="Add keywords for search...">
+                        <button class="btn btn-bc-secondary" type="button" id="addKeyword">
+                            Add
+                        </button>
+                    </div>
+                    <div id="keywordTags" class="mt-2"></div>
+                    <div class="help-text">
+                        Add keywords to help users find this form in searches
+                    </div>
+                </div>
+                
+                <!-- Effective Date -->
+                <div class="mb-3">
+                    <label for="effectiveDate" class="form-label">Effective Date</label>
+                    <input type="date" class="form-control" id="effectiveDate" name="effectiveDate">
+                    <div class="help-text">
+                        Optional: Date when this form becomes active
+                    </div>
+                </div>
+                
+                <!-- Public Visibility -->
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="isPublic" name="isPublic">
+                        <label class="form-check-label" for="isPublic">
+                            <strong>Make this form publicly accessible</strong>
+                        </label>
+                    </div>
+                    <div class="help-text">
+                        Check this box if the form should be visible to the public
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="mt-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-bc-primary btn-lg px-4">
+                        ✓ Create Form
+                    </button>
+                    <button type="button" class="btn btn-bc-secondary btn-lg px-4" onclick="resetForm()">
+                        ↻ Reset
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-lg px-4 ms-auto" onclick="window.history.back()">
+                        ← Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- API Response Preview -->
+        <div class="form-container">
+            <h3>Form Data Preview</h3>
+            <pre id="dataPreview" class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">
+{
+  "title": "",
+  "description": "",
+  "category": "",
+  "is_public": false,
+  "keywords": [],
+  "business_area_ids": [],
+  "effective_date": null
+}
+            </pre>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Keywords management
+        const keywords = [];
+        
+        document.getElementById('addKeyword').addEventListener('click', function() {
+            const input = document.getElementById('keywordInput');
+            const keyword = input.value.trim();
+            
+            if (keyword && !keywords.includes(keyword)) {
+                keywords.push(keyword);
+                updateKeywordTags();
+                input.value = '';
+                updatePreview();
+            }
+        });
+        
+        document.getElementById('keywordInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('addKeyword').click();
+            }
+        });
+        
+        function updateKeywordTags() {
+            const container = document.getElementById('keywordTags');
+            container.innerHTML = keywords.map((kw, idx) => 
+                `<span class="keyword-tag">
+                    ${kw}
+                    <span class="remove" onclick="removeKeyword(${idx})">×</span>
+                </span>`
+            ).join('');
+        }
+        
+        function removeKeyword(index) {
+            keywords.splice(index, 1);
+            updateKeywordTags();
+            updatePreview();
+        }
+        
+        // Live preview
+        function updatePreview() {
+            const formData = {
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value,
+                category: document.getElementById('category').value,
+                is_public: document.getElementById('isPublic').checked,
+                keywords: keywords,
+                business_area_ids: Array.from(document.getElementById('businessAreas').selectedOptions)
+                    .map(opt => opt.value),
+                effective_date: document.getElementById('effectiveDate').value || null
+            };
+            
+            document.getElementById('dataPreview').textContent = 
+                JSON.stringify(formData, null, 2);
+        }
+        
+        // Update preview on any input change
+        document.querySelectorAll('input, select, textarea').forEach(elem => {
+            elem.addEventListener('input', updatePreview);
+            elem.addEventListener('change', updatePreview);
+        });
+        
+        // Form submission
+        document.getElementById('formCreate').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value,
+                category: document.getElementById('category').value,
+                is_public: document.getElementById('isPublic').checked,
+                keywords: keywords,
+                business_area_ids: Array.from(document.getElementById('businessAreas').selectedOptions)
+                    .map(opt => opt.value),
+                effective_date: document.getElementById('effectiveDate').value || null
+            };
+            
+            console.log('Form data to submit:', formData);
+            
+            // Show success message
+            alert('Form data ready to submit!\n\nIn production, this would POST to:\n/api/v1/forms\n\nSee console for data.');
+        });
+        
+        function resetForm() {
+            document.getElementById('formCreate').reset();
+            keywords.length = 0;
+            updateKeywordTags();
+            updatePreview();
+        }
+    </script>
+</body>
+</html>

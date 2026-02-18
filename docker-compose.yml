@@ -1,0 +1,47 @@
+services:
+  # FastAPI Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: transportation-forms-app
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://transportation:password@db:5432/transportation_forms
+      - SQLALCHEMY_ECHO=true
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend:/app/backend
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: sh /app/entrypoint.sh
+
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: transportation-forms-db
+    environment:
+      POSTGRES_USER: transportation
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: transportation_forms
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C -c password_encryption=md5"
+    ports:
+      - "6432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Removed problematic pg_hba.conf mount - PostgreSQL will use defaults
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transportation -d transportation_forms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
