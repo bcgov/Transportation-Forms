@@ -142,7 +142,7 @@ async def auth_callback(
         if not user:
             # Create new user
             user = User(
-                azure_id=keycloak_user_id,  # Store KeyCloak ID (will rename to external_id in Phase 2)
+                keycloak_id=keycloak_user_id,  # Store Keycloak user UUID
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
@@ -153,7 +153,7 @@ async def auth_callback(
             logger.info(f"Created new user: {email}")
         else:
             # Update existing user
-            user.azure_id = keycloak_user_id
+            user.keycloak_id = keycloak_user_id  # Update Keycloak ID
             user.first_name = first_name
             user.last_name = last_name
             logger.info(f"Updated existing user: {email}")

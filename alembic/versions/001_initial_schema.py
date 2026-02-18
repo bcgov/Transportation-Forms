@@ -24,7 +24,7 @@ def upgrade() -> None:
     op.create_table(
         'users',
         sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('azure_id', sa.String(255), nullable=False),
+        sa.Column('keycloak_id', sa.String(255), nullable=True),
         sa.Column('email', sa.String(255), nullable=False),
         sa.Column('first_name', sa.String(100), nullable=True),
         sa.Column('last_name', sa.String(100), nullable=True),
@@ -35,10 +35,10 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint("email LIKE '%@%'", name='valid_email'),
         sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('azure_id', name='uq_users_azure_id'),
+        sa.UniqueConstraint('keycloak_id', name='uq_users_keycloak_id'),
         sa.UniqueConstraint('email', name='uq_users_email'),
     )
-    op.create_index('ix_users_azure_id', 'users', ['azure_id'])
+    op.create_index('ix_users_keycloak_id', 'users', ['keycloak_id'])
     op.create_index('ix_users_email', 'users', ['email'])
     op.create_index('ix_users_is_active', 'users', ['is_active'])
     op.create_index('ix_users_deleted_at', 'users', ['deleted_at'])

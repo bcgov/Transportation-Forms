@@ -39,7 +39,7 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    azure_id = Column(String(255), unique=True, nullable=False, index=True)
+    keycloak_id = Column(String(255), unique=True, nullable=True, index=True)  # Keycloak user UUID
     email = Column(String(255), unique=True, nullable=False, index=True)
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
