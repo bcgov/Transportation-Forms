@@ -109,7 +109,7 @@ router = APIRouter(
 @router.post("", response_model=FormResponse, status_code=status.HTTP_201_CREATED)
 async def create_form(
     request: FormCreateRequest,
-    current_user: TokenData = Depends(lambda: __import__('backend.auth.dependencies', fromlist=['get_current_user']).get_current_user()),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """
@@ -185,7 +185,7 @@ async def get_form(
 async def update_form(
     form_id: str,
     request: FormUpdateRequest,
-    current_user: TokenData = Depends(lambda: __import__('backend.auth.dependencies', fromlist=['get_current_user']).get_current_user()),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """
@@ -243,7 +243,7 @@ async def update_form(
 @router.delete("/{form_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_form(
     form_id: str,
-    current_user: TokenData = Depends(lambda: __import__('backend.auth.dependencies', fromlist=['get_current_user']).get_current_user()),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
     """
@@ -325,7 +325,7 @@ async def list_forms(
 @router.post("/{form_id}/archive", response_model=FormResponse)
 async def archive_form(
     form_id: str,
-    current_user: TokenData = Depends(lambda: __import__('backend.auth.dependencies', fromlist=['get_current_user']).get_current_user()),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """Archive a form (mark as archived)."""
@@ -355,7 +355,7 @@ async def archive_form(
 @router.post("/{form_id}/unarchive", response_model=FormResponse)
 async def unarchive_form(
     form_id: str,
-    current_user: TokenData = Depends(lambda: __import__('backend.auth.dependencies', fromlist=['get_current_user']).get_current_user()),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """Unarchive a form (restore from archived status)."""

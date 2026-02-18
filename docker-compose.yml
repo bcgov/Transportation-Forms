@@ -22,6 +22,21 @@ services:
     restart: unless-stopped
     command: sh /app/entrypoint.sh
 
+  # Frontend Application
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: transportation-forms-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app/frontend
+    depends_on:
+      - app
+    restart: unless-stopped
+    command: python -m uvicorn frontend.app:app --host 0.0.0.0 --port 3000
+
   # PostgreSQL Database
   db:
     image: postgres:16-alpine

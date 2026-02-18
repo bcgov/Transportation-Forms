@@ -1,6 +1,7 @@
 """FastAPI dependencies for JWT authentication and authorization."""
 
 from typing import Optional
+import os
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer
 from fastapi.security.http import HTTPAuthorizationCredentials
@@ -22,6 +23,10 @@ security = HTTPBearer(
     auto_error=True
 )
 
+# Development mode - bypass authentication
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
+IS_DEVELOPMENT = ENVIRONMENT == "development"
+
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
@@ -39,6 +44,16 @@ async def get_current_user(
         HTTPException: 401 if token is invalid or missing
     """
     token = credentials.credentials
+    
+    # Development mode: allow demo token
+    if IS_DEVELOPMENT and token == "demo-token":
+        return TokenData(
+            sub="550e8400-e29b-41d4-a716-446655440000",  # Demo UUID
+            email="demo@example.com",
+            name="Demo User",
+            roles=["admin"],
+            token_type="access"
+        )
     
     try:
         token_data = jwt_handler.validate_token(token, token_type="access")
