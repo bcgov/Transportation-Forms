@@ -10,6 +10,8 @@ from fastapi.staticfiles import StaticFiles
 import structlog
 import os
 
+from backend.config import settings
+
 # Configure logging
 logger = structlog.get_logger()
 
@@ -20,20 +22,14 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS Configuration (from environment variables)
-origins = [
-    "http://localhost:8000",
-    "http://localhost:8080",
-    "http://localhost:3000",
-    "http://127.0.0.1:8000",
-    "http://127.0.0.1:3000",
-]
+# CORS Configuration (driven by CORS_ORIGINS environment variable)
+origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -74,11 +70,42 @@ async def serve_frontend():
     )
 
 
-# Include API routes
-from backend.routes import auth, forms
+# Include API routes FIRST (before catch-all)
+from backend.routes import auth, forms, business_areas
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(forms.router, prefix="/api/v1")
+app.include_router(business_areas.router, prefix="/api/v1")
+
+
+@app.get("/{path:path}")
+async def serve_frontend_paths(path: str):
+    """Catch-all route to serve frontend for SPA routing"""
+    # Check if this is an API route
+    if path.startswith("api/"):
+        return JSONResponse(
+            status_code=404,
+            content={"message": "API endpoint not found"}
+        )
+    
+    # Check if this is a static file request
+    if "." in path and path.split(".")[-1] in ["js", "css", "png", "jpg", "gif", "svg", "font", "woff", "woff2", "ttf", "eot"]:
+        static_path = os.path.join(frontend_dir, path)
+        if os.path.exists(static_path):
+            return FileResponse(static_path)
+        return JSONResponse(
+            status_code=404,
+            content={"message": "Static file not found"}
+        )
+    
+    # Serve frontend index.html for all other routes (SPA routing)
+    index_path = os.path.join(frontend_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return JSONResponse(
+        status_code=404,
+        content={"message": "Frontend not found"}
+    )
 
 
 if __name__ == "__main__":

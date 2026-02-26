@@ -7,14 +7,15 @@ error handling, and authorization checks.
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, status, Depends, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, status, Depends, Query, UploadFile, File
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
 from backend.services.forms import FormService
+from backend.services import minio_service
 from backend.models import Form
 
 # ============================================================================
@@ -30,12 +31,37 @@ class BusinessAreaRef(BaseModel):
 class FormCreateRequest(BaseModel):
     """Request model for creating a form."""
     title: str = Field(..., min_length=1, max_length=255, description="Form title")
-    description: Optional[str] = Field(None, max_length=2000, description="Form description")
+    description: str = Field(..., min_length=1, max_length=2000, description="Form description (required)")
     category: str = Field(..., min_length=1, max_length=100, description="Form category")
     is_public: bool = Field(default=False, description="Whether form is publicly visible")
     keywords: Optional[List[str]] = Field(default=None, description="Search keywords")
     business_area_ids: Optional[List[str]] = Field(default=None, description="Associated business area IDs")
     effective_date: Optional[datetime] = Field(None, description="When form becomes effective")
+    # TASK-110C: new fields
+    version_number: Optional[int] = Field(None, ge=1, description="Form document version number; auto-incremented if omitted")
+    form_source: Optional[str] = Field(None, description="Form source type: 'URL' or 'Download'")
+    form_source_url: Optional[str] = Field(None, max_length=500, description="Source URL (required when form_source='URL')")
+    form_attachment_url: Optional[str] = Field(None, max_length=500, description="MinIO object URL (set after file upload when form_source='Download')")
+    form_attachment_filename: Optional[str] = Field(None, max_length=255, description="Original filename of the uploaded attachment")
+
+    @model_validator(mode="after")
+    def validate_form_source(self) -> "FormCreateRequest":
+        """Cross-field validation for form_source and its dependent fields."""
+        src = self.form_source
+        if src is not None:
+            src_upper = src.upper()
+            if src_upper not in ("URL", "DOWNLOAD"):
+                raise ValueError("form_source must be 'URL' or 'Download'")
+            # Normalise to canonical casing per spec: 'URL' or 'Download'
+            self.form_source = "URL" if src_upper == "URL" else "Download"
+            if src_upper == "URL" and not self.form_source_url:
+                raise ValueError("form_source_url is required when form_source is 'URL'")
+            if src_upper == "DOWNLOAD" and not self.form_attachment_url:
+                raise ValueError(
+                    "form_attachment_url is required when form_source is 'Download'. "
+                    "Upload the file first via POST /api/v1/uploads, then provide the returned URL."
+                )
+        return self
 
 
 class FormUpdateRequest(BaseModel):
@@ -62,6 +88,12 @@ class FormResponse(BaseModel):
     business_areas: List[BusinessAreaRef]
     created_by: Dict[str, str]
     effective_date: Optional[str]
+    # TASK-110C: new fields
+    version_number: Optional[int]
+    form_source: Optional[str]
+    form_source_url: Optional[str]
+    form_attachment_url: Optional[str]
+    form_attachment_filename: Optional[str]
     created_at: str
     updated_at: str
     
@@ -103,6 +135,55 @@ router = APIRouter(
 
 
 # ============================================================================
+# FILE UPLOAD ENDPOINT (TASK-110C)
+# ============================================================================
+
+class FileUploadResponse(BaseModel):
+    """Response returned after a successful file upload to MinIO."""
+    url: str
+    filename: str
+    object_key: str
+
+
+@router.post("/upload", response_model=FileUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_form_attachment(
+    file: UploadFile = File(..., description="Form attachment file to upload"),
+    current_user: TokenData = Depends(get_current_user),
+) -> FileUploadResponse:
+    """
+    Upload a form attachment file to MinIO and return its public URL.
+
+    Call this endpoint **before** creating the form when form_source is 'Download'.
+    Use the returned `url` as the `form_attachment_url` in the create-form request.
+
+    - **file**: The file to upload (PDF, DOCX, etc.)
+    """
+    # Read file bytes
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty"
+        )
+
+    content_type = file.content_type or "application/octet-stream"
+    original_filename = file.filename or "attachment"
+
+    try:
+        object_key, public_url = minio_service.upload_file(
+            file_bytes=file_bytes,
+            original_filename=original_filename,
+            content_type=content_type,
+        )
+        return FileUploadResponse(url=public_url, filename=original_filename, object_key=object_key)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"File upload failed: {exc}"
+        )
+
+
+# ============================================================================
 # CRUD ENDPOINTS
 # ============================================================================
 
@@ -139,6 +220,11 @@ async def create_form(
             business_area_ids=business_area_ids,
             created_by_id=UUID(current_user.sub),
             effective_date=request.effective_date,
+            version_number=request.version_number,
+            form_source=request.form_source,
+            form_source_url=request.form_source_url,
+            form_attachment_url=request.form_attachment_url,
+            form_attachment_filename=request.form_attachment_filename,
         )
         
         return FormResponse(**FormService.get_form_with_details(db, form.id))

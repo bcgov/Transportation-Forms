@@ -12,12 +12,22 @@ services:
       - DATABASE_URL=postgresql://transportation:password@db:5432/transportation_forms
       - SQLALCHEMY_ECHO=true
       - LOG_LEVEL=INFO
+      # CORS - comma-separated list of allowed origins
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8000,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8000
+      # MinIO (local file storage)
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=form-attachments
+      - MINIO_PUBLIC_URL=http://localhost:9000
     volumes:
       - ./backend:/app/backend
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
     depends_on:
       db:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     restart: unless-stopped
     command: sh /app/entrypoint.sh
@@ -58,5 +68,26 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # MinIO - S3-compatible local file storage (TASK-110C)
+  minio:
+    image: minio/minio:latest
+    container_name: transportation-forms-minio
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # MinIO Console (admin UI)
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  minio_data:

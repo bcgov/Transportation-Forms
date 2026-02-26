@@ -26,6 +26,7 @@ RUN pip install --upgrade pip setuptools wheel && \
 
 # Copy application code
 COPY backend/ ./backend/
+COPY frontend/ ./frontend/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
 COPY entrypoint.sh .

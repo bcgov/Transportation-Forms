@@ -1,0 +1,101 @@
+# Backend FastAPI application for Transportation Forms
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  namespace: transportation-forms
+  labels:
+    app: transportation-forms-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transportation-forms-app
+  template:
+    metadata:
+      labels:
+        app: transportation-forms-app
+    spec:
+      initContainers:
+        - name: wait-for-db
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h transportation-forms-db -U transportation -d transportation_forms; do
+                echo "Waiting for PostgreSQL..."; sleep 3;
+              done
+      containers:
+        - name: app
+          image: transportation-forms-app:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          env:
+            - name: ENVIRONMENT
+              value: "development"
+            - name: DATABASE_URL
+              value: "postgresql://transportation:password@transportation-forms-db:5432/transportation_forms"
+            - name: SQLALCHEMY_ECHO
+              value: "false"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: CORS_ORIGINS
+              value: "http://localhost:30300,http://localhost:30800,http://127.0.0.1:30300,http://127.0.0.1:30800"
+            - name: MINIO_ENDPOINT
+              value: "http://transportation-forms-minio:9000"
+            - name: MINIO_ACCESS_KEY
+              value: "minioadmin"
+            - name: MINIO_SECRET_KEY
+              value: "minioadmin"
+            - name: MINIO_BUCKET
+              value: "form-attachments"
+            - name: MINIO_PUBLIC_URL
+              value: "http://localhost:30900"
+          command:
+            - sh
+            - /app/entrypoint.sh
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transportation-forms-app
+  namespace: transportation-forms
+spec:
+  selector:
+    app: transportation-forms-app
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-nodeport
+  namespace: transportation-forms
+spec:
+  selector:
+    app: transportation-forms-app
+  type: NodePort
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30800

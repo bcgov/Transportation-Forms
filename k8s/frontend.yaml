@@ -1,0 +1,78 @@
+# Frontend FastAPI application for Transportation Forms
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: transportation-forms
+  labels:
+    app: transportation-forms-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transportation-forms-frontend
+  template:
+    metadata:
+      labels:
+        app: transportation-forms-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: transportation-forms-app:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
+          command:
+            - python
+            - -m
+            - uvicorn
+            - frontend.app:app
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "3000"
+          env:
+            - name: BACKEND_URL
+              value: "http://transportation-forms-app:8000"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transportation-forms-frontend
+  namespace: transportation-forms
+spec:
+  selector:
+    app: transportation-forms-frontend
+  ports:
+    - port: 3000
+      targetPort: 3000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-nodeport
+  namespace: transportation-forms
+spec:
+  selector:
+    app: transportation-forms-frontend
+  type: NodePort
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30300

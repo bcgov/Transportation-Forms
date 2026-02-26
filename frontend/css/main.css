@@ -1,0 +1,213 @@
+/* ==========================================================================
+   BC Government Transportation Forms - Main Stylesheet
+   Shared across all pages for consistent UI
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Variables
+   -------------------------------------------------------------------------- */
+:root {
+    --bc-blue: #003366;
+    --bc-blue-light: #38598a;
+    --bc-gold: #fcba19;
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+body {
+    background-color: #f8f9fa;
+}
+
+/* --------------------------------------------------------------------------
+   BC Gov Header
+   -------------------------------------------------------------------------- */
+.bc-header {
+    background-color: var(--bc-blue);
+    color: white;
+    padding: 1.5rem 0;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+}
+
+.bc-header-logo {
+    height: 60px;
+    margin-right: 2rem;
+    flex-shrink: 0;
+}
+
+.bc-header .container {
+    display: flex;
+    align-items: center;
+}
+
+.bc-header-content {
+    flex: 1;
+}
+
+.bc-header h1 {
+    font-size: 1.8rem;
+    margin: 0;
+}
+
+.bc-header p {
+    margin: 0.25rem 0 0 0;
+    opacity: 0.9;
+}
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+.btn-bc-primary {
+    background-color: var(--bc-blue);
+    border-color: var(--bc-blue);
+    color: white;
+}
+
+.btn-bc-primary:hover {
+    background-color: var(--bc-blue-light);
+    border-color: var(--bc-blue-light);
+    color: white;
+}
+
+.btn-bc-secondary {
+    background-color: white;
+    border-color: var(--bc-blue);
+    color: var(--bc-blue);
+}
+
+.btn-bc-secondary:hover {
+    background-color: #f8f9fa;
+    border-color: var(--bc-blue-light);
+    color: var(--bc-blue-light);
+}
+
+/* --------------------------------------------------------------------------
+   Navigation
+   -------------------------------------------------------------------------- */
+.nav-link {
+    color: var(--bc-blue) !important;
+    font-weight: 500;
+}
+
+.nav-link:hover {
+    color: var(--bc-blue-light) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Cards
+   -------------------------------------------------------------------------- */
+.card {
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid var(--bc-blue);
+}
+
+/* --------------------------------------------------------------------------
+   Badges
+   -------------------------------------------------------------------------- */
+.badge-status {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+}
+
+/* --------------------------------------------------------------------------
+   Alerts
+   -------------------------------------------------------------------------- */
+.alert-container {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    z-index: 9999;
+    max-width: 500px;
+}
+
+/* --------------------------------------------------------------------------
+   Spinner / Loading
+   -------------------------------------------------------------------------- */
+.spinner-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 3rem;
+}
+
+/* --------------------------------------------------------------------------
+   Empty State
+   -------------------------------------------------------------------------- */
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: #6c757d;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* --------------------------------------------------------------------------
+   Drag and Drop
+   -------------------------------------------------------------------------- */
+#dropZone.drag-over {
+    background: #e8f0fe !important;
+    border-color: var(--bc-blue-light) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Form Container (form pages)
+   -------------------------------------------------------------------------- */
+.form-container {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    max-width: 900px;
+    margin: 0 auto 2rem;
+}
+
+/* --------------------------------------------------------------------------
+   Form Elements
+   -------------------------------------------------------------------------- */
+.form-label {
+    font-weight: 600;
+    color: #333;
+}
+
+.required::after {
+    content: " *";
+    color: #dc3545;
+}
+
+.help-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+/* --------------------------------------------------------------------------
+   Keyword Tags
+   -------------------------------------------------------------------------- */
+.keyword-tag {
+    display: inline-block;
+    background-color: #e9ecef;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    margin: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.keyword-tag .remove {
+    margin-left: 0.5rem;
+    cursor: pointer;
+    color: #dc3545;
+    font-weight: bold;
+}
