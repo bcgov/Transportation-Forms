@@ -119,6 +119,7 @@ class BusinessArea(Base):
     
     # Relationships
     form_business_areas = relationship("FormBusinessArea", back_populates="business_area", cascade="all, delete-orphan")
+    contacts = relationship("BusinessAreaContact", back_populates="business_area", cascade="all, delete-orphan")
 
 
 # ============================================================================
@@ -139,6 +140,12 @@ class Form(Base):
     embedding = Column(String, nullable=True)  # Semantic embedding (vector)
     created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     effective_date = Column(DateTime, nullable=True)
+    # TASK-110C: Form creation enhancement fields
+    version_number = Column(Integer, default=1, nullable=True)  # User-visible form document version
+    form_source = Column(String(50), nullable=True)              # 'URL' or 'Download'
+    form_source_url = Column(String(500), nullable=True)         # URL when form_source == 'URL'
+    form_attachment_url = Column(String(500), nullable=True)     # MinIO object URL when form_source == 'Download'
+    form_attachment_filename = Column(String(255), nullable=True)  # Original uploaded filename
     deleted_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -156,6 +163,23 @@ class Form(Base):
         Index('idx_forms_category', 'category'),
         Index('idx_forms_created_by', 'created_by_id'),
     )
+
+
+# ============================================================================
+# TASK-110C TABLE: business_area_contacts (Junction Table)
+# Supports future contact-person management per business area (FR-ADMIN-014+)
+# ============================================================================
+class BusinessAreaContact(Base):
+    __tablename__ = "business_area_contacts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    business_area_id = Column(UUID(as_uuid=True), ForeignKey("business_areas.id", ondelete="CASCADE"), nullable=False, index=True)
+    contact_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+    # Relationships
+    business_area = relationship("BusinessArea", back_populates="contacts")
+    contact_user = relationship("User", foreign_keys=[contact_user_id])
 
 
 # ============================================================================

@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_S3_BUCKET: Optional[str] = None
     AWS_REGION: str = "us-west-2"
+
+    # MinIO (local development file storage, S3-compatible)
+    MINIO_ENDPOINT: str = "http://minio:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_BUCKET: str = "form-attachments"
+    MINIO_PUBLIC_URL: str = "http://localhost:9000"  # URL accessible from browser
     
     # Feature Flags
     ENABLE_SEMANTIC_SEARCH: bool = True

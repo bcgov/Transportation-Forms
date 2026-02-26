@@ -567,6 +567,249 @@
 - **Dependencies:** TASK-105, TASK-109
 - **PR Title:** "api: implement form service with crud operations and bc gov bootstrap ui"
 
+#### TASK-110-FIX: Frontend URL-Based Routing (Session Fix)
+- **Status:** COMPLETED ✅
+- **Priority:** P0
+- **Effort:** 3pt
+- **Assigned To:** AI Code Agent
+- **Completed:** February 18, 2026
+- **Description:** Fix form state persistence issue - make frontend dynamic with URL-based routing instead of SPA DOM manipulation
+- **Problem discovered:** After deleting a form, when clicking "Create Form", old values of the deleted form appeared in the form fields due to the HTML form preserving state through hidden/shown DOM elements.
+- **Solution:** Implement URL-based routing using native browser History API without introducing new libraries
+- **Implementation Details:**
+  - **Routes Implemented:**
+    - `/` - List view (manage forms)
+    - `/create` - Create new form view  
+    - `/edit/{formId}` - Edit existing form view
+  - **Browser APIs Used:**
+    - `window.history.pushState()` - Navigate to new URL
+    - `window.history.replaceState()` - Replace current URL
+    - `popstate` event listener - Handle browser back/forward buttons
+    - `window.location.pathname` - Parse current route
+  - **State Management:**
+    - Route becomes source of truth for view state
+    - Fresh form state initialization on route change
+    - `resetFormState()` function clears all form fields when navigating to `/create`
+    - Edit view properly resets before loading form data
+- **Frontend Changes (`frontend/index.html`):**
+  - [x] Added routing state variables (`currentRoute`, `routeParams`)
+  - [x] Implemented `routeHandler()` for URL-based view switching
+  - [x] Implemented `navigateTo()` helper for navigation
+  - [x] Updated all view functions with proper state management
+  - [x] Enhanced form reset on navigation
+  - [x] Dynamic page title updates based on route
+  - [x] Updated navigation links to use `navigateTo()` instead of direct view functions
+  - [x] Form delete/submit operations navigate back to `/` after completion
+- **Backend Changes (`backend/main.py`):**
+  - [x] Added catch-all route handler to support SPA routing
+  - [x] Distinguishes between API calls, static files, and frontend routes
+  - [x] Serves `index.html` for all non-API routes
+  - [x] Maintains backward compatibility with existing API
+- **Test Scenarios Verified:**
+  - [x] Create → List → Delete → Create: No stale form data appears
+  - [x] Browser back/forward buttons work correctly
+  - [x] Edit form loads correct data without stale values
+  - [x] Page title updates based on current view
+  - [x] Form reset on navigation removes all old values
+  - [x] URL can be bookmarked and shared (e.g., `/edit/{formId}`)
+- **Benefits:**
+  - ✅ No new libraries/frameworks required (pure JavaScript + native APIs)
+  - ✅ Cleaner state isolation between views
+  - ✅ Better user experience - no stale data
+  - ✅ Browser navigation intuitive and functional
+  - ✅ URLs are bookmarkable and shareable
+  - ✅ Backward compatible with existing functionality
+- **Quality Assurance:**
+  - ✅ All existing TASK-110 tests remain passing
+  - ✅ No breaking changes to API or existing features
+  - ✅ Code uses only browser-native APIs
+  - ✅ Progressive enhancement pattern maintained
+- **Deployment:**
+  - [x] Changes deployed via Docker container restart
+  - [x] No database migrations required
+  - [x] No new dependencies required
+- **Documentation:**
+  - [x] `ROUTING-IMPLEMENTATION.md` - Complete implementation guide
+  - [x] Test scenarios documented with expected behavior
+  - [x] Architecture explanation for future maintenance
+- **Dependencies:** TASK-110
+- **Related Issue:** Bug in TASK-110 implementation - form state not cleared on navigation
+
+#### TASK-110C: Form Creation Enhancement (Create Operation)
+- **Status:** COMPLETED
+- **Priority:** P1
+- **Effort:** 5pt
+- **Assigned To:** GitHub Copilot
+- **Completed Date:** 2026-02-19
+- **Description:** Enhance form creation functionality with advanced features including field validation, business area persistence, versioning, and file upload support via MinIO
+- **Backend Acceptance Criteria:**
+  - [x] POST /api/v1/forms - Enhanced endpoint to accept: version_number, form_source (URL or Download), form_attachment_url or form_attachment (file), business_areas array (IDs only)
+  - [x] Business Areas - Save form-to-business area relationship in database (forms_business_areas junction table)
+  - [x] Version Management - Accept version_number from frontend; auto-increment if not provided or if null
+  - [x] Form Attachment - Support file uploads via MinIO for local development
+  - [x] Form Source - Support two types: 'URL' (with URL field) or 'Download' (with file attachment)
+  - [x] Validation - Enforce required fields at API level with error messages
+  - [x] Database - Extend forms table with: version_number, form_source, form_source_url, form_attachment_url, form_attachment_filename
+  - [x] Database - Create business_areas table with columns: id (UUID), name, description, is_active, display_order, created_at, updated_at (already existed from TASK-110)
+  - [x] Database - Create business_area_contacts junction table for multiple contact persons per business area (id, business_area_id, contact_user_id, created_at)
+  - [x] Database - Create forms_business_areas junction table for many-to-many form-to-business-area relationship (already existed from TASK-110)
+- **Frontend Acceptance Criteria:**
+  - [x] Rename "Create Form" button/link to "Add New Form"
+  - [x] Description field - Make required with validation indicator
+  - [x] Business Areas - Display multi-select dropdown/checkboxes populated from business_areas table (read-only list, managed separately in admin panel)
+  - [x] Business Areas - When one or more selected, save selected business area IDs to database via API
+  - [x] Error Handling - Display validation errors under respective fields in red highlighting
+  - [x] Version Number - Add input field that auto-increments on each form creation; user can manually alter; shows next version on form load
+  - [x] Form Source - Add dropdown with options: "URL" and "Download"
+  - [x] Conditional URL Field - When "URL" selected, show URL input field (required when URL source selected)
+  - [x] Conditional Upload Section - When "Download" selected becomes a required field, show upload area supporting:
+    - [x] Click to select files from local system
+    - [x] Drag-drop files onto the section
+    - [x] Progress indicator during upload
+  - [x] MinIO Integration - Configure client-side file upload for local development
+  - [x] Visual Feedback - Show success message after form created with all new fields
+- **Infrastructure Requirements:**
+  - [x] MinIO setup in docker-compose.yml for local development file storage
+  - [x] MinIO access credentials configured in .env
+  - [x] S3-compatible boto3 client for file operations
+- **Schema Changes:**
+  - [x] ALTER TABLE forms ADD COLUMN version_number INT DEFAULT 1
+  - [x] ALTER TABLE forms ADD COLUMN form_source VARCHAR(50) (URL or Download)
+  - [x] ALTER TABLE forms ADD COLUMN form_source_url VARCHAR(500)
+  - [x] ALTER TABLE forms ADD COLUMN form_attachment_url VARCHAR(500)
+  - [x] ALTER TABLE forms ADD COLUMN form_attachment_filename VARCHAR(255)
+  - [x] CREATE TABLE business_areas (...) - already existed from initial schema
+  - [x] CREATE TABLE business_area_contacts (id UUID PRIMARY KEY, business_area_id UUID REFERENCES business_areas(id) ON DELETE CASCADE, contact_user_id UUID REFERENCES users(id) ON DELETE CASCADE, created_at TIMESTAMP DEFAULT NOW())
+  - [x] CREATE TABLE forms_business_areas (...) - already existed from initial schema
+  - [x] NOTE: Only create schema above - Business Area CRUD management (create, edit, deactivate, reorder) will be handled in a future Phase 1+ admin task per SPECIFICATION.md FR-ADMIN-014 through FR-ADMIN-018
+- **Deliverables:**
+  - [x] Backend: Enhanced `backend/services/forms.py` create_form() method
+  - [x] Backend: Enhanced `backend/routes/forms.py` POST endpoint + file upload endpoint (POST /api/v1/forms/upload)
+  - [x] Backend: Migration script `alembic/versions/002_task_110c_form_creation_enhancement.py`
+  - [x] Backend: MinIO client configuration `backend/services/minio_service.py`
+  - [x] Backend: New business areas read endpoint `backend/routes/business_areas.py`
+  - [x] Frontend: Updated create form UI with all new fields and conditional sections
+  - [x] Frontend: File upload handler with drag-drop support
+- **Testing Guide:**
+  - [ ] Create form with all new fields - verify data saved to database
+  - [ ] Create form with URL source - verify URL stored correctly
+  - [ ] Create form with Download source - upload file - verify file in MinIO, URL stored in database
+  - [ ] Validate description required - attempt create without description - verify error appears
+  - [ ] Validate URL required when source is URL - verify error if URL empty
+  - [ ] Business areas - select multiple - verify saved to junction table
+  - [ ] Version number - create form, check auto-increment, manually set version, create another, verify next increments correctly
+- **Dependencies:** TASK-110, TASK-110-FIX
+- **Notes:** 
+  - This task focuses on extending create operations with new capabilities without modifying existing completed functionality from TASK-110
+  - **Business Area Integration:** Business Areas schema is created to support future admin management (SPECIFICATION.md FR-ADMIN-014 through FR-ADMIN-018), allowing forms to be associated with business areas during creation
+  - **Preloaded Business Areas:** For form creation, assumes business_areas table is preloaded with default/seed business areas; future admin task will implement full CRUD for business area management
+  - **Frontend Business Areas Selection:** The UI allows selection/multi-select of business areas during form creation, but does not manage/create business areas itself
+  - **Business Area Contact Persons:** The business_area_contacts table supports future contact person management; not required during form creation (will be managed separately)
+
+#### TASK-110R: Form Read/View Enhancement (Read Operation)
+- **Status:** NOT_STARTED
+- **Priority:** P1
+- **Effort:** 3pt
+- **Assigned To:** To Be Assigned
+- **Description:** Implement advanced form view/read functionality to display all form details including newly added fields from TASK-110C
+- **Backend Acceptance Criteria:**
+  - [ ] GET /api/v1/forms/{id} - Return all fields including: version_number, form_source, form_source_url, form_attachment_url, form_attachment_filename, business_areas array
+  - [ ] Populate business_areas - Join with forms_business_areas and business_areas tables
+  - [ ] Include form metadata - Created by, created at, updated at, updated by
+- **Frontend Acceptance Criteria:**
+  - [ ] View Feature - On forms list page, clicking "View" opens modal window (existing or enhanced)
+  - [ ] Display New Fields - Modal shows all fields from TASK-110C:
+    - [ ] Version Number
+    - [ ] Form Source (type indicator)
+    - [ ] Form Source URL (clickable link if URL type)
+    - [ ] Form Attachment (download link if file type)
+    - [ ] Business Areas (list or tags display)
+    - [ ] Created by and date
+    - [ ] Updated by and date
+  - [ ] Form Metadata - Show audit information clearly
+  - [ ] Read-Only Display - All fields displayed in read-only format (no editing in view modal)
+  - [ ] Download Link - If form attached, provide download capability
+  - [ ] External Link - If URL source, provide link to external form
+  - [ ] Responsive - Modal responsive on all screen sizes
+- **Database Requirements:**
+  - [ ] GET query optimized to fetch all related data in minimal calls
+- **Deliverables:**
+  - Backend: Enhanced `GET /api/v1/forms/{id}` endpoint with new fields
+  - Backend: SQL query with necessary joins for business_areas
+  - Frontend: Enhanced view modal displaying all fields
+  - Frontend: Download handler for form attachments
+  - Frontend: Link generation for external forms
+- **Testing Guide:**
+  - [ ] Create form with all TASK-110C fields
+  - [ ] Open view modal - verify all new fields display correctly
+  - [ ] Verify business areas shown as list
+  - [ ] Test download link for attached files
+  - [ ] Test external link for URL-sourced forms
+  - [ ] Verify created by/updated by information displayed
+  - [ ] Test modal responsive on mobile/tablet
+- **Dependencies:** TASK-110, TASK-110C
+- **Notes:** This task focuses on read operations; no updates occur in view modal
+
+#### TASK-110U: Form Update Enhancement (Update Operation)
+- **Status:** NOT_STARTED
+- **Priority:** P1
+- **Effort:** 5pt
+- **Assigned To:** To Be Assigned
+- **Description:** Enhance form update functionality with version rollback, status tracking, audit logging, and form attachment management
+- **Backend Acceptance Criteria:**
+  - [ ] PUT /api/v1/forms/{id} - Enhanced endpoint accepting: all TASK-110C fields, status field, new business_areas
+  - [ ] Version Rollback - GET /api/v1/forms/{id}/versions - List form versions with snapshots
+  - [ ] Version Restore - POST /api/v1/forms/{id}/versions/{versionNumber}/restore - Rollback to previous version
+  - [ ] Status Field - Support statuses: Draft, Active, Archived, Deprecated
+  - [ ] Business Areas - Update many-to-many relationship (add/remove business areas)
+  - [ ] Form Attachment - Support updating/replacing attachment
+  - [ ] Attachment Removal - DELETE /api/v1/forms/{id}/attachment - Remove attached file
+  - [ ] Audit Logging - Log field changes with before/after values
+  - [ ] Updated By - Track which user made the update
+- **Frontend Acceptance Criteria:**
+  - [ ] Edit Form Page - Display all new fields from TASK-110C
+  - [ ] Version Rollback - Add "Version History" section showing all versions
+  - [ ] Rollback UI - For each version, show: version number, date, updated by, preview of major fields
+  - [ ] Rollback Button - Allow user to select and rollback to any previous version with confirmation
+  - [ ] Status Field - Dropdown: Draft, Active, Archived, Deprecated
+  - [ ] Status Indicator - Show current status prominently
+  - [ ] Business Areas - Display selected areas, ability to add/remove
+  - [ ] Audit Fields - Show "Last Updated by [User]" and timestamp
+  - [ ] Attachment Management - Display current attachment (if any)
+  - [ ] Remove Attachment - Button to delete currently attached file (with confirmation)
+  - [ ] Replace Attachment - Option to upload new file (removes old one)
+  - [ ] Update Feedback - Show success/error messages with what was changed
+- **Infrastructure Requirements:**
+  - [ ] Implement form versioning strategy (store snapshots or diffs)
+  - [ ] MinIO integration for new/replacement files
+- **Schema Changes:**
+  - [ ] CREATE TABLE form_versions (id, form_id, version_number, snapshot_data, created_by, created_at)
+  - [ ] ALTER TABLE forms ADD COLUMN status VARCHAR(50) DEFAULT 'Draft'
+  - [ ] ALTER TABLE forms ADD COLUMN updated_by UUID REFERENCES users(id)
+  - [ ] ALTER TABLE audit_logs - Enhance to track field-level changes
+- **Deliverables:**
+  - Backend: Enhanced `backend/services/forms.py` update_form() method with versioning
+  - Backend: New version management endpoints
+  - Backend: Version restore logic
+  - Backend: Attachment removal endpoint
+  - Frontend: Enhanced edit form UI with all new fields
+  - Frontend: Version history display component
+  - Frontend: Rollback confirmation modal
+  - Frontend: Attachment management UI
+  - Migration: Database schema updates for versioning and status
+- **Testing Guide:**
+  - [ ] Edit form - change multiple fields - verify all saved
+  - [ ] Change business areas - add/remove - verify junction table updated
+  - [ ] Upload new attachment - verify old one remove, new one stored
+  - [ ] View version history - verify all versions listed
+  - [ ] Rollback to previous version - verify form reverted correctly
+  - [ ] Check audit log - verify all changes logged with before/after values
+  - [ ] Test status field - change through all statuses - verify persisted
+  - [ ] Remove attachment - verify file deleted from MinIO and database cleared
+  - [ ] Verify updated_by shows correct user
+- **Dependencies:** TASK-110, TASK-110C, TASK-110R
+- **Notes:** This task focuses on update operations including rollback, status tracking, and comprehensive audit trails
+
 #### TASK-111: Search Service - Keyword Search
 - **Status:** NOT_STARTED
 - **Priority:** P0
@@ -1652,7 +1895,10 @@
 | TASK-107 | JWT Token Implementation | 3pt | 1 | ✅ COMPLETED |
 | TASK-108 | Azure AD Integration | 5pt | 1 | - |
 | TASK-109 | Authorization & RBAC | 3pt | 1 | - |
-| TASK-110 | Form Service - CRUD | 5pt | 1 | - |
+| TASK-110 | Form Service - CRUD | 5pt | 1 | ✅ COMPLETED |
+| TASK-110C | Form Create Enhancement | 5pt | 1 | - |
+| TASK-110R | Form Read/View Enhancement | 3pt | 1 | - |
+| TASK-110U | Form Update Enhancement | 5pt | 1 | - |
 | TASK-111 | Search Service - Keyword | 3pt | 1 | - |
 | TASK-112 | Search Service - Semantic | 5pt | 1 | - |
 | TASK-113 | S3 Service | 3pt | 1 | - |
