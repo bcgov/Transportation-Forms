@@ -5,7 +5,8 @@ All 10 core tables with UUID primary keys, soft-deletes, audit timestamps
 
 from sqlalchemy import (
     Column, String, Text, Boolean, DateTime, ForeignKey, 
-    Table, Integer, Index, UniqueConstraint, CheckConstraint, JSON
+    Table, Integer, Index, UniqueConstraint, CheckConstraint, JSON,
+    text as sa_text,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -335,4 +336,96 @@ class FormPreview(Base):
     __table_args__ = (
         Index('idx_form_previews_form_date', 'form_id', 'created_at'),
         Index('idx_form_previews_user_date', 'user_id', 'created_at'),
+    )
+
+
+# ============================================================================
+# TABLE 12: form_number_prefixes (TASK-401)
+# Admin-configurable prefix definitions with independent sequence counters
+# ============================================================================
+class FormNumberPrefix(Base):
+    __tablename__ = "form_number_prefixes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prefix = Column(String(10), unique=True, nullable=False, index=True)  # e.g., 'H', 'CVSE', 'INS'
+    description = Column(Text, nullable=True)
+    current_sequence = Column(Integer, nullable=False, default=0)  # Last issued sequential number
+    padding_length = Column(Integer, nullable=False, default=4)  # Zero-pad width (e.g., 4 → '0021')
+    max_number_length = Column(Integer, nullable=False, default=10)  # Max length for custom numbers
+    is_case_sensitive = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    reservations = relationship("FormNumberReservation", back_populates="prefix", cascade="all, delete-orphan")
+
+
+# ============================================================================
+# TABLE 13: form_number_reservations (TASK-403)
+# Stores every reserved form number, with status tracking and expiry
+# ============================================================================
+class FormNumberReservation(Base):
+    __tablename__ = "form_number_reservations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prefix_id = Column(UUID(as_uuid=True), ForeignKey("form_number_prefixes.id"), nullable=False, index=True)
+    form_number = Column(String(50), nullable=False)  # e.g., '0021', '0020A'
+    full_form_number = Column(String(70), nullable=False)  # e.g., 'H0021', 'H0020A'
+    numbering_method = Column(String(20), nullable=False)  # 'auto_generated' or 'custom'
+    custom_number_reason = Column(Text, nullable=True)  # Required when numbering_method = 'custom'
+    status = Column(
+        String(30), nullable=False, default="reserved"
+    )  # reserved, pending_approval, approved, rejected, changes_requested, released, expired
+    reserved_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    released_at = Column(DateTime, nullable=True)
+    released_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    prefix = relationship("FormNumberPrefix", back_populates="reservations")
+    reserved_by = relationship("User", foreign_keys=[reserved_by_id])
+    released_by = relationship("User", foreign_keys=[released_by_id])
+    approvers = relationship("FormReservationApprover", back_populates="reservation", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_fnr_full_form_number_active", "full_form_number", unique=True, postgresql_where=sa_text("deleted_at IS NULL AND status NOT IN ('released', 'expired')")),
+        Index("ix_fnr_status", "status"),
+        Index("ix_fnr_prefix_id", "prefix_id"),
+        Index("ix_fnr_reserved_by_id", "reserved_by_id"),
+        Index("ix_fnr_expires_at", "expires_at"),
+        CheckConstraint("numbering_method IN ('auto_generated', 'custom')", name="ck_fnr_numbering_method"),
+        CheckConstraint("status IN ('reserved', 'pending_approval', 'approved', 'rejected', 'changes_requested', 'released', 'expired')", name="ck_fnr_status"),
+    )
+
+
+# ============================================================================
+# TABLE 14: form_reservation_approvers (TASK-403)
+# Tracks individual approver decisions for form number reservations
+# ============================================================================
+class FormReservationApprover(Base):
+    __tablename__ = "form_reservation_approvers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    reservation_id = Column(UUID(as_uuid=True), ForeignKey("form_number_reservations.id", ondelete="CASCADE"), nullable=False, index=True)
+    approver_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    decision = Column(String(30), nullable=True)  # 'approved', 'rejected', 'changes_requested'
+    decision_reason = Column(Text, nullable=True)  # Mandatory when decision = 'rejected'
+    decision_comments = Column(Text, nullable=True)
+    decided_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+    # Relationships
+    reservation = relationship("FormNumberReservation", back_populates="approvers")
+    approver = relationship("User", foreign_keys=[approver_id])
+
+    __table_args__ = (
+        UniqueConstraint("reservation_id", "approver_id", name="uq_reservation_approver"),
     )

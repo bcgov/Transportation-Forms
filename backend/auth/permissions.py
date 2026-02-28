@@ -63,6 +63,16 @@ class Permission(str, Enum):
     AUDIT_LOG_EXPORT = "audit_log:export"
     REPORT_VIEW = "report:view"
     
+    # Form Number Reservation Permissions
+    RESERVATION_CREATE = "reservation:create"
+    RESERVATION_READ = "reservation:read"
+    RESERVATION_SUBMIT = "reservation:submit"
+    RESERVATION_APPROVE = "reservation:approve"
+    RESERVATION_REJECT = "reservation:reject"
+    RESERVATION_REQUEST_CHANGES = "reservation:request_changes"
+    RESERVATION_RELEASE = "reservation:release"
+    RESERVATION_ADMIN = "reservation:admin"
+
     # System Configuration Permissions
     SYSTEM_CONFIG = "system:config"
     SYSTEM_HEALTH = "system:health"
@@ -120,6 +130,16 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.AUDIT_LOG_EXPORT,
             Permission.REPORT_VIEW,
             
+            # All reservation permissions
+            Permission.RESERVATION_CREATE,
+            Permission.RESERVATION_READ,
+            Permission.RESERVATION_SUBMIT,
+            Permission.RESERVATION_APPROVE,
+            Permission.RESERVATION_REJECT,
+            Permission.RESERVATION_REQUEST_CHANGES,
+            Permission.RESERVATION_RELEASE,
+            Permission.RESERVATION_ADMIN,
+
             # System configuration
             Permission.SYSTEM_CONFIG,
             Permission.SYSTEM_HEALTH,
@@ -152,6 +172,15 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             # User management (limited)
             Permission.USER_READ,
             
+            # Reservation permissions (manager)
+            Permission.RESERVATION_CREATE,
+            Permission.RESERVATION_READ,
+            Permission.RESERVATION_SUBMIT,
+            Permission.RESERVATION_APPROVE,
+            Permission.RESERVATION_REJECT,
+            Permission.RESERVATION_REQUEST_CHANGES,
+            Permission.RESERVATION_RELEASE,
+
             # Audit log viewing
             Permission.AUDIT_LOG_VIEW,
             Permission.REPORT_VIEW,
@@ -173,6 +202,13 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             # Categories (read only)
             Permission.CATEGORY_READ,
             
+            # Reservation review permissions
+            Permission.RESERVATION_READ,
+            Permission.RESERVATION_APPROVE,
+            Permission.RESERVATION_REJECT,
+            Permission.RESERVATION_REQUEST_CHANGES,
+            Permission.RESERVATION_RELEASE,
+
             # Audit log viewing
             Permission.AUDIT_LOG_VIEW,
         ],
@@ -190,6 +226,11 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             
             # Categories (read only)
             Permission.CATEGORY_READ,
+
+            # Reservation basic permissions
+            Permission.RESERVATION_CREATE,
+            Permission.RESERVATION_READ,
+            Permission.RESERVATION_SUBMIT,
         ],
     },
 }
@@ -231,6 +272,15 @@ PERMISSION_GROUPS: Dict[str, List[Permission]] = {
         Permission.AUDIT_LOG_VIEW,
         Permission.AUDIT_LOG_EXPORT,
         Permission.REPORT_VIEW,
+    ],
+    "reservation_manage": [
+        Permission.RESERVATION_CREATE,
+        Permission.RESERVATION_READ,
+        Permission.RESERVATION_SUBMIT,
+        Permission.RESERVATION_APPROVE,
+        Permission.RESERVATION_REJECT,
+        Permission.RESERVATION_REQUEST_CHANGES,
+        Permission.RESERVATION_RELEASE,
     ],
 }
 
@@ -324,6 +374,16 @@ RESOURCE_ACTION_PERMISSIONS: Dict[str, Dict[str, str]] = {
     "system": {
         "config": Permission.SYSTEM_CONFIG,
         "health": Permission.SYSTEM_HEALTH,
+    },
+    "reservations": {
+        "create": Permission.RESERVATION_CREATE,
+        "read": Permission.RESERVATION_READ,
+        "submit": Permission.RESERVATION_SUBMIT,
+        "approve": Permission.RESERVATION_APPROVE,
+        "reject": Permission.RESERVATION_REJECT,
+        "request_changes": Permission.RESERVATION_REQUEST_CHANGES,
+        "release": Permission.RESERVATION_RELEASE,
+        "admin": Permission.RESERVATION_ADMIN,
     },
 }
 

@@ -72,7 +72,7 @@ Create a modern, single-page web application that serves as the centralized plat
 ### DevOps & CI/CD
 - **Version Control:** Git (GitHub)
 - **CI/CD Platform:** GitHub Actions
-- **Containerization:** Docker
+- **Containerization:** Rancher Desktop (Docker-compatible CLI)
 - **Orchestration:** Kubernetes (future scalability)
 - **Infrastructure:** Terraform or CloudFormation (IaC)
 

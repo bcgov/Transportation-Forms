@@ -171,7 +171,7 @@ This ensures all non-API routes serve the `index.html` file, allowing the fronte
 
 ## Deployment
 
-Simply restart the Docker container:
+Simply restart the container (via Rancher Desktop):
 ```bash
 docker-compose restart app
 ```

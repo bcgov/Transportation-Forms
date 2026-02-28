@@ -3,8 +3,8 @@
 ## Prerequisites
 
 - PostgreSQL 16 LTS running on localhost:5432
-- Docker & Docker Compose installed
-- Python 3.12 (for local development without Docker)
+- Rancher Desktop installed (provides Docker-compatible CLI and Docker Compose)
+- Python 3.12 (for local development without containers)
 - Git
 
 ## Step 1: Clone and Initial Setup
@@ -51,10 +51,10 @@ CORS_ALLOW_HEADERS=["*"]
 # ... rest of variables from .env.example
 ```
 
-## Step 3: Build Docker Image
+## Step 3: Build Container Image
 
 ```bash
-# Build the FastAPI container
+# Build the FastAPI container (Rancher Desktop provides docker CLI)
 docker build -t transportation-forms .
 
 # Verify build succeeded
@@ -67,7 +67,7 @@ docker images | grep transportation-forms
 # Option A: Using docker-compose (includes optional PostgreSQL)
 docker-compose up -d
 
-# Option B: Using Docker (connect to local PostgreSQL)
+# Option B: Using container (connect to local PostgreSQL)
 docker run -p 8000:8000 \
   --env-file .env \
   --network host \
@@ -185,10 +185,11 @@ alembic history --oneline
 - Check DATABASE_URL in .env file
 - Verify PostgreSQL is listening on localhost:5432
 
-### Docker Build Fails
+### Container Build Fails
 - Clear build cache: `docker build --no-cache -t transportation-forms .`
 - Check Python version: `docker run transportation-forms python --version`
 - View build logs: `docker build -t transportation-forms . 2>&1 | tee build.log`
+- Ensure Rancher Desktop is running with the dockerd (moby) container engine
 
 ### Migration Fails
 - Check database exists: `psql -U postgres -l | grep transportation_forms`
@@ -200,7 +201,7 @@ alembic history --oneline
 - Check PostgreSQL connection: `pytest backend/ -vvs --tb=short`
 - Clear pytest cache: `rm -rf .pytest_cache/ && pytest backend/`
 
-## Docker Compose Commands
+## Container Commands (via Rancher Desktop)
 
 ```bash
 # Start all services (app + optional PostgreSQL)
