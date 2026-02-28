@@ -6,7 +6,7 @@
 - **API Docs:** http://localhost:8000/docs
 - **Database:** localhost:6432
 
-## Docker Commands
+## Container Commands (Rancher Desktop)
 ```bash
 # View all containers
 docker-compose ps
@@ -104,7 +104,7 @@ docker exec -e DATABASE_URL='postgresql://transportation:password@localhost:6432
 - **API Routes:** `backend/routes/forms.py`
 - **Frontend UI:** `frontend/index.html`
 - **Tests:** `tests/test_forms.py`
-- **Docker Config:** `docker-compose.yml`
+- **Container Config:** `docker-compose.yml`
 - **Testing Guide:** `CRUD_TESTING_GUIDE.md`
 - **Summary:** `TASK-110-COMPLETION-SUMMARY.md`
 
@@ -113,7 +113,7 @@ docker exec -e DATABASE_URL='postgresql://transportation:password@localhost:6432
 ✅ Database persistence verified
 ✅ Frontend integrated with API
 ✅ 10/13 tests passing
-✅ Docker deployment running
+✅ Container deployment running (Rancher Desktop)
 
 ---
 **TASK-110 COMPLETE** ✨

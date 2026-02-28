@@ -23,6 +23,18 @@ async def root():
         return FileResponse(index_path)
     return {"message": "Frontend index.html not found"}
 
+@app.get("/create")
+@app.get("/reserve")
+@app.get("/approvals")
+@app.get("/my-reservations")
+@app.get("/edit/{form_id}")
+async def spa_routes(form_id: str = ""):
+    """Serve the SPA index page for client-side routes."""
+    index_path = os.path.join(frontend_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "Frontend index.html not found"}
+
 @app.get("/form-demo")
 async def form_demo():
     """Serve the form demo page."""

@@ -267,7 +267,7 @@ Versioned APIs           → /api/v1, /api/v2, etc.
 ### 3.7 CI/CD: GitHub Actions
 ```
 GitHub Actions           → Built-in CI/CD, no extra services
-Docker                   → Containerization for consistency
+Rancher Desktop          → Containerization for consistency (Docker-compatible CLI)
 Kubernetes (future)      → Container orchestration
 ```
 
@@ -329,7 +329,7 @@ Kubernetes (future)      → Container orchestration
 │     GitHub Actions CI/CD                            │
 │  Step 1: Lint & Test                                │
 │  Step 2: Security Scan                              │
-│  Step 3: Build Docker Image                         │
+│  Step 3: Build Container Image                      │
 │  Step 4: Push to Registry                           │
 │  Step 5: Deploy to DEV                              │
 │  Step 6: Deploy to TEST (manual)                    │
@@ -517,7 +517,7 @@ Kubernetes (future)      → Container orchestration
 | Indexing strategy | 2 days | P0 | 2 | Phase 1 |
 | Connection pooling | 1 day | P0 | 2 | Phase 1 |
 | S3 configuration | 2 days | P0 | 1 | Phase 1 |
-| Docker setup | 2 days | P0 | 1 | Phase 1 |
+| Rancher Desktop / container setup | 2 days | P0 | 1 | Phase 1 |
 | CI/CD pipeline | 4 days | P0 | 1-2 | Phase 1 |
 | DEV environment | 2 days | P0 | 8 | Phase 1 |
 | TEST environment | 2 days | P0 | 12 | Phase 3 |
@@ -563,7 +563,7 @@ Kubernetes (future)      → Container orchestration
 | AI Code Agent | Autonomous | 100% | Backend development, API implementation, database work |
 | AI Frontend Agent | Autonomous | 100% | Frontend development, UI/UX implementation, accessibility |
 | AI Test Agent | Autonomous | 100% | Unit tests, integration tests, E2E tests, coverage validation |
-| AI DevOps Agent | Autonomous | 100% | CI/CD, Docker, deployment, infrastructure, monitoring |
+| AI DevOps Agent | Autonomous | 100% | CI/CD, Rancher Desktop, deployment, infrastructure, monitoring |
 | User (Approver) | Human | As-needed | Code review, ADR approval, deployment authorization |
 | **Total** | **4 AI + 1 Human** | **Variable** | Complete application delivery |
 

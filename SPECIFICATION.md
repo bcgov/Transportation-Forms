@@ -51,7 +51,7 @@ All technology decisions align with [CONSTITUTION.md](CONSTITUTION.md) requireme
 - Frontend: jQuery, CSS/SCSS, Bootstrap 5
 - Backend: Python 3.12 LTS with FastAPI
 - Database: PostgreSQL 16 LTS
-- Storage: AWS S3 or compatible
+- Storage: S3 or compatible, use MinIO for local development
 - Authentication: KeyCloak OIDC (Phase 1), Azure AD user lookup (Phase 2), JWT tokens (RS256)
 - API Documentation: OpenAPI/Swagger
 
@@ -813,7 +813,7 @@ Response:
 
 #### Week 15: DevOps & Deployment
 - [ ] GitHub Actions CI/CD pipeline
-- [ ] Docker containerization
+- [ ] Container builds (Rancher Desktop / Docker-compatible CLI)
 - [ ] DEV environment deployment
 - [ ] TEST environment deployment
 - [ ] Monitoring and logging setup
