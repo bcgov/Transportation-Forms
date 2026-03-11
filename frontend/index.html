@@ -546,7 +546,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-bc-primary" onclick="saveFormChanges()">Save Changes</button>
+                    <!--<button type="button" class="btn btn-bc-primary" onclick="saveFormChanges()">Save Changes</button>-->
                 </div>
             </div>
         </div>
@@ -784,7 +784,7 @@
                         <dd class="col-sm-9"><span class="badge bg-info">${form.status}</span></dd>
                         
                         <dt class="col-sm-3">Public:</dt>
-                        <dd class="col-sm-9">${form.is_public ? 'âœ“ Yes' : 'âœ— No'}</dd>
+                        <dd class="col-sm-9">${form.is_public ? 'Yes' : 'âœ— No'}</dd>
 
                         <dt class="col-sm-3">Version:</dt>
                         <dd class="col-sm-9">${form.version_number !== null && form.version_number !== undefined ? 'v' + form.version_number : 'N/A'}</dd>
@@ -860,8 +860,8 @@
                 keywords = form.keywords || [];
                 displayKeywords();
                 
-                document.getElementById('submitBtn').textContent = 'âœ“ Update Form';
-                document.querySelector('h2').textContent = 'âœï¸ Edit Form';
+                document.getElementById('submitBtn').textContent = 'Update Form';
+                document.querySelector('h2').textContent = 'Edit Form';
                 document.getElementById('pageTitle').textContent = `Edit Form - ${form.title} - BC Gov`;
                 
                 document.getElementById('listView').style.display = 'none';
