@@ -29,7 +29,7 @@ spec:
               done
       containers:
         - name: app
-          image: transportation-forms-app:latest
+          image: transportation-forms-app:IMAGE_TAG
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
@@ -98,4 +98,4 @@ spec:
   ports:
     - port: 8000
       targetPort: 8000
-      nodePort: 30800
+      nodePort: 30300

@@ -147,6 +147,8 @@ class Form(Base):
     form_source_url = Column(String(500), nullable=True)         # URL when form_source == 'URL'
     form_attachment_url = Column(String(500), nullable=True)     # MinIO object URL when form_source == 'Download'
     form_attachment_filename = Column(String(255), nullable=True)  # Original uploaded filename
+    # TASK-413: Form number reservation linkage
+    form_number_reservation_id = Column(UUID(as_uuid=True), ForeignKey("form_number_reservations.id"), nullable=True, index=True)
     deleted_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -158,6 +160,7 @@ class Form(Base):
     workflow_history = relationship("FormWorkflow", back_populates="form", cascade="all, delete-orphan")
     downloads = relationship("FormDownload", back_populates="form", cascade="all, delete-orphan")
     previews = relationship("FormPreview", back_populates="form", cascade="all, delete-orphan")
+    form_number_reservation = relationship("FormNumberReservation", foreign_keys=[form_number_reservation_id])
     
     __table_args__ = (
         Index('idx_forms_status_public', 'status', 'is_public'),

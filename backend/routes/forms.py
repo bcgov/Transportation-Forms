@@ -43,6 +43,8 @@ class FormCreateRequest(BaseModel):
     form_source_url: Optional[str] = Field(None, max_length=500, description="Source URL (required when form_source='URL')")
     form_attachment_url: Optional[str] = Field(None, max_length=500, description="MinIO object URL (set after file upload when form_source='Download')")
     form_attachment_filename: Optional[str] = Field(None, max_length=255, description="Original filename of the uploaded attachment")
+    # TASK-413: Form number reservation linkage
+    form_number_reservation_id: Optional[str] = Field(None, description="UUID of approved form number reservation to link (optional)")
 
     @model_validator(mode="after")
     def validate_form_source(self) -> "FormCreateRequest":
@@ -210,6 +212,10 @@ async def create_form(
         if request.business_area_ids:
             business_area_ids = [UUID(ba_id) for ba_id in request.business_area_ids]
         
+        form_number_reservation_id = None
+        if request.form_number_reservation_id:
+            form_number_reservation_id = UUID(request.form_number_reservation_id)
+        
         form = FormService.create_form(
             db=db,
             title=request.title,
@@ -225,6 +231,7 @@ async def create_form(
             form_source_url=request.form_source_url,
             form_attachment_url=request.form_attachment_url,
             form_attachment_filename=request.form_attachment_filename,
+            form_number_reservation_id=form_number_reservation_id,
         )
         
         return FormResponse(**FormService.get_form_with_details(db, form.id))

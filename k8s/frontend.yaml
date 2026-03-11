@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: transportation-forms-app:latest
+          image: transportation-forms-app:IMAGE_TAG
           imagePullPolicy: Never
           ports:
             - containerPort: 3000
@@ -75,4 +75,4 @@ spec:
   ports:
     - port: 3000
       targetPort: 3000
-      nodePort: 30300
+      nodePort: 30800

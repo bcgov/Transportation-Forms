@@ -25,6 +25,7 @@ from backend.models import (
     User,
     UserRole,
     Role,
+    Form,
 )
 
 
@@ -947,3 +948,47 @@ class ReservationService:
             .all()
         )
         return items, total
+
+    @staticmethod
+    def list_approved_unused_reservations(
+        db: Session,
+    ) -> List[FormNumberReservation]:
+        """List all approved, unused reservations across all prefixes.
+        
+        Returns reservations that:
+        - Have status = 'approved'
+        - Are not released (released_at IS NULL)
+        - Are not deleted (deleted_at IS NULL)  
+        - Have not expired (expires_at IS NULL OR expires_at > NOW())
+        - Are NOT linked to any form (no form has this reservation_id)
+        
+        Ordered by created_at DESC (newest first).
+        """
+        now = datetime.now(timezone.utc)
+        
+        query = db.query(FormNumberReservation).filter(
+            FormNumberReservation.status == 'approved',
+            FormNumberReservation.released_at.is_(None),
+            FormNumberReservation.deleted_at.is_(None),
+            or_(
+                FormNumberReservation.expires_at.is_(None),
+                FormNumberReservation.expires_at > now
+            ),
+        )
+        
+        # Exclude reservations that are already linked to a form
+        used_reservation_ids = db.query(Form.form_number_reservation_id).filter(
+            Form.form_number_reservation_id.isnot(None),
+            Form.deleted_at.is_(None),
+        ).distinct()
+        
+        query = query.filter(
+            ~FormNumberReservation.id.in_(used_reservation_ids)
+        )
+        
+        items = (
+            query
+            .order_by(FormNumberReservation.created_at.desc())
+            .all()
+        )
+        return items
