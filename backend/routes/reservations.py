@@ -153,6 +153,14 @@ class ReservationListResponse(BaseModel):
     items: List[ReservationResponse]
 
 
+class ApprovedUnusedReservationsResponse(BaseModel):
+    """Response for approved and unused reservations (TASK-413)."""
+    reservations: List[ReservationResponse]
+
+    class Config:
+        from_attributes = True
+
+
 class ExpiryResultResponse(BaseModel):
     """Response for the expiry trigger endpoint."""
     expired_count: int
@@ -777,6 +785,37 @@ async def list_reservations(
     )
 
 
+# Get approved and unused reservations - MUST be before /{reservation_id} route
+@router.get(
+    "/approved-unused",
+    response_model=ApprovedUnusedReservationsResponse,
+    summary="Get all approved and unused form number reservations",
+)
+async def get_approved_unused_reservations(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ApprovedUnusedReservationsResponse:
+    """
+    Retrieve all approved, unused form number reservations across all prefixes.
+    
+    Returns reservations that are:
+    - Status = 'approved'
+    - Not released
+    - Not deleted  
+    - Not expired (or have no expiry set)
+    - Not linked to an existing form
+    
+    Ordered by created_at DESC (newest first).
+    
+    **Authentication:** Required (staff role minimum)
+    """
+    reservations = ReservationService.list_approved_unused_reservations(db)
+    return ApprovedUnusedReservationsResponse(
+        reservations=[_to_response(r) for r in reservations]
+    )
+
+
+# Get single reservation by ID - MUST be after specific routes like /approved-unused
 @router.get(
     "/{reservation_id}",
     response_model=ReservationDetailResponse,

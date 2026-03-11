@@ -12,7 +12,7 @@ from sqlalchemy import and_, or_, desc, asc, func
 
 from backend.models import (
     Form, FormBusinessArea, FormVersion, FormWorkflow, 
-    BusinessArea, User, AuditLog
+    BusinessArea, User, AuditLog, FormNumberReservation
 )
 
 
@@ -39,6 +39,7 @@ class FormService:
         form_source_url: Optional[str] = None,
         form_attachment_url: Optional[str] = None,
         form_attachment_filename: Optional[str] = None,
+        form_number_reservation_id: Optional[UUID] = None,
     ) -> Form:
         """
         Create a new form.
@@ -58,12 +59,13 @@ class FormService:
             form_source_url: Source URL when form_source == 'URL'
             form_attachment_url: MinIO object URL when form_source == 'DOWNLOAD'
             form_attachment_filename: Original filename of the uploaded attachment
+            form_number_reservation_id: (Optional) UUID of approved reservation to link (TASK-413)
             
         Returns:
             Created Form object
             
         Raises:
-            ValueError: If business areas don't exist or form_source validation fails
+            ValueError: If business areas don't exist, form_source validation fails, or reservation is invalid
         """
         # Validate description is provided (required per TASK-110C)
         if not description or not description.strip():
@@ -75,6 +77,28 @@ class FormService:
                 Form.deleted_at.is_(None)
             ).scalar()
             version_number = (max_version or 0) + 1
+
+        # TASK-413: Validate and link form number reservation
+        if form_number_reservation_id:
+            reservation = db.query(FormNumberReservation).filter(
+                FormNumberReservation.id == form_number_reservation_id,
+                FormNumberReservation.deleted_at.is_(None),
+            ).first()
+            
+            if not reservation:
+                raise ValueError(f"Reservation {form_number_reservation_id} not found")
+            
+            if reservation.status != 'approved':
+                raise ValueError(f"Reservation must be approved, current status: {reservation.status}")
+            
+            # Check if this reservation is already used by another form
+            existing_form = db.query(Form).filter(
+                Form.form_number_reservation_id == form_number_reservation_id,
+                Form.deleted_at.is_(None),
+            ).first()
+            
+            if existing_form:
+                raise ValueError(f"Reservation is already used by another form")
 
         # Create the form
         form = Form(
@@ -92,6 +116,7 @@ class FormService:
             form_source_url=form_source_url,
             form_attachment_url=form_attachment_url,
             form_attachment_filename=form_attachment_filename,
+            form_number_reservation_id=form_number_reservation_id,
         )
         
         # Associate business areas
@@ -113,20 +138,26 @@ class FormService:
         db.refresh(form)
         
         # Audit log
+        audit_new_values = {
+            "id": str(form.id),
+            "title": title,
+            "category": category,
+            "is_public": is_public,
+            "version_number": version_number,
+            "form_source": form_source,
+        }
+        
+        # Include reservation_id in audit log if provided (TASK-413)
+        if form_number_reservation_id:
+            audit_new_values["form_number_reservation_id"] = str(form_number_reservation_id)
+        
         FormService._audit_log(
             db=db,
             entity_type="forms",
             entity_id=str(form.id),
             action="CREATE",
             user_id=created_by_id,
-            new_values={
-                "id": str(form.id),
-                "title": title,
-                "category": category,
-                "is_public": is_public,
-                "version_number": version_number,
-                "form_source": form_source,
-            }
+            new_values=audit_new_values
         )
         
         return form

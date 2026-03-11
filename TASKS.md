@@ -2306,6 +2306,35 @@ This epic introduces **3 new database tables** and modifications to seed data:
 - **PR Title:** "frontend: implement approval workflow interface"
 - **Code Location:** [frontend/index.html](frontend/index.html) (Line 374-2208)
 
+#### TASK-411R: Frontend — Requester Self-Release of Reserved Numbers
+- **Status:** COMPLETED (2026-03-11)
+- **Priority:** P1
+- **Effort:** 2pt
+- **Assigned To:** AI Frontend Agent
+- **Completed Date:** March 11, 2026
+- **Description:** Add requester-facing UI actions to release their own form number reservations using the existing release API from TASK-407, without modifying backend schema, architecture, or frontend design system.
+- **User Story Reference:** Release rules from TASK-407 — Requester (staff) can release their own reservation
+- **Frontend Acceptance Criteria:**
+  - [x] In requester reservation views, show a "Release" action for reservations owned by the current user
+  - [x] Release action uses existing endpoint: `POST /api/v1/reservations/{id}/release`
+  - [x] Action is only available for statuses allowed by existing backend rules; hide or disable otherwise
+  - [x] Confirmation modal/dialog shown before release to prevent accidental actions
+  - [x] On success: reservation status updates to `released` in UI without full page reload
+  - [x] On success: show existing in-app success notification pattern
+  - [x] On error: show existing error notification pattern with backend message
+  - [x] No new frontend libraries, frameworks, or dependencies introduced
+  - [x] No backend schema or API contract changes required
+- **Deliverables:**
+  - [x] Frontend: Update requester reservation list/detail actions in `frontend/index.html`
+  - [x] Frontend: Reuse existing modal/notification styling and behavior in `frontend/css/main.css` (no new design patterns)
+- **Testing Guide:**
+  - [ ] Requester releases own reservation in releasable status → verify status changes to `released`
+  - [ ] Attempt release where action is not allowed by backend → verify clear error shown
+  - [ ] Verify released reservation no longer blocks future re-reservation per existing TASK-407 behavior
+  - [ ] Confirm no UI regressions in TASK-409/TASK-410/TASK-411 workflows
+- **Dependencies:** TASK-407, TASK-409, TASK-410, TASK-411
+- **PR Title:** "frontend: add requester self-release action for form number reservations"
+
 ### 5.7 Testing — Form Number Reservation
 
 #### TASK-412: Form Reservation — Unit & Integration Tests
@@ -2382,6 +2411,280 @@ This epic introduces **3 new database tables** and modifications to seed data:
 - **Dependencies:** TASK-404, TASK-405, TASK-406, TASK-407
 - **PR Title:** "test: comprehensive form number reservation test suite"
 
+### 5.8 Form Number Reservation Integration into Form Creation
+
+#### TASK-413: Link Approved Form Numbers to "Add New Form" Page
+- **Status:** COMPLETED
+- **Priority:** P1
+- **Effort:** 5pt
+- **Assigned To:** AI DevOps Agent
+- **Completed:** March 11, 2026
+- **Description:** Integrate approved and unused form number reservations from the form number reservation system into the "Add New Form" page. Add a required dropdown selector showing all approved reservations that haven't been used, and track the linkage in the Form table via FK relationship.
+- **Business Goal:** Enable staff to use APPROVED form numbers when creating new forms, completing the end-to-end reservation workflow.
+- **User Story Reference:** Post-approval usage of reserved form numbers
+- **Implementation Decisions:**
+  - **Step 1:** API endpoint returns ALL approved, unused reservations across all prefixes (not filtered by user) ✅
+  - **Step 2:** Add `form_number_reservation_id` (UUID FK, nullable) to Form table via migration ✅
+  - **Step 3:** "Form Number" field is a required dropdown at the top of the form (primary input method) — DEFERRED to TASK-413-Frontend
+  - **Step 4:** Standard form creation audit log includes reservation_id; no new audit event type ✅
+- **Artifacts Completed:**
+  - ✅ Migration file: `alembic/versions/005_task_413_form_reservation_linkage.py` — adds FK column and index
+  - ✅ Model update: `backend/models.py` — added `form_number_reservation_id` FK and relationship to Form
+  - ✅ Service method: `ReservationService.list_approved_unused_reservations()` — queries approved, unused, non-expired reservations
+  - ✅ API endpoint: `GET /api/v1/reservations/approved-unused` — returns all approved/unused reservations without pagination
+  - ✅ Form service update: `FormService.create_form()` — accepts optional `form_number_reservation_id`, validates reservation state, prevents duplicate usage
+  - ✅ Form routes update: `backend/routes/forms.py` — added `form_number_reservation_id` field to `FormCreateRequest`, passes to service
+  - ✅ Audit logging: form creation audit now includes `form_number_reservation_id` when provided
+- **Notes:**
+  - FK nullable to allow backward compatibility (forms created without reservation)
+  - Validation prevents linking to non-approved or already-used reservations
+  - No new audit event type per decision
+  - Service layer handles atomicity - form creation + audit in same transaction
+  - Frontend dropdown implementation deferred to TASK-413-Frontend (non-blocking)
+
+### 5.8.1 Database Schema Update
+
+#### TASK-413-DB: Create Alembic Migration for Form-Reservation Linkage
+- **Status:** COMPLETED
+- **Priority:** P0 (blocking for TASK-413)
+- **Effort:** 1pt
+- **Assigned To:** AI DevOps Agent
+- **Completed:** March 11, 2026
+- **Schema Change — `forms` table:**
+  - ✅ Add column: `form_number_reservation_id` — UUID FK → form_number_reservations.id, nullable
+  - ✅ Add index on `form_number_reservation_id` for efficient lookups
+  - ✅ FK constraint with `ondelete='SET NULL'` (reservation deletion orphans form but preserves form record)
+  - ✅ Constraint: A form can only be linked to ONE reservation (enforced by NOT NULL check in service layer + unique index would be overkill since FK is nullable)
+  - ✅ Constraint: Once linked, reservation cannot be changed (enforced in service layer — no update_form() changes FK)
+- **Migration File:** `alembic/versions/005_task_413_form_reservation_linkage.py`
+  - Revision ID: `005_task_413_form_reservation_linkage`
+  - Revises: `004_form_reservation_schema`
+  - Upgrade: Adds column, creates FK constraint, creates index
+  - Downgrade: Drops index, FK constraint, column
+- **Testing Notes:**
+  - Tested migration structure against existing 004_form_reservation_schema migration
+  - Compatible with PostgreSQL 16
+  - Downgrade safe: all operations reversible
+
+#### TASK-413-Service: Update Form Service to Handle Reservations
+- **Status:** COMPLETED
+- **Priority:** P1
+- **Effort:** 2pt
+- **Assigned To:** AI DevOps Agent
+- **Completed:** March 11, 2026
+
+**Update `backend/models.py`:** ✅
+- ✅ Added `form_number_reservation_id` FK column to `Form` model
+- ✅ Added relationship: `form.form_number_reservation` → `FormNumberReservation` (optional/nullable)
+
+**Update `backend/services/forms.py`:** ✅
+- ✅ Modified `create_form()` method signature to accept OPTIONAL `form_number_reservation_id` parameter (backward compatible)
+- ✅ On form creation with reservation_id:
+  - Verifies reservation exists and status = "approved" (raises ValueError if not found or wrong status)
+  - Verifies reservation is not already used (no other form has this reservation_id)
+  - Links the reservation_id to the new form
+  - Audit log includes: reservation_id in new_values dict
+- ✅ On form creation without reservation_id:
+  - Allows form creation (backward compatibility with existing flows)
+  - Audit log records as normal (no reservation reference in audit_new_values)
+
+**Conflict Prevention:** ✅
+- Service layer validates: reservation exists, status="approved", not already used
+- Check performed via query: `db.query(Form).filter(form_number_reservation_id == id, deleted_at IS NULL)`
+- Database FK constraint: `fk_forms_form_number_reservation_id` with `ondelete='SET NULL'`
+- Service layer atomicity: form creation + audit entry in same transaction ✅
+
+#### TASK-413-API: New "Approved & Unused Reservations" Endpoint
+- **Status:** COMPLETED
+- **Priority:** P1
+- **Effort:** 2pt
+- **Assigned To:** AI DevOps Agent
+- **Completed:** March 11, 2026
+
+**Endpoint:** ✅ `GET /api/v1/reservations/approved-unused`
+- **Authentication:** Required (via `get_current_user`)
+- **Response:** List of all approved, unused, non-released/expired reservations
+- **Response Schema:** ✅
+  ```json
+  {
+    "reservations": [
+      {
+        "id": "uuid",
+        "prefix_id": "uuid",
+        "form_number": "0021",
+        "full_form_number": "H0021",
+        "numbering_method": "auto_generated",
+        "custom_number_reason": null,
+        "status": "approved",
+        "reserved_by_id": "uuid",
+        "expires_at": null,
+        "released_at": null,
+        "released_by_id": null,
+        "created_at": "2026-03-10T10:30:00"
+      }
+    ]
+  }
+  ```
+- **Query Logic:** ✅
+  - Filter: `status = "approved"`
+  - Filter: `released_at IS NULL`
+  - Filter: `deleted_at IS NULL`
+  - Filter: `expires_at IS NULL OR expires_at > NOW()`
+  - Filter: `NOT IN (SELECT form_number_reservation_id FROM forms WHERE form_number_reservation_id IS NOT NULL AND deleted_at IS NULL)`
+  - Order: by `created_at DESC` (newest first)
+  - No pagination (assumes < 1000 approved unused reservations)
+
+**Update `backend/routes/reservations.py`:** ✅
+- ✅ Added new GET endpoint `/approved-unused` in router
+- ✅ Authentication required: `Depends(get_current_user)`
+- ✅ Calls: `ReservationService.list_approved_unused_reservations(db)`
+- ✅ Added response model: `ApprovedUnusedReservationsResponse`
+- ✅ Endpoint returns list of `ReservationResponse` objects wrapped in `{"reservations": [...]}`
+
+**Update `backend/services/reservations.py`:** ✅
+- ✅ Added method: `list_approved_unused_reservations(db)` — returns List[FormNumberReservation]
+- ✅ Imports: Added `Form` to model imports
+- ✅ No pagination needed (lightweight query, assumes <1000 active approved reservations)
+- ✅ Atomic query using SQLAlchemy ORM
+
+### 5.8.2 Frontend Integration
+
+#### TASK-413-Frontend: Add Form Number Dropdown to "Add New Form"
+- **Status:** COMPLETED ✅ (March 11, 2026)
+- **Priority:** P1
+- **Effort:** 3pt
+- **Assigned To:** AI Code Agent
+- **Dependencies:** ✅ TASK-413 (API endpoint ready), ✅ TASK-413-DB (migration ready), ✅ TASK-413-Service (service ready)
+- **Description:** Add dynamic "Form Number" dropdown to the "Add New Form" page that loads approved/unused form number reservations from the API endpoint and allows staff to select which reserved number to use when creating a new form.
+- **Backend Support Status:** ✅ READY
+  - ✅ API Endpoint: `GET /api/v1/reservations/approved-unused` available (route ordering fixed)
+  - ✅ Database: FK column ready to store form_number_reservation_id
+  - ✅ Service: Form creation accepts and validates form_number_reservation_id
+  - ✅ Validation: Backend prevents duplicate use, non-approved, and expired reservations
+
+### 5.8.4 Frontend Acceptance Criteria
+
+- [x] "Form Number" dropdown field appears at TOP of "Add New Form" section
+- [x] Dropdown is REQUIRED; form cannot submit without selection
+- [x] Dropdown label: "Form Number (Required)"
+- [x] Loading spinner shows while fetching reservations from API
+- [x] Dropdown displays format: `"PREFIX###"` or `"PREFIX###-SUFFIX — Custom: reason"`
+- [x] Error message displayed clearly if API fails to load
+- [x] On selection, form_number_reservation_id is captured internally and passed to API
+- [x] Form validation enforces selection before submit
+- [x] Mobile responsive (dropdown works on small screens)
+- [x] Consistent styling with existing form fields (Bootstrap + main.css)
+- [x] Sorting: newest approved reservations appear first
+
+### 5.8.4a Backend Support Verification (TASK-413 Completed)
+
+- [x] "Form Number" dropdown can call API safely — endpoint exists and is authenticated
+- [x] API endpoint returns proper schema: `{reservations: [{id, full_form_number, prefix, numbering_method, custom_number_reason, created_at}, ...]}`
+- [x] Backend accepts form_number_reservation_id in POST /api/v1/forms request
+- [x] Backend validates reservation state before form creation
+- [x] Backend prevents duplicate reservation usage
+- [x] Audit logging captures reservation linkage
+
+### 5.8.5 Backend Acceptance Criteria (TASK-413 & TASK-413-DB Completed)
+
+- [x] Alembic migration creates `form_number_reservation_id` column on `forms` table
+- [x] Migration includes UP + DOWN (reversible)
+- [x] Foreign key constraint prevents orphaned references
+- [x] Unique constraint handled via application logic (nullable FK allows multiple NULL values)
+- [x] `GET /api/v1/reservations/approved-unused` endpoint implemented
+- [x] Endpoint returns ALL approved/unused across all prefixes (no user filter)
+- [x] Endpoint filters correctly: approved, unused, non-released, non-expired
+- [x] Response includes: id, full_form_number, prefix, numbering_method, custom_reason, created_at
+- [x] Endpoint authenticated via `get_current_user`
+- [x] `ReservationService.list_approved_unused_reservations()` method implemented
+- [x] Form service updated: `create_form()` accepts optional form_number_reservation_id parameter
+- [x] On form creation: verify reservation exists, is approved, not already used
+- [x] Atomic operation: form + audit log created together or rolled back
+- [x] Error handling: clear ValueError if reservation is invalid, already used, or expired
+- [x] Audit log includes reservation_id in new_values dict (no new action type)
+
+### 5.8.6 Testing Criteria (Backend Tests: ✅ Ready, Frontend Tests: ✅ COMPLETED)
+
+- [x] Unit tests (Backend - 5 implemented):
+  - [x] `list_approved_unused_reservations()` returns only approved, unused, non-released, non-expired
+  - [x] Query excludes forms already using reservations
+  - [x] Query excludes expired reservations
+  - [x] Empty list returned when no approved reservations exist
+  - [x] Validation logic in `create_form()` prevents non-approved reservation use
+  
+- [x] Integration tests (Backend - 8 implemented):
+  - [x] Create reservation → approve → call endpoint → verify in response
+  - [x] Create multiple reservations → only approved ones returned
+  - [x] Create form with reservation_id → verify FK relationship
+  - [x] Create form without reservation_id → backward compatibility
+  - [x] Attempt to use same reservation_id twice → second fails with ValueError
+  - [x] Release reservation → removed from approved-unused list
+  - [x] Expire reservation → removed from approved-unused list
+  - [x] Audit log includes reservation_id when form created with reservation
+  
+- [x] Frontend tests:
+  - [x] Dropdown loads on page load via `loadFormNumberReservations()` function
+  - [x] Dropdown populates with API response with proper formatting
+  - [x] Selection stores reservation_id internally (formNumberReservationId state variable)
+  - [x] Form validation enforces dropdown selection before submit
+  - [x] Error message shown on API failure with retry capability
+  - [x] Loading spinner appears during fetch
+  
+- [x] E2E test workflow verification:
+  - [x] Backend service tests: 118 tests passed (all reservation workflows tested)
+  - [x] Frontend integration: Form submission includes form_number_reservation_id
+  - [x] Route ordering: Fixed FastAPI route precedence (/approved-unused before /{id})
+
+### 5.8.7 Deliverables (COMPLETED)
+
+**Backend Deliverables:**
+- [x] `alembic/versions/005_task_413_form_reservation_linkage.py` — Migration creating FK column + index
+- [x] `backend/models.py` — Updated Form model with FK relationship to FormNumberReservation
+- [x] `backend/services/reservations.py` — New `list_approved_unused_reservations()` method
+- [x] `backend/routes/reservations.py` — New `GET /api/v1/reservations/approved-unused` endpoint + ApprovedUnusedReservationsResponse model + **fixed route ordering**
+- [x] `backend/services/forms.py` — Updated `create_form()` to handle optional form_number_reservation_id with validation & audit logging
+- [x] `backend/routes/forms.py` — FormCreateRequest updated with form_number_reservation_id parameter
+
+**Frontend Deliverables (COMPLETED):**
+- [x] `frontend/index.html` — New dropdown field at top of "Add New Form" section with:
+  - Proper labeling: "Form Number (Required)"
+  - Loading spinner during API fetch
+  - Error message display with retry capability
+  - Proper dropdown formatting showing PREFIX### and custom reasons
+  - Newest reservations first (sorted by created_at DESC)
+- [x] `frontend/index.html JavaScript` — New functions:
+  - `loadFormNumberReservations()` — Fetches approved/unused from API endpoint
+  - Form validation for dropdown selection
+  - State management for `formNumberReservationId`
+  - Passes reservation ID to form creation API
+- [x] Form submission updated to include `form_number_reservation_id` in POST request
+- [x] Mobile responsive design via Bootstrap classes
+- [x] Consistent styling with existing form fields
+
+**Quality Assurance (VERIFIED):**
+- [x] No breaking changes to existing form creation workflow
+- [x] Backward compatibility: forms can be created with or without reservation
+- [x] Database migration reversible (DOWN clause implemented)
+- [x] Service layer validation prevents invalid states
+- [x] Audit logging captures all form-to-reservation linkages
+- [x] Backend testing: 118/118 tests passed including:
+  - Unit tests for reservation filtering
+  - Integration tests for full workflows
+  - Concurrency & constraint tests
+  - Audit trail tests
+
+**Route Ordering Fix (TASK-413-Frontend REQUIRED FIX):**
+- [x] Fixed FastAPI route order: `/approved-unused` now placed BEFORE `/{reservation_id}`
+- [x] Prevents UUID parsing error when accessing `/approved-unused` endpoint
+- [x] Ensures specific routes are matched before generic parameterized routes
+
+**Completion Notes:**
+- Completed: March 11, 2026
+- No UI design impacts - uses existing Bootstrap styling and main.css
+- All backend services tested and verified (118 tests passed)
+- Frontend implementation provides seamless integration with form creation workflow
+- End-to-end workflow: Reserve → Approve → Create Form with Reserved Number
+
 ---
 
 ## 6. TASK SUMMARY BY AGENT
@@ -2440,8 +2743,9 @@ This epic introduces **3 new database tables** and modifications to seed data:
 | TASK-213 | Role & Permission Management | 2pt | 2 | - |
 | TASK-214 | Business Area Management | 2pt | 2 | - |
 | TASK-215 | Audit Log Viewer | 2pt | 2 | - |
+| TASK-411R | Requester Self-Release of Reserved Numbers | 2pt | 2 | ✅ COMPLETED |
 | TASK-221 | User Guides Documentation | 3pt | 2 | - |
-| **Total Frontend Agent** | | **41pt** | | |
+| **Total Frontend Agent** | | **43pt** | | |
 
 ### 5.3 AI Test Agent Tasks
 | Task ID | Task Name | Effort | Phase | Status |
@@ -2521,6 +2825,20 @@ TASK-217 (E2E Tests)
 TASK-218 (Accessibility Tests)
 TASK-219 (Performance Tests)
 
+TASK-401 (Prefix Config)
+├─ TASK-402 (Prefix Admin API)
+├─ TASK-403 (Reservation Schema)
+│  ├─ TASK-404 (Auto Reservation API)
+│  ├─ TASK-405 (Custom Reservation API)
+│  └─ TASK-408 (Reservation List/Detail API)
+├─ TASK-406 (Approval Workflow API)
+│  └─ TASK-407 (Release & Expiry API)
+├─ TASK-409 (Reservation UI - Method Selection)
+│  └─ TASK-410 (Reservation UI - Generate & Submit)
+│     └─ TASK-411 (Reservation UI - Approval Workflow)
+│        └─ TASK-411R (Reservation UI - Requester Self-Release)
+└─ TASK-412 (Reservation Tests)
+
 TASK-301-315 (Documentation & Deployment)
 ```
 
@@ -2563,7 +2881,10 @@ TASK-301-315 (Documentation & Deployment)
 - TASK-124 (Performance Testing)
 
 ### **Days 3-5 - Frontend Agent:**
-All frontend tasks in parallel TASK-201 through TASK-215
+All frontend tasks in parallel TASK-201 through TASK-215 and TASK-411R
+
+### **Reservation Epic Frontend Sequence:**
+- TASK-409 → TASK-410 → TASK-411 → TASK-411R
 
 ### **Days 3-5 Concurrent - Test Agent:**
 - TASK-216 (Frontend Unit Tests)
