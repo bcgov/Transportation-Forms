@@ -14,6 +14,8 @@ from backend.models import (
     Form, FormBusinessArea, FormVersion, FormWorkflow, 
     BusinessArea, User, AuditLog, FormNumberReservation
 )
+from backend.config import settings
+from backend.services import minio_service
 
 
 class FormService:
@@ -299,6 +301,22 @@ class FormService:
             form.effective_date = kwargs["effective_date"]
         if "collects_personal_info" in kwargs:
             form.collects_personal_info = kwargs["collects_personal_info"]
+        # TASK-416: handle attachment field updates and MinIO deletion
+        if "form_source" in kwargs:
+            form.form_source = kwargs["form_source"]
+        if "form_source_url" in kwargs:
+            form.form_source_url = kwargs["form_source_url"]
+        if "form_attachment_url" in kwargs:
+            old_url = form.form_attachment_url
+            new_url = kwargs["form_attachment_url"]
+            # Delete the old file from MinIO whenever the URL changes (removed or replaced)
+            if old_url and old_url != new_url:
+                old_key = FormService._extract_minio_object_key(old_url)
+                if old_key:
+                    minio_service.delete_file(old_key)
+            form.form_attachment_url = new_url
+        if "form_attachment_filename" in kwargs:
+            form.form_attachment_filename = kwargs["form_attachment_filename"]
         
         # Handle business area updates
         if "business_area_ids" in kwargs:
@@ -462,6 +480,19 @@ class FormService:
     # HELPER METHODS
     # =====================================================================
     
+    @staticmethod
+    def _extract_minio_object_key(url: str) -> Optional[str]:
+        """Extract the MinIO object key from a full public URL."""
+        if not url:
+            return None
+        prefix = f"{settings.MINIO_PUBLIC_URL}/{settings.MINIO_BUCKET}/"
+        if url.startswith(prefix):
+            return url[len(prefix):]
+        # Fallback: look for the 'uploads/' path segment used by all stored objects
+        import re
+        match = re.search(r"(uploads/[^?#]+)", url)
+        return match.group(1) if match else None
+
     @staticmethod
     def _audit_log(
         db: Session,
