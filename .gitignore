@@ -50,7 +50,7 @@ venv.bak/
 .env.local
 .env.*.local
 .env.prod
-
+build-deploy.ps1
 # Test output / coverage reports (generated, not source)
 coverage_results.txt
 test_results.txt
