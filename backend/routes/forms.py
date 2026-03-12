@@ -84,11 +84,22 @@ class FormUpdateRequest(BaseModel):
     business_area_ids: Optional[List[str]] = None
     effective_date: Optional[datetime] = None
     collects_personal_info: Optional[str] = Field(None, description="Does this form collect personal information? ('Yes' or 'No')")
+    # TASK-416: attachment fields — support updating/clearing file attachment
+    form_source: Optional[str] = Field(None, description="Form source type: 'URL' or 'Download' (null to clear)")
+    form_source_url: Optional[str] = Field(None, max_length=500, description="Source URL when form_source is 'URL'")
+    form_attachment_url: Optional[str] = Field(None, max_length=500, description="MinIO object URL when form_source is 'Download' (null to clear attachment)")
+    form_attachment_filename: Optional[str] = Field(None, max_length=255, description="Original filename of the uploaded attachment")
 
     @model_validator(mode="after")
-    def validate_collects_personal_info(self) -> "FormUpdateRequest":
+    def validate_update_fields(self) -> "FormUpdateRequest":
         if self.collects_personal_info is not None and self.collects_personal_info not in ("Yes", "No"):
             raise ValueError("collects_personal_info must be 'Yes' or 'No'")
+        # Validate form_source if explicitly provided
+        if self.form_source is not None:
+            src_upper = self.form_source.upper()
+            if src_upper not in ("URL", "DOWNLOAD"):
+                raise ValueError("form_source must be 'URL' or 'Download'")
+            self.form_source = "URL" if src_upper == "URL" else "Download"
         return self
 
 
@@ -329,6 +340,10 @@ async def update_form(
             update_data["business_area_ids"] = [UUID(ba_id) for ba_id in request.business_area_ids]
         if request.collects_personal_info is not None:
             update_data["collects_personal_info"] = request.collects_personal_info
+        # TASK-416: attachment fields — use model_fields_set to support explicit null (clearing)
+        for field in ("form_source", "form_source_url", "form_attachment_url", "form_attachment_filename"):
+            if field in request.model_fields_set:
+                update_data[field] = getattr(request, field)
         
         form = FormService.update_form(
             db=db,

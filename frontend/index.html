@@ -88,19 +88,27 @@
                 <form id="formCreate" onsubmit="handleFormSubmit(event)" novalidate>
                     <!-- Form Number (TASK-413) -->
                     <div class="mb-3">
-                        <label for="formNumber" class="form-label"><strong>Form Number (Required)</strong> <span style="color: red;">*</span></label>
-                        <div class="input-group mb-2">
-                            <select class="form-select" id="formNumber" name="formNumber" required>
-                                <option value="">-- Loading approved form numbers --</option>
-                            </select>
+                        <label class="form-label"><strong>Form Number</strong> <span id="formNumberRequiredStar" style="color: red;">*</span></label>
+                        <!-- Dropdown: shown on Create only -->
+                        <div id="formNumberSelectContainer">
+                            <div class="input-group mb-2">
+                                <select class="form-select" id="formNumber" name="formNumber" required>
+                                    <option value="">-- Loading approved form numbers --</option>
+                                </select>
+                            </div>
+                            <div id="formNumberSpinner" style="display: none;" class="mb-2">
+                                <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+                                <small class="text-muted">Loading available form numbers...</small>
+                            </div>
+                            <div id="formNumberError" class="alert alert-danger" style="display: none; margin-bottom: 0.5rem;"></div>
+                            <div class="invalid-feedback" id="error-formNumber"></div>
+                            <small class="text-muted">Select a reserved form number to assign to this new form</small>
                         </div>
-                        <div id="formNumberSpinner" style="display: none;" class="mb-2">
-                            <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
-                            <small class="text-muted">Loading available form numbers...</small>
+                        <!-- Read-only display: shown on Edit only -->
+                        <div id="formNumberReadonlyContainer" style="display: none;">
+                            <p class="form-control-plaintext fw-bold" id="formNumberReadonly">N/A</p>
+                            <small class="text-muted">Form Number cannot be changed after a form is created</small>
                         </div>
-                        <div id="formNumberError" class="alert alert-danger" style="display: none; margin-bottom: 0.5rem;"></div>
-                        <div class="invalid-feedback" id="error-formNumber"></div>
-                        <small class="text-muted">Select a reserved form number to assign to this new form</small>
                     </div>
                     
                     <!-- Title -->
@@ -938,6 +946,14 @@
                 document.getElementById('formSource').value = form.form_source || '';
                 document.getElementById('formSourceUrl').value = form.form_source_url || '';
 
+                // TASK-415: Show read-only form number in edit mode
+                document.getElementById('formNumberSelectContainer').style.display = 'none';
+                document.getElementById('formNumberRequiredStar').style.display = 'none';
+                document.getElementById('formNumberReadonlyContainer').style.display = 'block';
+                document.getElementById('formNumberReadonly').textContent = getFormNumberDisplay(form) || 'N/A';
+                // Ensure the select is not required so form validation passes
+                document.getElementById('formNumber').required = false;
+
                 // Restore uploaded file info if applicable
                 if (form.form_source === 'Download' && form.form_attachment_url) {
                     uploadedFileUrl = form.form_attachment_url;
@@ -1132,16 +1148,18 @@
             event.preventDefault();
             clearAllFieldErrors();
 
-            // Validate form number is selected (TASK-413)
+            // Validate form number is selected on create only (TASK-413 / TASK-415)
             const formNumberValue = document.getElementById('formNumber').value;
-            if (!formNumberValue) {
+            if (!currentFormId && !formNumberValue) {
                 showFieldError('formNumber', 'Please select a Form Number.');
                 return;
             }
 
             // Client-side validation for Download source
             const formSource = document.getElementById('formSource').value;
-            if (formSource === 'Download' && !uploadedFileUrl) {
+            // TASK-416: In edit mode, formSource='Download' with no file means "clear the attachment"
+            // — do NOT block submission. In create mode a file is always required.
+            if (!currentFormId && formSource === 'Download' && !uploadedFileUrl) {
                 showFieldError('fileUpload', 'Please upload a file before submitting.');
                 return;
             }
@@ -1149,6 +1167,11 @@
                 showFieldError('formSourceUrl', 'Form URL is required when Form Source is URL.');
                 return;
             }
+
+            // TASK-416: When editing and user removed the file without uploading a replacement,
+            // treat it as clearing the attachment (send null source values to the backend).
+            const effectiveFormSource = (currentFormId && formSource === 'Download' && !uploadedFileUrl)
+                ? null : (formSource || null);
             
             const formData = {
                 title: document.getElementById('title').value,
@@ -1162,12 +1185,12 @@
                 collects_personal_info: document.getElementById('collectsPersonalInfo').value,
                 // TASK-110C fields
                 version_number: document.getElementById('versionNumber').value ? parseInt(document.getElementById('versionNumber').value, 10) : null,
-                form_source: formSource || null,
-                form_source_url: formSource === 'URL' ? document.getElementById('formSourceUrl').value : null,
-                form_attachment_url: formSource === 'Download' ? uploadedFileUrl : null,
-                form_attachment_filename: formSource === 'Download' ? uploadedFileFilename : null,
-                // TASK-413: Form number reservation linkage
-                form_number_reservation_id: formNumberValue || null,
+                form_source: effectiveFormSource,
+                form_source_url: effectiveFormSource === 'URL' ? document.getElementById('formSourceUrl').value : null,
+                form_attachment_url: effectiveFormSource === 'Download' ? uploadedFileUrl : null,
+                form_attachment_filename: effectiveFormSource === 'Download' ? uploadedFileFilename : null,
+                // TASK-413: Form number reservation linkage (create only — TASK-415 locks this on edit)
+                ...(!currentFormId && { form_number_reservation_id: formNumberValue || null }),
             };
             
             try {
@@ -1287,6 +1310,12 @@
             formNumberReservationId = null;
             document.getElementById('submitBtn').textContent = 'Create Form';
             document.querySelector('h2').textContent = 'Add New Form';
+
+            // TASK-415: Ensure dropdown is visible and required on create
+            document.getElementById('formNumberSelectContainer').style.display = 'block';
+            document.getElementById('formNumberRequiredStar').style.display = 'inline';
+            document.getElementById('formNumberReadonlyContainer').style.display = 'none';
+            document.getElementById('formNumber').required = true;
 
             // Load dynamic data
             loadBusinessAreas();
@@ -2377,6 +2406,11 @@
             formNumberReservationId = null;
             document.getElementById('submitBtn').textContent = 'Create Form';
             document.querySelector('h2').textContent = 'Add New Form';
+            // TASK-415: Reset form number field to dropdown mode
+            document.getElementById('formNumberSelectContainer').style.display = 'block';
+            document.getElementById('formNumberRequiredStar').style.display = 'inline';
+            document.getElementById('formNumberReadonlyContainer').style.display = 'none';
+            document.getElementById('formNumber').required = true;
             // Hide conditional sections
             document.getElementById('sourceUrlSection').style.display = 'none';
             document.getElementById('sourceDownloadSection').style.display = 'none';

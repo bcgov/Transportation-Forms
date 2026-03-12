@@ -50,6 +50,52 @@
   - [x] Form view modal displays the selected value
   - [x] Automated tests cover create/update/default/validation
 
+### 2.2.2 TASK-415: Lock Form Number Field When Editing a Form
+- **Status:** COMPLETED ✅ (March 12, 2026)
+- **Priority:** P1
+- **Effort:** 2pt
+- **Assigned To:** AI Code Agent
+- **Dependencies:** ✅ TASK-413-Frontend (Form Number dropdown implemented on Add New Form)
+- **Description:** When a staff member opens the Edit Form modal for an existing form, the Form Number dropdown must be rendered as a read-only display (not an interactive dropdown). The currently associated form number must be shown, but the user must not be able to change it.
+- **Scope:** Frontend only — no backend or API changes required.
+- **Acceptance Criteria:**
+  - [x] In the Edit Form modal, the "Form Number" field is displayed as read-only text (not a selectable dropdown)
+  - [x] The currently associated form number value is shown (e.g. `MV123`) or `N/A` if none is linked
+  - [x] The `form_number_reservation_id` is NOT sent in the PATCH/PUT request (field is locked and not re-submitted)
+  - [x] The interactive Form Number dropdown (used on Add New Form) is not shown in the edit context
+  - [x] No regressions to the Add New Form dropdown behavior
+  - [x] No regressions to any other edit form fields or actions
+- **Implemented:**
+  - Added `#formNumberReadonlyContainer` / `#formNumberReadonly` elements alongside the existing dropdown in the HTML
+  - `editForm()` hides the dropdown container, hides the required-star, shows the read-only `<p>` populated via `getFormNumberDisplay(form)`; sets `select.required = false` so HTML5 validation passes
+  - `showCreateView()` re-shows the dropdown container, required-star, hides the read-only display, and sets `select.required = true`
+  - `resetFormState()` restores the same dropdown-visible state for consistency
+  - `handleFormSubmit()` skips form-number validation and omits `form_number_reservation_id` from the payload when `currentFormId` is set (edit mode)
+
+### 2.2.3 TASK-416: Fix Edit Form — File Attachment Sync and Field Refresh in View Modal
+- **Status:** COMPLETED ✅ (March 12, 2026)
+- **Priority:** P1
+- **Effort:** 5pt
+- **Assigned To:** AI Code Agent
+- **Dependencies:** TASK-414, TASK-415
+- **Description:** Three related bugs exist in the Edit Form workflow that prevent the View modal from accurately reflecting the current state of a form after edits are saved:
+  1. **Missing attachment not uploaded on edit** — If a form has no file attached and the user uploads a file via the Edit Form modal, the new file does not appear in the View modal after saving.
+  2. **Deleted attachment not removed from DB/S3** — If the user removes an existing file attachment from the Edit Form modal, the file record is not deleted from the database and the file is not removed from MinIO/S3 storage.
+  3. **Field changes not reflected in View modal** — After saving edits to any form field (e.g., title, description, personal info flag), the View modal continues to display stale data from before the edit.
+- **Scope:** Frontend (`frontend/index.html`) and Backend (`backend/routes/forms.py`, `backend/services/forms.py`).
+- **Acceptance Criteria:**
+  - [x] When a form with no existing attachment is edited and a new file is uploaded, the View modal displays the attachment after saving
+  - [x] When an existing attachment is removed during an edit, the associated database record is cleared and the file is removed from MinIO/S3 storage
+  - [x] After saving any edit (title, description, personal info, etc.), the View modal immediately reflects all updated field values without requiring a page refresh
+  - [x] No regressions to the Add New Form file upload flow
+  - [x] No regressions to forms that already have attachments when editing without changing the file
+  - [x] Backend returns the updated form (including attachment URL) in the PUT response
+  - [x] No UI design changes
+- **Implemented:**
+  - **`backend/routes/forms.py`** — Added `form_source`, `form_source_url`, `form_attachment_url`, `form_attachment_filename` to `FormUpdateRequest`. Uses Pydantic v2 `model_fields_set` in the PUT route to distinguish "field not sent" from "field explicitly set to null", enabling both update and deletion of attachment data.
+  - **`backend/services/forms.py`** — `update_form()` now handles the 4 new attachment kwargs. When `form_attachment_url` changes (removed or replaced), the old MinIO object is deleted via `minio_service.delete_file()`. Added `_extract_minio_object_key()` static helper to derive the storage key from the full public URL. Added `settings` and `minio_service` imports.
+  - **`frontend/index.html`** — `handleFormSubmit()`: (1) Download-source validation now only blocks in **create** mode — in edit mode, a cleared file is treated as an intentional attachment removal. (2) `effectiveFormSource` computes `null` when the user is in edit mode with formSource='Download' but no file present, ensuring `form_source`, `form_attachment_url`, and `form_attachment_filename` are all sent as `null` to correctly clear the attachment in the backend.
+
 ### 2.1 Project Initialization
 
 #### TASK-101: GitHub Repository Setup
