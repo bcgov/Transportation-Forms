@@ -70,6 +70,17 @@ async def serve_frontend():
     )
 
 
+# Initialise MinIO bucket on startup (idempotent — safe to run every boot)
+@app.on_event("startup")
+async def startup_event():
+    try:
+        from backend.services.minio_service import ensure_bucket_exists
+        ensure_bucket_exists()
+        logger.info("MinIO bucket initialised.")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("MinIO bucket initialisation skipped", error=str(exc))
+
+
 # Include API routes FIRST (before catch-all)
 from backend.routes import auth, forms, business_areas
 from backend.routes.prefixes import public_router as prefixes_public_router

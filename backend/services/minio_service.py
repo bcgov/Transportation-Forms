@@ -8,9 +8,9 @@ same code works with both MinIO and real AWS S3.
 """
 
 import io
+import json
 import uuid
 import logging
-import os
 from typing import Tuple, Optional
 
 import boto3
@@ -35,19 +35,42 @@ def _get_s3_client():
 
 
 def ensure_bucket_exists() -> None:
-    """Create the configured bucket if it does not already exist."""
+    """Create the configured bucket if it does not already exist, and ensure
+    a public-read bucket policy is applied.
+
+    Modern MinIO (2022+) disables S3 object ACLs by default.  Public read
+    access must be granted via a bucket policy instead.
+    """
     client = _get_s3_client()
     bucket = settings.MINIO_BUCKET
     try:
         client.head_bucket(Bucket=bucket)
+        logger.info("MinIO bucket '%s' already exists.", bucket)
     except ClientError as exc:
         error_code = exc.response["Error"]["Code"]
         if error_code in ("404", "NoSuchBucket"):
             client.create_bucket(Bucket=bucket)
             logger.info("MinIO bucket '%s' created.", bucket)
         else:
-            # Re-raise unexpected errors
             raise
+
+    # Apply a public-read policy so uploaded objects are browser-accessible.
+    # This replaces the deprecated ACL="public-read" approach which is no
+    # longer supported by MinIO RELEASE.2022-10-29+.
+    public_read_policy = json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"AWS": "*"},
+            "Action": ["s3:GetObject"],
+            "Resource": [f"arn:aws:s3:::{bucket}/*"],
+        }],
+    })
+    try:
+        client.put_bucket_policy(Bucket=bucket, Policy=public_read_policy)
+        logger.info("Public-read policy applied to bucket '%s'.", bucket)
+    except ClientError as exc:
+        logger.warning("Could not apply bucket policy to '%s': %s", bucket, exc)
 
 
 def upload_file(
@@ -81,8 +104,8 @@ def upload_file(
         Key=object_key,
         Body=file_bytes,
         ContentType=content_type,
-        # Make the object publicly readable so browsers can directly access it
-        ACL="public-read",
+        # Public read is granted via bucket policy set in ensure_bucket_exists().
+        # ACL="public-read" is not used: MinIO 2022+ disables S3 ACLs by default.
     )
 
     public_url = f"{settings.MINIO_PUBLIC_URL}/{settings.MINIO_BUCKET}/{object_key}"
