@@ -14,7 +14,7 @@ echo ""
 # database name
 DB_NAME="transportation_forms"
 DB_USER="postgres"
-DB_PASSWORD="password"
+DB_PASSWORD="${DB_PASSWORD:-password}"
 DB_HOST="localhost"
 DB_PORT="5432"
 

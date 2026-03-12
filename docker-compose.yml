@@ -9,15 +9,15 @@ services:
       - "8000:8000"
     environment:
       - ENVIRONMENT=development
-      - DATABASE_URL=postgresql://transportation:password@db:5432/transportation_forms
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-transportation}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-transportation_forms}
       - SQLALCHEMY_ECHO=true
       - LOG_LEVEL=INFO
       # CORS - comma-separated list of allowed origins
       - CORS_ORIGINS=http://localhost:3000,http://localhost:8000,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8000
       # MinIO (local file storage)
       - MINIO_ENDPOINT=http://minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_BUCKET=form-attachments
       - MINIO_PUBLIC_URL=http://localhost:9000
     volumes:
@@ -52,9 +52,9 @@ services:
     image: postgres:16-alpine
     container_name: transportation-forms-db
     environment:
-      POSTGRES_USER: transportation
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: transportation_forms
+      POSTGRES_USER: ${POSTGRES_USER:-transportation}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-transportation_forms}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C -c password_encryption=md5"
     ports:
       - "6432:5432"
@@ -76,8 +76,8 @@ services:
       - "9000:9000"   # S3 API
       - "9001:9001"   # MinIO Console (admin UI)
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"

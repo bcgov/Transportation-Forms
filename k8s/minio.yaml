@@ -44,9 +44,15 @@ spec:
               name: console
           env:
             - name: MINIO_ROOT_USER
-              value: "minioadmin"
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: minio-root-user
             - name: MINIO_ROOT_PASSWORD
-              value: "minioadmin"
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: minio-root-password
           volumeMounts:
             - name: minio-storage
               mountPath: /data

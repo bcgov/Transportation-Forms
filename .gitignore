@@ -51,6 +51,17 @@ venv.bak/
 .env.*.local
 .env.prod
 
+# Test output / coverage reports (generated, not source)
+coverage_results.txt
+test_results.txt
+test_results_full.txt
+
+# Task-specific completion notes (internal task tracking)
+TASK-*-*.md
+
+# K8s secrets file (contains actual credentials — use secrets.example.yaml as template)
+k8s/secrets.yaml
+
 # RSA Keys (auto-generated, never commit!)
 backend/auth/keys/
 *.pem

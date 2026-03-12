@@ -37,7 +37,10 @@ spec:
             - name: ENVIRONMENT
               value: "development"
             - name: DATABASE_URL
-              value: "postgresql://transportation:password@transportation-forms-db:5432/transportation_forms"
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: database-url
             - name: SQLALCHEMY_ECHO
               value: "false"
             - name: LOG_LEVEL
@@ -47,9 +50,15 @@ spec:
             - name: MINIO_ENDPOINT
               value: "http://transportation-forms-minio:9000"
             - name: MINIO_ACCESS_KEY
-              value: "minioadmin"
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: minio-root-user
             - name: MINIO_SECRET_KEY
-              value: "minioadmin"
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: minio-root-password
             - name: MINIO_BUCKET
               value: "form-attachments"
             - name: MINIO_PUBLIC_URL
