@@ -38,7 +38,6 @@ def test_create_form_with_personal_info_yes(forms_client: TestClient):
         json={
             "title": "Driver Application Form",
             "description": "Form for driver onboarding.",
-            "category": "applications",
             "is_public": False,
             "collects_personal_info": "Yes",
         },
@@ -56,7 +55,6 @@ def test_create_form_defaults_personal_info_to_no(forms_client: TestClient):
         json={
             "title": "Vehicle Checklist",
             "description": "Daily vehicle checklist.",
-            "category": "transportation",
             "is_public": True,
         },
     )
@@ -73,7 +71,6 @@ def test_update_form_personal_info_field(forms_client: TestClient):
         json={
             "title": "Permit Renewal",
             "description": "Permit renewal request form.",
-            "category": "permits",
             "is_public": False,
             "collects_personal_info": "No",
         },
@@ -99,7 +96,6 @@ def test_reject_invalid_personal_info_value(forms_client: TestClient):
         json={
             "title": "Invalid Personal Info",
             "description": "Should fail.",
-            "category": "other",
             "is_public": False,
             "collects_personal_info": "Maybe",
         },

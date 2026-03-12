@@ -32,7 +32,6 @@ class FormCreateRequest(BaseModel):
     """Request model for creating a form."""
     title: str = Field(..., min_length=1, max_length=255, description="Form title")
     description: str = Field(..., min_length=1, max_length=2000, description="Form description (required)")
-    category: str = Field(..., min_length=1, max_length=100, description="Form category")
     is_public: bool = Field(default=False, description="Whether form is publicly visible")
     keywords: Optional[List[str]] = Field(default=None, description="Search keywords")
     business_area_ids: Optional[List[str]] = Field(default=None, description="Associated business area IDs")
@@ -78,7 +77,6 @@ class FormUpdateRequest(BaseModel):
     """Request model for updating a form."""
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
-    category: Optional[str] = Field(None, min_length=1, max_length=100)
     is_public: Optional[bool] = None
     keywords: Optional[List[str]] = None
     business_area_ids: Optional[List[str]] = None
@@ -108,7 +106,6 @@ class FormResponse(BaseModel):
     id: str
     title: str
     description: Optional[str]
-    category: str
     status: str
     is_public: bool
     current_version: int
@@ -147,7 +144,6 @@ class FormListItem(BaseModel):
     """List item for form summaries."""
     id: str
     title: str
-    category: str
     status: str
     is_public: bool
     created_at: str
@@ -232,7 +228,6 @@ async def create_form(
     
     - **title**: Form title (required, 1-255 chars)
     - **description**: Optional form description
-    - **category**: Form category (required)
     - **is_public**: Whether form is publicly visible
     - **keywords**: List of search keywords
     - **business_area_ids**: Associated business areas
@@ -252,7 +247,6 @@ async def create_form(
             db=db,
             title=request.title,
             description=request.description,
-            category=request.category,
             is_public=request.is_public,
             keywords=request.keywords,
             business_area_ids=business_area_ids,
@@ -328,8 +322,6 @@ async def update_form(
             update_data["title"] = request.title
         if request.description is not None:
             update_data["description"] = request.description
-        if request.category is not None:
-            update_data["category"] = request.category
         if request.is_public is not None:
             update_data["is_public"] = request.is_public
         if request.keywords is not None:
@@ -408,7 +400,6 @@ async def delete_form(
 async def list_forms(
     skip: int = Query(0, ge=0, description="Number of forms to skip"),
     limit: int = Query(20, ge=1, le=100, description="Number of forms to return (max 100)"),
-    category: Optional[str] = Query(None, description="Filter by category"),
     status: Optional[str] = Query(None, description="Filter by status"),
     is_public: Optional[bool] = Query(None, description="Filter by public status"),
     sort_by: str = Query("created_at", regex="^(created_at|updated_at|title)$", description="Sort field"),
@@ -420,7 +411,6 @@ async def list_forms(
     
     - **skip**: Number of forms to skip (for pagination)
     - **limit**: Max forms to return (1-100, default 20)
-    - **category**: Filter by category
     - **status**: Filter by status (draft, pending_review, approved, published, archived)
     - **is_public**: Filter by public/private status
     - **sort_by**: Sort by created_at, updated_at, or title
@@ -430,7 +420,6 @@ async def list_forms(
         db=db,
         skip=skip,
         limit=limit,
-        category=category,
         status=status,
         is_public=is_public,
         sort_by=sort_by,

@@ -35,6 +35,35 @@
 
 ## 2. PHASE 1: BACKEND & DATABASE (DAYS 1-2)
 
+### 2.2.4 TASK-417: Remove Category Field from Forms
+
+- **Status:** COMPLETED ✅ (March 12, 2026)
+- **Priority:** P1
+- **Effort:** 3pt
+- **Assigned To:** AI Code Agent
+- **Dependencies:** None
+- **Description:** The `category` field is no longer needed on the forms dataset. Remove it entirely from the database schema, backend model, all API request/response contracts, and the frontend UI (Add New Form modal, Edit Form modal, View modal, and the category filter on the forms list).
+- **Scope:** Database migration, `backend/models.py`, `backend/routes/forms.py`, `backend/services/forms.py`, `frontend/index.html`, `tests/`.
+- **Acceptance Criteria:**
+  - [x] New Alembic migration (`007_remove_category_field.py`) drops the `category` column and its index (`idx_forms_category`) from the `forms` table
+  - [x] `backend/models.py` — `category` column and `Index('idx_forms_category', 'category')` removed from the `Form` model
+  - [x] `backend/routes/forms.py` — `category` removed from `FormCreateRequest`, `FormUpdateRequest`, `FormResponse`, `FormSummaryResponse`; `category` query-filter parameter removed from the list endpoint
+  - [x] `backend/services/forms.py` — `category` parameter removed from `create_form()` signature and body; `category` filter logic removed from `get_forms()`; `category` key removed from all dict serialisations in `update_form()` and elsewhere
+  - [x] `frontend/index.html` — Category `<select>` field (id `category`) and its label removed from the Add New Form / Edit Form modal
+  - [x] `frontend/index.html` — Category filter dropdown (id `categoryFilter`) removed from the forms-list toolbar
+  - [x] `frontend/index.html` — `form.category` badge removed from the forms-list row and from the View modal (`<dt>Category:</dt>` / `<dd>` block)
+  - [x] `frontend/index.html` — All JS references to `category` (`clearFieldError`, validation map, payload construction, `applyFilters`, `editForm` population) removed
+  - [x] `tests/test_forms_personal_info_api.py` (and any other test files) — `category` key removed from all test payloads
+  - [x] No regressions to any other form field or workflow
+  - [x] Application starts cleanly and all existing tests pass after the migration
+- **Implemented:**
+  - **`alembic/versions/007_remove_category_field.py`** — Drops `idx_forms_category` index then `category` column; `downgrade()` restores both with `server_default='other'`
+  - **`backend/models.py`** — Removed `category` column and `Index('idx_forms_category', 'category')`
+  - **`backend/routes/forms.py`** — Removed `category` from `FormCreateRequest`, `FormUpdateRequest`, `FormResponse`, `FormListItem`; removed `category` query param and forwarding call in `list_forms`; removed from docstrings and `create_form` call
+  - **`backend/services/forms.py`** — Removed `category` from `create_form()` signature, `Form()` constructor, audit log dict, `list_forms()` signature and filter clause, `update_form()` old-values dict and update block, `get_form_with_details()` return dict
+  - **`frontend/index.html`** — Removed category `<select>` in Add/Edit form; removed `categoryFilter` toolbar dropdown; removed `form.category` badge from list row; removed `Category` dt/dd from View modal; removed from `editForm()`, `clearAllFieldErrors()`, `fieldMap`, `handleFormSubmit()` payload, and `applyFilters()`
+  - **`tests/test_forms_personal_info_api.py`** — Removed `"category"` key from all four test request payloads
+
 ### 2.2.1 TASK-414: Add Personal Info Collection Field to Forms
 - **Status:** COMPLETED
 - **Priority:** P1
