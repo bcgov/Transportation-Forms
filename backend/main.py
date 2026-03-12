@@ -34,7 +34,7 @@ app.add_middleware(
 )
 
 # Mount static files for frontend
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+frontend_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend"))
 if os.path.exists(frontend_dir):
     app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
@@ -107,9 +107,10 @@ async def serve_frontend_paths(path: str):
     
     # Check if this is a static file request
     if "." in path and path.split(".")[-1] in ["js", "css", "png", "jpg", "gif", "svg", "font", "woff", "woff2", "ttf", "eot"]:
-        static_path = os.path.abspath(os.path.join(frontend_dir, path))
+        # Resolve against the known frontend directory and normalize the path
+        static_path = os.path.realpath(os.path.join(frontend_dir, path))
         # Ensure the resolved path is within the frontend directory to prevent directory traversal
-        if os.path.commonpath([frontend_dir, static_path]) != os.path.abspath(frontend_dir):
+        if os.path.commonpath([frontend_dir, static_path]) != frontend_dir:
             return JSONResponse(
                 status_code=404,
                 content={"message": "Static file not found"}
