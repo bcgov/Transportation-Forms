@@ -121,11 +121,25 @@
                     
                     <!-- Business Areas (dynamically loaded from API) -->
                     <div class="mb-3">
-                        <label class="form-label">Business Areas</label>
-                        <div id="businessAreasList" style="border: 1px solid #dee2e6; border-radius: 4px; padding: 1rem; max-height: 200px; overflow-y: auto;">
-                            <span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
+                        <label for="businessAreaInput" class="form-label">Business Area</label>
+                        <div class="position-relative" id="businessAreaCombobox">
+                            <input type="text"
+                                   id="businessAreaInput"
+                                   class="form-control"
+                                   placeholder="Type to search business areas..."
+                                   autocomplete="off"
+                                   role="combobox"
+                                   aria-expanded="false"
+                                   aria-controls="businessAreaDropdown"
+                                   aria-haspopup="listbox"
+                                   aria-autocomplete="list">
+                            <input type="hidden" id="businessAreaValue">
+                            <ul id="businessAreaDropdown"
+                                role="listbox"
+                                class="dropdown-menu w-100 p-0"
+                                style="display:none; max-height:220px; overflow-y:auto; z-index:1060;"></ul>
                         </div>
-                        <small class="text-muted">Select one or more business areas this form belongs to</small>
+                        <small class="text-muted">Select the business area this form belongs to (optional)</small>
                     </div>
                     
                     <!-- Keywords -->
@@ -607,6 +621,9 @@
         // Current route state
         let currentRoute = null;
         let routeParams = {};
+
+        // TASK-419: Business area combobox options cache
+        let businessAreaOptions = [];
         
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -623,6 +640,9 @@
                     addKeyword();
                 }
             });
+
+            // TASK-419: Initialise business area combobox
+            initBusinessAreaCombobox();
         });
         
         // Main router handler
@@ -719,34 +739,152 @@
             }
         }
 
-        // Load business areas dynamically from the API (TASK-110C)
+        // Load business areas dynamically from the API (TASK-419: combobox type-to-search)
         async function loadBusinessAreas() {
-            const container = document.getElementById('businessAreasList');
+            const previousId = document.getElementById('businessAreaValue').value;
+            // Reset visible input and hidden value; keep any previously confirmed selection
+            // so that a re-invocation (e.g. opening edit modal twice) stays idempotent.
+            document.getElementById('businessAreaInput').value = '';
+            document.getElementById('businessAreaValue').value = '';
+            businessAreaOptions = [];
             try {
                 const response = await fetch(`${API_BASE}/business-areas`);
                 if (!response.ok) throw new Error('Failed to load business areas');
                 const areas = await response.json();
-
-                if (areas.length === 0) {
-                    container.innerHTML = '<span class="text-muted">No business areas available.</span>';
-                    return;
+                businessAreaOptions = areas.map(area => ({
+                    id: area.id,
+                    label: area.name + (area.description ? ` \u2013 ${area.description}` : ''),
+                }));
+                // Restore previously confirmed selection if it still exists in the list
+                if (previousId) {
+                    const found = businessAreaOptions.find(o => o.id === previousId);
+                    if (found) {
+                        document.getElementById('businessAreaInput').value = found.label;
+                        document.getElementById('businessAreaValue').value = found.id;
+                    }
                 }
-
-                container.innerHTML = areas.map(area => `
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox"
-                               id="ba-${area.id}" value="${area.id}" name="businessAreas">
-                        <label class="form-check-label" for="ba-${area.id}">
-                            ${escapeHtml(area.name)}
-                            ${area.description ? `<small class="text-muted"> &ndash; ${escapeHtml(area.description)}</small>` : ''}
-                        </label>
-                    </div>
-                `).join('');
             } catch (error) {
-                container.innerHTML = '<span class="text-danger">Could not load business areas. Please refresh.</span>';
                 console.error('Business areas load error:', error);
             }
         }
+
+        // ── TASK-419: Business area combobox helpers ─────────────────────────
+
+        function initBusinessAreaCombobox() {
+            const input = document.getElementById('businessAreaInput');
+            const dropdown = document.getElementById('businessAreaDropdown');
+            if (!input || !dropdown) return;
+
+            // Show filtered list when user types
+            input.addEventListener('input', () => {
+                // If the typed text no longer exactly matches the confirmed label, clear the hidden value
+                const confirmedLabel = businessAreaOptions.find(
+                    o => o.id === document.getElementById('businessAreaValue').value
+                );
+                if (!confirmedLabel || confirmedLabel.label !== input.value) {
+                    document.getElementById('businessAreaValue').value = '';
+                }
+                renderBusinessAreaDropdown(input.value.toLowerCase());
+                setBusinessAreaDropdownVisible(true);
+            });
+
+            // Show full list on focus
+            input.addEventListener('focus', () => {
+                renderBusinessAreaDropdown(input.value.toLowerCase());
+                setBusinessAreaDropdownVisible(true);
+            });
+
+            // Keyboard navigation from the input field
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const firstItem = dropdown.querySelector('[role="option"]');
+                    if (firstItem) firstItem.focus();
+                } else if (e.key === 'Escape') {
+                    closeBusinessAreaDropdown();
+                } else if (e.key === 'Tab') {
+                    closeBusinessAreaDropdown();
+                }
+            });
+
+            // Close when clicking outside the combobox widget
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#businessAreaCombobox')) {
+                    closeBusinessAreaDropdown();
+                }
+            });
+        }
+
+        function renderBusinessAreaDropdown(query) {
+            const dropdown = document.getElementById('businessAreaDropdown');
+            if (!dropdown) return;
+            const filtered = query
+                ? businessAreaOptions.filter(o => o.label.toLowerCase().includes(query))
+                : businessAreaOptions;
+
+            dropdown.innerHTML = '';
+            if (filtered.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'dropdown-item disabled text-muted py-2';
+                li.setAttribute('aria-disabled', 'true');
+                li.textContent = query ? 'No matching business areas' : 'No business areas available';
+                dropdown.appendChild(li);
+            } else {
+                filtered.forEach(option => {
+                    const li = document.createElement('li');
+                    li.className = 'dropdown-item py-2';
+                    li.style.cursor = 'pointer';
+                    li.setAttribute('role', 'option');
+                    li.setAttribute('tabindex', '-1');
+                    li.setAttribute('data-id', option.id);
+                    li.textContent = option.label;
+                    // Prevent the input losing focus before we record the selection
+                    li.addEventListener('mousedown', (e) => e.preventDefault());
+                    li.addEventListener('click', () => selectBusinessArea(option.id, option.label));
+                    li.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            selectBusinessArea(option.id, option.label);
+                        } else if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            const next = li.nextElementSibling;
+                            if (next && next.getAttribute('role') === 'option') next.focus();
+                        } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            const prev = li.previousElementSibling;
+                            if (prev && prev.getAttribute('role') === 'option') prev.focus();
+                            else document.getElementById('businessAreaInput').focus();
+                        } else if (e.key === 'Escape') {
+                            closeBusinessAreaDropdown();
+                            document.getElementById('businessAreaInput').focus();
+                        } else if (e.key === 'Tab') {
+                            closeBusinessAreaDropdown();
+                        }
+                    });
+                    dropdown.appendChild(li);
+                });
+            }
+        }
+
+        function selectBusinessArea(id, label) {
+            document.getElementById('businessAreaInput').value = label;
+            document.getElementById('businessAreaValue').value = id;
+            closeBusinessAreaDropdown();
+            document.getElementById('businessAreaInput').focus();
+        }
+
+        function setBusinessAreaDropdownVisible(visible) {
+            const input = document.getElementById('businessAreaInput');
+            const dropdown = document.getElementById('businessAreaDropdown');
+            if (input) input.setAttribute('aria-expanded', String(visible));
+            if (dropdown) dropdown.style.display = visible ? 'block' : 'none';
+        }
+
+        function closeBusinessAreaDropdown() {
+            setBusinessAreaDropdownVisible(false);
+        }
+
+        // ── end TASK-419 ─────────────────────────────────────────────────────
 
         // Fetch and pre-populate the next version number (TASK-110C)
         async function prefillNextVersionNumber() {
@@ -934,12 +1072,12 @@
                 }
                 onFormSourceChange();
 
-                // Restore business area selections after they load
+                // TASK-418: Pre-select single business area after dropdown loads
                 loadBusinessAreas().then(() => {
-                    (form.business_areas || []).forEach(ba => {
-                        const cb = document.getElementById(`ba-${ba.id}`);
-                        if (cb) cb.checked = true;
-                    });
+                    const firstArea = (form.business_areas || [])[0];
+                    if (firstArea) {
+                        document.getElementById('businessAreaSelect').value = firstArea.id;
+                    }
                 });
 
                 keywords = form.keywords || [];
@@ -1149,8 +1287,10 @@
                 description: document.getElementById('description').value,
                 is_public: document.getElementById('isPublic').checked,
                 keywords: keywords,
-                business_area_ids: Array.from(document.querySelectorAll('input[name="businessAreas"]:checked'))
-                    .map(cb => cb.value),
+                business_area_ids: (() => {
+                    const v = document.getElementById('businessAreaSelect').value;
+                    return v ? [v] : [];
+                })(),
                 effective_date: document.getElementById('effectiveDate').value || null,
                 collects_personal_info: document.getElementById('collectsPersonalInfo').value,
                 // TASK-110C fields
@@ -1237,7 +1377,7 @@
             container.innerHTML = keywords.map((kw, idx) => `
                 <span class="badge bg-light text-dark me-2 mb-2">
                     ${escapeHtml(kw)}
-                    <span onclick="removeKeyword(${idx})" style="cursor: pointer; margin-left: 0.5rem;">Ã—</span>
+                    <span onclick="removeKeyword(${idx})" style="cursor: pointer; margin-left: 0.5rem;">x</span>
                 </span>
             `).join('');
         }

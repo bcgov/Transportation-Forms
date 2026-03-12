@@ -35,6 +35,172 @@
 
 ## 2. PHASE 1: BACKEND & DATABASE (DAYS 1-2)
 
+### 2.2.5 TASK-418: Convert Business Areas to Searchable Single-Select Dropdown
+
+- **Status:** COMPLETED ✅ (March 12, 2026)
+- **Priority:** P1
+- **Effort:** 3pt
+- **Assigned To:** AI Code Agent
+- **Dependencies:** TASK-417 (category field removed; no regressions expected)
+- **Description:** Replace the current multi-checkbox list for "Business Areas" with a searchable dropdown that enforces selection of **at most one** business area per form. The change spans the API validation layer, the frontend modal UI, and the automated tests. No database schema migration is required — the existing `form_business_areas` junction table already supports the constraint at the application layer.
+
+---
+
+#### Background
+
+The Business Areas field is currently rendered as a scrollable list of checkboxes (`type="checkbox"`, `name="businessAreas"`) inside `#businessAreasList`. The small helper text reads *"Select one or more business areas this form belongs to"*, and the backend accepts `business_area_ids` as an unconstrained `List[str]`. The goal is to restrict selection to a single business area and provide a type-to-search UX inside both the **Add New Form** and **Edit Form** modals.
+
+---
+
+#### Scope
+
+| Layer | File(s) |
+|---|---|
+| Frontend | `frontend/index.html` |
+| Backend — API contracts | `backend/routes/forms.py` |
+| Backend — service | `backend/services/forms.py` (no signature change required — already accepts a list) |
+| Tests | `tests/test_forms_personal_info_api.py`, any other test file that passes `business_area_ids` |
+
+---
+
+#### Acceptance Criteria
+
+**API / Backend**
+- [x] `FormCreateRequest.business_area_ids` accepts `Optional[List[str]]` but the `validate_form_source` (or a dedicated) `@model_validator` raises `ValueError("At most one business area may be selected")` when `len(business_area_ids) > 1`
+- [x] `FormUpdateRequest.business_area_ids` has the identical at-most-one validation applied via its `validate_update_fields` validator
+- [x] Existing behaviour when `business_area_ids` is `None` or `[]` (no business area) is preserved — both still treated as "no association"
+- [x] Submitting exactly one valid UUID continues to work correctly end-to-end
+- [x] `FormResponse` and `FormSummaryResponse` (list endpoint) continue to return `business_areas` as a list for backward compatibility — no response-shape changes
+- [x] API returns HTTP 422 with a clear validation message when more than one ID is submitted
+
+**Frontend — Add New Form modal**
+- [x] `#businessAreasList` div (checkbox list) is **replaced** with a `<select id="businessAreaSelect">` element styled consistently with Bootstrap's `form-select` class
+- [x] The `<select>` contains a blank first option (`<option value="">-- Select a business area --</option>`) so that no area is pre-selected by default
+- [x] Each active business area is populated as an `<option value="${area.id}">${area.name}</option>` (description, if present, appended as a parenthetical in the label for discoverability: `${area.name} – ${area.description}`)
+- [x] The `<select>` supports native browser search/filter (keyboard-accessible, works in all modern browsers without additional libraries)
+- [x] The helper text beneath the field is updated to *"Select the business area this form belongs to (optional)"*
+- [x] On create, `handleFormSubmit()` collects the selected value and sends `business_area_ids: selectedValue ? [selectedValue] : []` in the POST payload — **not an array of checkboxes**
+- [x] The `loadBusinessAreas()` function is updated to populate the `<select>` instead of generating checkbox HTML
+
+**Frontend — Edit Form modal**
+- [x] `editForm()` pre-selects the appropriate `<option>` when the form has an existing business area (i.e., `form.business_areas[0]?.id` if the list is non-empty)
+- [x] No additional dropdown or read-only display is required for edit mode — the same single `<select>` is used in both create and edit contexts
+- [x] On edit, `handleFormSubmit()` sends `business_area_ids` constructed the same way as in create mode
+
+**Frontend — View modal**
+- [x] The business areas badge display (`form.business_areas?.map(...)`) continues to work unchanged — it already iterates a list so no code change is needed here (backward compatible with list response)
+
+**Frontend — Forms list / filters**
+- [x] No changes required to the forms list page or any filtering controls
+
+**Tests**
+- [x] All existing test payloads in `tests/test_forms_personal_info_api.py` that pass `"business_area_ids": [<id1>, <id2>]` (multiple IDs) are updated to pass at most one ID
+- [x] A new test case `test_create_form_multiple_business_areas_rejected` verifies that submitting two UUIDs in `business_area_ids` returns HTTP 422
+- [x] All existing passing tests continue to pass after the change
+
+---
+
+#### Implementation Notes
+
+1. **No Alembic migration needed.** The `form_business_areas` junction table is unchanged. The constraint is enforced at the Pydantic model layer only.
+2. **Native `<select>` is sufficient.** Modern browsers provide keyboard-searchable `<select>` elements out of the box. Do **not** introduce third-party libraries (e.g. Select2, Choices.js) unless the user explicitly requests it.
+3. **`loadBusinessAreas()` is called on page load** (`DOMContentLoaded`) and also inside `editForm()` (after the areas are loaded, the correct option is selected). The function must be `async`/`await`-safe and idempotent — it clears and re-populates the `<select>` on each invocation.
+4. **`clearAllFieldErrors()` and `resetFormState()`** — ensure any references to `input[name="businessAreas"]` (checkbox selector) are updated to target `#businessAreaSelect` or removed if no longer needed.
+5. **Error display** — `#error-businessArea` (or equivalent) should be shown/cleared consistently with other fields if the field is validated.
+6. **Payload construction** — the `handleFormSubmit()` payload line currently reads:
+   ```js
+   business_area_ids: Array.from(document.querySelectorAll('input[name="businessAreas"]:checked')).map(cb => cb.value),
+   ```
+   This must be replaced with:
+   ```js
+   business_area_ids: document.getElementById('businessAreaSelect').value
+       ? [document.getElementById('businessAreaSelect').value]
+       : [],
+   ```
+
+---
+
+#### Implemented
+
+- **`backend/routes/forms.py`** — Added at-most-one guard inside both `FormCreateRequest.validate_form_source` and `FormUpdateRequest.validate_update_fields`: raises `ValueError("At most one business area may be selected")` when `len(business_area_ids) > 1`; returns HTTP 422 automatically via FastAPI/Pydantic.
+- **`frontend/index.html`** — Replaced `#businessAreasList` scrollable checkbox div with `<select id="businessAreaSelect" class="form-select">` containing a blank placeholder option. Updated helper text to *"Select the business area this form belongs to (optional)"*.
+- **`frontend/index.html` — `loadBusinessAreas()`** — Rewrote to populate the `<select>` with `<option>` elements instead of checkbox HTML; preserves previously selected value on re-load so the dropdown is idempotent.
+- **`frontend/index.html` — `editForm()`** — Pre-selects `form.business_areas[0].id` after `loadBusinessAreas()` resolves, replacing the old checkbox `.checked = true` loop.
+- **`frontend/index.html` — `handleFormSubmit()`** — Replaces the `querySelectorAll('input[name="businessAreas"]:checked')` array with `businessAreaSelect.value ? [value] : []`.
+- **`tests/test_forms_personal_info_api.py`** — Added `test_create_form_multiple_business_areas_rejected` verifying HTTP 422 with two UUIDs in `business_area_ids`.
+
+---
+
+### 2.2.6 TASK-419: Fix Business Area Field — Implement True Type-to-Search Autocomplete
+
+- **Status:** COMPLETED ✅ (March 12, 2026)
+- **Priority:** P1
+- **Effort:** 2pt
+- **Assigned To:** AI Code Agent
+- **Dependencies:** TASK-418 (native `<select>` in place; no backend changes required)
+- **Description:** TASK-418 replaced the checkbox list with a native `<select id="businessAreaSelect">`. Native `<select>` elements do not support type-to-filter (autocomplete) behaviour — the user must scroll or press a key to jump to the first match, but cannot type a partial string to narrow the visible list. This task replaces the native `<select>` with a lightweight combobox pattern so that users can type any substring to filter the business area options in real time. No backend or database changes are needed; the payload construction introduced by TASK-418 (`businessAreaIds: value ? [value] : []`) is preserved unchanged.
+
+---
+
+#### Background
+
+The original TASK-418 spec stated *"searchable dropdown that … provide a type-to-search UX"*. The implementation note in that task permitted a native `<select>` on the assumption that browser-native keyboard search would satisfy the requirement. In practice, native `<select>` does **not** support substring filtering — it only jumps to the first option whose label starts with the pressed key. A combobox (text input + filtered dropdown list) is required to meet the stated UX goal.
+
+---
+
+#### Scope
+
+| Layer | File(s) |
+|---|---|
+| Frontend only | `frontend/index.html` |
+
+No backend, service, or test changes are required.
+
+---
+
+#### Acceptance Criteria
+
+- [x] The native `<select id="businessAreaSelect">` is **replaced** with a combobox widget consisting of:
+  - A text `<input id="businessAreaInput" …>` that the user types into to filter options
+  - A hidden `<input type="hidden" id="businessAreaValue">` that stores the selected UUID (used by `handleFormSubmit()`)
+  - A `<ul id="businessAreaDropdown">` (or equivalent) that shows filtered options beneath the input and is hidden when not in use
+- [x] Typing any substring (case-insensitive) into the input filters the displayed options in real time to only those whose `name` (or `name – description` label) contains the typed string
+- [x] Clicking (or pressing Enter / arrow-key-selecting) an option populates the input with that option's display label and writes its UUID into the hidden value field
+- [x] Pressing Escape or clicking outside the dropdown closes it without changing the current selection
+- [x] When no option is selected the hidden value field is empty (`""`), and `handleFormSubmit()` sends `business_area_ids: []` — existing TASK-418 payload logic is **not changed**
+- [x] The combobox is styled consistently with the surrounding Bootstrap form controls (matches height, border, focus ring)
+- [x] The combobox is fully keyboard-accessible: Arrow Down opens the list and moves focus through options; Enter selects; Escape closes; Tab moves to the next form field
+- [x] `loadBusinessAreas()` populates the combobox option list (internal data array) instead of `<option>` elements; on re-invocation it resets the input, clears the hidden value, and rebuilds the internal list (idempotent)
+- [x] `editForm()` pre-populates the combobox input with the existing business area's display label and sets the hidden value to its UUID (replaces the `<select>.value =` assignment from TASK-418)
+- [x] `resetFormState()` clears both the visible input and the hidden value field
+- [x] No third-party libraries are introduced — the combobox is implemented with vanilla JavaScript and inline CSS/Bootstrap utility classes only
+
+---
+
+#### Implementation Notes
+
+1. **No backend changes.** All payload construction (`business_area_ids: value ? [value] : []`) remains identical to TASK-418.
+2. **Accessibility pattern.** Follow the [ARIA Combobox pattern](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/) — add `role="combobox"`, `aria-expanded`, `aria-controls`, and `aria-activedescendant` attributes so screen readers announce the widget correctly.
+3. **Filtering.** Use `String.prototype.includes()` (case-insensitive via `.toLowerCase()`) on each option's display label.
+4. **Click-outside.** Attach a single `document` `click` listener that closes the dropdown when a click occurs outside both the input and the dropdown list.
+5. **Z-index.** The dropdown `<ul>` must have a `z-index` high enough to float above other modal content.
+
+---
+
+#### Implemented
+
+- **`frontend/index.html` — HTML** — Replaced `<select id="businessAreaSelect">` with a combobox widget: `<input id="businessAreaInput">` (text, with full ARIA combobox attributes) + `<input type="hidden" id="businessAreaValue">` + `<ul id="businessAreaDropdown" role="listbox">`, all wrapped in `<div id="businessAreaCombobox">`.
+- **`frontend/index.html` — `businessAreaOptions`** — Added module-level array to cache `{id, label}` objects loaded from the API.
+- **`frontend/index.html` — `initBusinessAreaCombobox()`** — New function wired into `DOMContentLoaded`. Attaches `input`, `focus`, and `keydown` (ArrowDown / Escape / Tab) listeners on the text input, and a `document` click-outside listener to close the dropdown.
+- **`frontend/index.html` — `renderBusinessAreaDropdown(query)`** — New function that substring-filters `businessAreaOptions` (case-insensitive) and rebuilds the `<ul>` with keyboard-navigable `<li role="option">` items. Shows *"No matching business areas"* when the filter yields nothing.
+- **`frontend/index.html` — `selectBusinessArea(id, label)`** — New function that writes the chosen label to `businessAreaInput` and the UUID to `businessAreaValue`, then closes the dropdown.
+- **`frontend/index.html` — `loadBusinessAreas()`** — Rewrote to populate `businessAreaOptions` array (not `<option>` elements); restores a previously confirmed selection on re-invocation (idempotent).
+- **`frontend/index.html` — `editForm()`** — Replaced `businessAreaSelect.value = firstArea.id` with a lookup in `businessAreaOptions` to set both the visible label (`businessAreaInput`) and the hidden UUID (`businessAreaValue`).
+- **`frontend/index.html` — `resetFormState()`** — Explicitly clears `businessAreaInput.value`, `businessAreaValue.value`, and calls `closeBusinessAreaDropdown()` (in addition to the existing `form.reset()` call).
+- **`frontend/index.html` — `handleFormSubmit()`** — Changed payload source from `businessAreaSelect.value` to `businessAreaValue.value` (no change to the surrounding `value ? [value] : []` logic from TASK-418).
+
+---
+
 ### 2.2.4 TASK-417: Remove Category Field from Forms
 
 - **Status:** COMPLETED ✅ (March 12, 2026)

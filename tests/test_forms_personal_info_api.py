@@ -103,3 +103,23 @@ def test_reject_invalid_personal_info_value(forms_client: TestClient):
 
     assert response.status_code == 422
     assert "collects_personal_info" in str(response.json()["detail"])
+
+
+@pytest.mark.integration
+def test_create_form_multiple_business_areas_rejected(forms_client: TestClient):
+    """TASK-418: submitting more than one business_area_id must return 422."""
+    response = forms_client.post(
+        "/api/v1/forms",
+        json={
+            "title": "Multi-Area Form",
+            "description": "Should be rejected because two business areas provided.",
+            "is_public": False,
+            "business_area_ids": [
+                "00000000-0000-0000-0000-000000000001",
+                "00000000-0000-0000-0000-000000000002",
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+    assert "At most one business area" in str(response.json()["detail"])
