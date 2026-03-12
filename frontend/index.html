@@ -66,14 +66,6 @@
                     </div>
                 </div>
                 <div class="col-md-6 text-end">
-                    <select class="form-select form-select-sm d-inline-block w-auto" id="categoryFilter" onchange="applyFilters()">
-                        <option value="">All Categories</option>
-                        <option value="permits">Permits</option>
-                        <option value="licenses">Licenses</option>
-                        <option value="applications">Applications</option>
-                        <option value="transportation">Transportation</option>
-                        <option value="finance">Finance</option>
-                    </select>
                 </div>
             </div>
             
@@ -125,21 +117,6 @@
                         <textarea class="form-control" id="description" name="description" rows="4" placeholder="Describe the purpose and usage of this form" required></textarea>
                         <div class="invalid-feedback" id="error-description"></div>
                         <small class="text-muted">Required. Describe the purpose and usage of this form</small>
-                    </div>
-                    
-                    <!-- Category -->
-                    <div class="mb-3">
-                        <label for="category" class="form-label"><strong>Category</strong> <span style="color: red;">*</span></label>
-                        <select class="form-select" id="category" name="category" required>
-                            <option value="">Select a category...</option>
-                            <option value="permits">Permits</option>
-                            <option value="licenses">Licenses</option>
-                            <option value="applications">Applications</option>
-                            <option value="transportation">Transportation</option>
-                            <option value="finance">Finance</option>
-                            <option value="compliance">Compliance</option>
-                            <option value="other">Other</option>
-                        </select>
                     </div>
                     
                     <!-- Business Areas (dynamically loaded from API) -->
@@ -831,7 +808,6 @@
                                 <h5 class="card-title">${escapeHtml(getFormNumberDisplay(form))} - ${escapeHtml(form.title)}</h5>
                                 <p class="card-text text-muted">${escapeHtml(form.description || 'No description')}</p>
                                 <div>
-                                    <span class="badge bg-secondary">${form.category}</span>
                                     <span class="badge ${form.is_public ? 'bg-success' : 'bg-warning'}">
                                         ${form.is_public ? 'Public' : 'Private'}
                                     </span>
@@ -877,9 +853,6 @@
                         
                         <dt class="col-sm-3">Description:</dt>
                         <dd class="col-sm-9">${escapeHtml(form.description || 'N/A')}</dd>
-                        
-                        <dt class="col-sm-3">Category:</dt>
-                        <dd class="col-sm-9"><span class="badge bg-secondary">${form.category}</span></dd>
                         
                         <dt class="col-sm-3">Status:</dt>
                         <dd class="col-sm-9"><span class="badge bg-info">${form.status}</span></dd>
@@ -938,7 +911,6 @@
                 // Populate form fields
                 document.getElementById('title').value = form.title;
                 document.getElementById('description').value = form.description || '';
-                document.getElementById('category').value = form.category;
                 document.getElementById('isPublic').checked = form.is_public;
                 document.getElementById('collectsPersonalInfo').value = form.collects_personal_info || 'No';
                 document.getElementById('effectiveDate').value = form.effective_date ? form.effective_date.split('T')[0] : '';
@@ -1105,7 +1077,7 @@
         }
 
         function clearAllFieldErrors() {
-            ['title', 'description', 'category', 'formSource', 'formSourceUrl', 'fileUpload'].forEach(clearFieldError);
+            ['title', 'description', 'formSource', 'formSourceUrl', 'fileUpload'].forEach(clearFieldError);
             const generalErrors = document.getElementById('formErrors');
             if (generalErrors) { generalErrors.style.display = 'none'; generalErrors.textContent = ''; }
         }
@@ -1120,7 +1092,6 @@
                     const fieldMap = {
                         'title': 'title',
                         'description': 'description',
-                        'category': 'category',
                         'form_source': 'formSource',
                         'form_source_url': 'formSourceUrl',
                         'form_attachment_url': 'fileUpload',
@@ -1176,7 +1147,6 @@
             const formData = {
                 title: document.getElementById('title').value,
                 description: document.getElementById('description').value,
-                category: document.getElementById('category').value,
                 is_public: document.getElementById('isPublic').checked,
                 keywords: keywords,
                 business_area_ids: Array.from(document.querySelectorAll('input[name="businessAreas"]:checked'))
@@ -2470,7 +2440,6 @@
         
         // Apply filters
         function applyFilters() {
-            const category = document.getElementById('categoryFilter').value;
             // Implement filtering
             loadForms();
         }

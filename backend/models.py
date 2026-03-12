@@ -132,7 +132,6 @@ class Form(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
-    category = Column(String(100), nullable=False, index=True)
     status = Column(String(50), default='draft', nullable=False, index=True)  # draft, pending_review, approved, published, archived
     is_public = Column(Boolean, default=False, nullable=False, index=True)
     current_version = Column(Integer, default=0, nullable=False)
@@ -166,7 +165,6 @@ class Form(Base):
     
     __table_args__ = (
         Index('idx_forms_status_public', 'status', 'is_public'),
-        Index('idx_forms_category', 'category'),
         Index('idx_forms_created_by', 'created_by_id'),
         CheckConstraint("collects_personal_info IN ('Yes', 'No')", name='check_collects_personal_info_values'),
     )

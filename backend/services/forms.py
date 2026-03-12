@@ -30,7 +30,6 @@ class FormService:
         db: Session,
         title: str,
         description: Optional[str],
-        category: str,
         is_public: bool,
         keywords: Optional[List[str]],
         business_area_ids: Optional[List[UUID]],
@@ -51,7 +50,6 @@ class FormService:
             db: Database session
             title: Form title
             description: Form description
-            category: Form category
             is_public: Whether form is publicly visible
             keywords: List of search keywords
             business_area_ids: List of associated business area IDs
@@ -108,7 +106,6 @@ class FormService:
         form = Form(
             title=title,
             description=description,
-            category=category,
             is_public=is_public,
             keywords=keywords or [],
             created_by_id=created_by_id,
@@ -146,7 +143,6 @@ class FormService:
         audit_new_values = {
             "id": str(form.id),
             "title": title,
-            "category": category,
             "is_public": is_public,
             "version_number": version_number,
             "form_source": form_source,
@@ -194,7 +190,6 @@ class FormService:
         db: Session,
         skip: int = 0,
         limit: int = 20,
-        category: Optional[str] = None,
         status: Optional[str] = None,
         is_public: Optional[bool] = None,
         sort_by: str = "created_at",
@@ -207,7 +202,6 @@ class FormService:
             db: Database session
             skip: Number of records to skip
             limit: Max records to return (max 100)
-            category: Filter by category
             status: Filter by status (draft, pending_review, approved, published, archived)
             is_public: Filter by public status
             sort_by: Field to sort by (created_at, updated_at, title)
@@ -219,8 +213,6 @@ class FormService:
         query = db.query(Form).filter(Form.deleted_at.is_(None))
         
         # Apply filters
-        if category:
-            query = query.filter(Form.category == category)
         if status:
             query = query.filter(Form.status == status)
         if is_public is not None:
@@ -266,7 +258,7 @@ class FormService:
             db: Database session
             form_id: Form UUID to update
             updated_by_id: UUID of user performing update
-            **kwargs: Fields to update (title, description, category, is_public, 
+            **kwargs: Fields to update (title, description, is_public, 
                      keywords, business_area_ids, effective_date)
             
         Returns:
@@ -280,7 +272,6 @@ class FormService:
         old_values = {
             "title": form.title,
             "description": form.description,
-            "category": form.category,
             "is_public": form.is_public,
             "keywords": form.keywords,
             "collects_personal_info": form.collects_personal_info,
@@ -291,8 +282,6 @@ class FormService:
             form.title = kwargs["title"]
         if "description" in kwargs:
             form.description = kwargs["description"]
-        if "category" in kwargs:
-            form.category = kwargs["category"]
         if "is_public" in kwargs:
             form.is_public = kwargs["is_public"]
         if "keywords" in kwargs:
@@ -542,7 +531,6 @@ class FormService:
             "id": str(form.id),
             "title": form.title,
             "description": form.description,
-            "category": form.category,
             "status": form.status,
             "is_public": form.is_public,
             "current_version": form.current_version,
