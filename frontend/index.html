@@ -216,6 +216,17 @@
                         <label for="effectiveDate" class="form-label">Effective Date</label>
                         <input type="date" class="form-control" id="effectiveDate" name="effectiveDate">
                     </div>
+
+                    <!-- Collects Personal Information -->
+                    <div class="mb-3">
+                        <label for="collectsPersonalInfo" class="form-label"><strong>Does this form collect personal info?</strong> <span style="color: red;">*</span></label>
+                        <select class="form-select" id="collectsPersonalInfo" name="collectsPersonalInfo" required>
+                            <option value="No">No</option>
+                            <option value="Yes">Yes</option>
+                        </select>
+                        <div class="invalid-feedback" id="error-collectsPersonalInfo"></div>
+                        <small class="text-muted">Indicates whether this form collects personal information from end users</small>
+                    </div>
                     
                     <!-- Public Visibility -->
                     <div class="mb-3">
@@ -701,6 +712,20 @@
             try {
                 showSpinner('#formsList', true);
                 const response = await fetch(`${API_BASE}/forms?skip=0&limit=100`);
+
+                if (!response.ok) {
+                    let detail = `HTTP ${response.status}`;
+                    try {
+                        const err = await response.json();
+                        if (typeof err?.detail === 'string') {
+                            detail = err.detail;
+                        }
+                    } catch (_) {
+                        // Ignore parse errors and fall back to status text
+                    }
+                    throw new Error(detail);
+                }
+
                 const data = await response.json();
                 displayForms(data.items || []);
             } catch (error) {
@@ -755,6 +780,25 @@
                 // Non-critical â€“ leave placeholder as-is
             }
         }
+
+        function getFormNumberDisplay(form) {
+            const possibleValues = [
+                form?.full_form_number,
+                form?.form_number,
+                form?.form_number_display,
+                form?.form_number_value,
+                form?.form_number_reservation?.full_form_number,
+                form?.form_number_reservation?.form_number,
+            ];
+
+            for (const value of possibleValues) {
+                if (typeof value === 'string' && value.trim()) {
+                    return value.trim();
+                }
+            }
+
+            return 'N/A';
+        }
         
         function displayForms(forms) {
             const container = document.getElementById('formsList');
@@ -776,7 +820,7 @@
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-8">
-                                <h5 class="card-title">${escapeHtml(form.title)}</h5>
+                                <h5 class="card-title">${escapeHtml(getFormNumberDisplay(form))} - ${escapeHtml(form.title)}</h5>
                                 <p class="card-text text-muted">${escapeHtml(form.description || 'No description')}</p>
                                 <div>
                                     <span class="badge bg-secondary">${form.category}</span>
@@ -819,6 +863,9 @@
                     <dl class="row">
                         <dt class="col-sm-3">Title:</dt>
                         <dd class="col-sm-9">${escapeHtml(form.title)}</dd>
+
+                        <dt class="col-sm-3">Form Number:</dt>
+                        <dd class="col-sm-9">${escapeHtml(getFormNumberDisplay(form))}</dd>
                         
                         <dt class="col-sm-3">Description:</dt>
                         <dd class="col-sm-9">${escapeHtml(form.description || 'N/A')}</dd>
@@ -830,10 +877,13 @@
                         <dd class="col-sm-9"><span class="badge bg-info">${form.status}</span></dd>
                         
                         <dt class="col-sm-3">Public:</dt>
-                        <dd class="col-sm-9">${form.is_public ? 'Yes' : 'âœ— No'}</dd>
+                        <dd class="col-sm-9">${form.is_public ? 'Yes' : 'No'}</dd>
 
                         <dt class="col-sm-3">Version:</dt>
                         <dd class="col-sm-9">${form.version_number !== null && form.version_number !== undefined ? 'v' + form.version_number : 'N/A'}</dd>
+
+                        <dt class="col-sm-3">Does this form collect personal info?</dt>
+                        <dd class="col-sm-9">${form.collects_personal_info || 'No'}</dd>
 
                         <dt class="col-sm-3">Form Source:</dt>
                         <dd class="col-sm-9">${form.form_source || 'N/A'}</dd>
@@ -882,6 +932,7 @@
                 document.getElementById('description').value = form.description || '';
                 document.getElementById('category').value = form.category;
                 document.getElementById('isPublic').checked = form.is_public;
+                document.getElementById('collectsPersonalInfo').value = form.collects_personal_info || 'No';
                 document.getElementById('effectiveDate').value = form.effective_date ? form.effective_date.split('T')[0] : '';
                 document.getElementById('versionNumber').value = form.version_number || '';
                 document.getElementById('formSource').value = form.form_source || '';
@@ -1108,6 +1159,7 @@
                 business_area_ids: Array.from(document.querySelectorAll('input[name="businessAreas"]:checked'))
                     .map(cb => cb.value),
                 effective_date: document.getElementById('effectiveDate').value || null,
+                collects_personal_info: document.getElementById('collectsPersonalInfo').value,
                 // TASK-110C fields
                 version_number: document.getElementById('versionNumber').value ? parseInt(document.getElementById('versionNumber').value, 10) : null,
                 form_source: formSource || null,

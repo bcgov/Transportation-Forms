@@ -45,6 +45,8 @@ class FormCreateRequest(BaseModel):
     form_attachment_filename: Optional[str] = Field(None, max_length=255, description="Original filename of the uploaded attachment")
     # TASK-413: Form number reservation linkage
     form_number_reservation_id: Optional[str] = Field(None, description="UUID of approved form number reservation to link (optional)")
+    # Personal information collection indicator
+    collects_personal_info: Optional[str] = Field(default="No", description="Does this form collect personal information? ('Yes' or 'No')")
 
     @model_validator(mode="after")
     def validate_form_source(self) -> "FormCreateRequest":
@@ -63,6 +65,12 @@ class FormCreateRequest(BaseModel):
                     "form_attachment_url is required when form_source is 'Download'. "
                     "Upload the file first via POST /api/v1/uploads, then provide the returned URL."
                 )
+        
+        # Validate collects_personal_info field
+        if self.collects_personal_info is not None:
+            if self.collects_personal_info not in ("Yes", "No"):
+                raise ValueError("collects_personal_info must be 'Yes' or 'No'")
+        
         return self
 
 
@@ -75,6 +83,13 @@ class FormUpdateRequest(BaseModel):
     keywords: Optional[List[str]] = None
     business_area_ids: Optional[List[str]] = None
     effective_date: Optional[datetime] = None
+    collects_personal_info: Optional[str] = Field(None, description="Does this form collect personal information? ('Yes' or 'No')")
+
+    @model_validator(mode="after")
+    def validate_collects_personal_info(self) -> "FormUpdateRequest":
+        if self.collects_personal_info is not None and self.collects_personal_info not in ("Yes", "No"):
+            raise ValueError("collects_personal_info must be 'Yes' or 'No'")
+        return self
 
 
 class FormResponse(BaseModel):
@@ -96,6 +111,12 @@ class FormResponse(BaseModel):
     form_source_url: Optional[str]
     form_attachment_url: Optional[str]
     form_attachment_filename: Optional[str]
+    # TASK-413: linked form number reservation display fields
+    form_number_reservation_id: Optional[str]
+    form_number: Optional[str]
+    full_form_number: Optional[str]
+    # Personal information collection indicator
+    collects_personal_info: str
     created_at: str
     updated_at: str
     
@@ -232,6 +253,7 @@ async def create_form(
             form_attachment_url=request.form_attachment_url,
             form_attachment_filename=request.form_attachment_filename,
             form_number_reservation_id=form_number_reservation_id,
+            collects_personal_info=request.collects_personal_info,
         )
         
         return FormResponse(**FormService.get_form_with_details(db, form.id))
@@ -305,6 +327,8 @@ async def update_form(
             update_data["effective_date"] = request.effective_date
         if request.business_area_ids is not None:
             update_data["business_area_ids"] = [UUID(ba_id) for ba_id in request.business_area_ids]
+        if request.collects_personal_info is not None:
+            update_data["collects_personal_info"] = request.collects_personal_info
         
         form = FormService.update_form(
             db=db,

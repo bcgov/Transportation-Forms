@@ -35,6 +35,21 @@
 
 ## 2. PHASE 1: BACKEND & DATABASE (DAYS 1-2)
 
+### 2.2.1 TASK-414: Add Personal Info Collection Field to Forms
+- **Status:** COMPLETED
+- **Priority:** P1
+- **Effort:** 3pt
+- **Assigned To:** Full-Stack Agent
+- **Description:** Add `collects_personal_info` field (Yes/No) to forms schema, APIs, Add New Form UI, and view modal.
+- **Acceptance Criteria:**
+  - [x] New DB column exists with default `No`
+  - [x] DB constraint enforces values `Yes` or `No`
+  - [x] Forms create/update APIs support the field
+  - [x] Forms response payload includes the field
+  - [x] Add New Form shows “Does this form collect personal info?”
+  - [x] Form view modal displays the selected value
+  - [x] Automated tests cover create/update/default/validation
+
 ### 2.1 Project Initialization
 
 #### TASK-101: GitHub Repository Setup
@@ -2562,6 +2577,46 @@ This epic introduces **3 new database tables** and modifications to seed data:
   - ✅ Service: Form creation accepts and validates form_number_reservation_id
   - ✅ Validation: Backend prevents duplicate use, non-approved, and expired reservations
 
+#### TASK-413-Frontend-ViewModal: Display Form Number in View Modal
+- **Status:** COMPLETED ✅ (March 12, 2026)
+- **Priority:** P1
+- **Effort:** 1pt
+- **Assigned To:** AI Code Agent
+- **Dependencies:** ✅ TASK-413-Frontend
+- **Description:** Update the form "View" modal window to display the Form Number value so users can immediately see which reserved number is linked to the form.
+- **Implementation Scope:**
+  - Add Form Number field display to the existing view modal UI
+  - Populate from existing form data payload (no API contract changes)
+  - Preserve current modal layout/behavior; only add the missing field
+- **Acceptance Criteria:**
+  - Form Number is visible in the view modal when present
+  - If Form Number is unavailable, UI handles gracefully without breaking layout
+  - No changes to existing modal actions, styling, or workflow
+- **Implemented:**
+  - Added `Form Number` row to the existing form view modal (`viewForm()` template)
+  - Reused existing form payload values with a graceful fallback to `N/A`
+  - Preserved existing modal layout, controls, and behavior
+
+#### TASK-413-Frontend-ListTitle: Prefix Form Number in Forms List Titles
+- **Status:** COMPLETED ✅ (March 12, 2026)
+- **Priority:** P1
+- **Effort:** 1pt
+- **Assigned To:** AI Code Agent
+- **Dependencies:** ✅ TASK-413-Frontend
+- **Description:** Update the forms list item title format to include Form Number before Form Title in this exact format: `<Form_Number> - <Form_Title>`.
+- **Implementation Scope:**
+  - Update list title rendering logic only
+  - Use existing Form Number and title values from the loaded form records
+  - Keep all other list metadata, ordering, actions, and styling unchanged
+- **Acceptance Criteria:**
+  - Every form item title renders as `<Form_Number> - <Form_Title>`
+  - Existing list interactions remain unchanged
+  - No regressions in responsive behavior or visual spacing
+- **Implemented:**
+  - Updated forms list card title rendering to `<Form_Number> - <Form_Title>`
+  - Added shared `getFormNumberDisplay(form)` helper to read existing payload fields safely
+  - Left list metadata, actions, ordering, and styling unchanged
+
 ### 5.8.4 Frontend Acceptance Criteria
 
 - [x] "Form Number" dropdown field appears at TOP of "Add New Form" section
@@ -2629,6 +2684,8 @@ This epic introduces **3 new database tables** and modifications to seed data:
   - [x] Form validation enforces dropdown selection before submit
   - [x] Error message shown on API failure with retry capability
   - [x] Loading spinner appears during fetch
+  - [x] Forms list title renders as `<Form_Number> - <Form_Title>`
+  - [x] View modal displays `Form Number` with graceful `N/A` fallback when unavailable
   
 - [x] E2E test workflow verification:
   - [x] Backend service tests: 118 tests passed (all reservation workflows tested)
