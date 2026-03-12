@@ -107,7 +107,13 @@ async def serve_frontend_paths(path: str):
     
     # Check if this is a static file request
     if "." in path and path.split(".")[-1] in ["js", "css", "png", "jpg", "gif", "svg", "font", "woff", "woff2", "ttf", "eot"]:
-        static_path = os.path.join(frontend_dir, path)
+        static_path = os.path.abspath(os.path.join(frontend_dir, path))
+        # Ensure the resolved path is within the frontend directory to prevent directory traversal
+        if os.path.commonpath([frontend_dir, static_path]) != os.path.abspath(frontend_dir):
+            return JSONResponse(
+                status_code=404,
+                content={"message": "Static file not found"}
+            )
         if os.path.exists(static_path):
             return FileResponse(static_path)
         return JSONResponse(
