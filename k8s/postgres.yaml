@@ -38,7 +38,10 @@ spec:
             - name: POSTGRES_USER
               value: "transportation"
             - name: POSTGRES_PASSWORD
-              value: "password"
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: postgres-password
             - name: POSTGRES_DB
               value: "transportation_forms"
             - name: POSTGRES_INITDB_ARGS
