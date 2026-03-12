@@ -40,6 +40,7 @@ class FormService:
         form_attachment_url: Optional[str] = None,
         form_attachment_filename: Optional[str] = None,
         form_number_reservation_id: Optional[UUID] = None,
+        collects_personal_info: Optional[str] = None,
     ) -> Form:
         """
         Create a new form.
@@ -60,6 +61,7 @@ class FormService:
             form_attachment_url: MinIO object URL when form_source == 'DOWNLOAD'
             form_attachment_filename: Original filename of the uploaded attachment
             form_number_reservation_id: (Optional) UUID of approved reservation to link (TASK-413)
+            collects_personal_info: 'Yes' or 'No' - whether this form collects personal information
             
         Returns:
             Created Form object
@@ -117,6 +119,7 @@ class FormService:
             form_attachment_url=form_attachment_url,
             form_attachment_filename=form_attachment_filename,
             form_number_reservation_id=form_number_reservation_id,
+            collects_personal_info=collects_personal_info or 'No',
         )
         
         # Associate business areas
@@ -145,6 +148,7 @@ class FormService:
             "is_public": is_public,
             "version_number": version_number,
             "form_source": form_source,
+            "collects_personal_info": form.collects_personal_info,
         }
         
         # Include reservation_id in audit log if provided (TASK-413)
@@ -277,6 +281,7 @@ class FormService:
             "category": form.category,
             "is_public": form.is_public,
             "keywords": form.keywords,
+            "collects_personal_info": form.collects_personal_info,
         }
         
         # Update fields
@@ -292,6 +297,8 @@ class FormService:
             form.keywords = kwargs["keywords"]
         if "effective_date" in kwargs:
             form.effective_date = kwargs["effective_date"]
+        if "collects_personal_info" in kwargs:
+            form.collects_personal_info = kwargs["collects_personal_info"]
         
         # Handle business area updates
         if "business_area_ids" in kwargs:
@@ -497,6 +504,8 @@ class FormService:
         form = FormService.get_form_by_id(db, form_id)
         if not form:
             return None
+
+        reservation = form.form_number_reservation
         
         return {
             "id": str(form.id),
@@ -523,6 +532,12 @@ class FormService:
             "form_source_url": form.form_source_url,
             "form_attachment_url": form.form_attachment_url,
             "form_attachment_filename": form.form_attachment_filename,
+            # Personal information field
+            "collects_personal_info": form.collects_personal_info,
+            # TASK-413 fields
+            "form_number_reservation_id": str(form.form_number_reservation_id) if form.form_number_reservation_id else None,
+            "form_number": reservation.form_number if reservation else None,
+            "full_form_number": reservation.full_form_number if reservation else None,
             "created_at": form.created_at.isoformat(),
             "updated_at": form.updated_at.isoformat(),
         }

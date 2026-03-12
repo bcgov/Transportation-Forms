@@ -149,6 +149,8 @@ class Form(Base):
     form_attachment_filename = Column(String(255), nullable=True)  # Original uploaded filename
     # TASK-413: Form number reservation linkage
     form_number_reservation_id = Column(UUID(as_uuid=True), ForeignKey("form_number_reservations.id"), nullable=True, index=True)
+    # Personal information collection indicator
+    collects_personal_info = Column(String(10), default='No', nullable=False, index=True)  # 'Yes' or 'No'
     deleted_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -166,6 +168,7 @@ class Form(Base):
         Index('idx_forms_status_public', 'status', 'is_public'),
         Index('idx_forms_category', 'category'),
         Index('idx_forms_created_by', 'created_by_id'),
+        CheckConstraint("collects_personal_info IN ('Yes', 'No')", name='check_collects_personal_info_values'),
     )
 
 
