@@ -62,6 +62,9 @@ TASK-*-*.md
 # K8s secrets file (contains actual credentials — use secrets.example.yaml as template)
 k8s/secrets.yaml
 
+# Local deployment script (machine-specific, not for shared repo)
+deploy-clean.ps1
+
 # RSA Keys (auto-generated, never commit!)
 backend/auth/keys/
 *.pem

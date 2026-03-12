@@ -19,8 +19,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Drop the index first, then the column
-    op.drop_index('idx_forms_category', table_name='forms')
+    # Drop the index first, then the column.
+    # if_exists=True guards against the index already being absent.
+    op.drop_index('ix_forms_category', table_name='forms', if_exists=True)
     op.drop_column('forms', 'category')
 
 
@@ -30,4 +31,4 @@ def downgrade() -> None:
         'forms',
         sa.Column('category', sa.String(100), nullable=False, server_default='other')
     )
-    op.create_index('idx_forms_category', 'forms', ['category'])
+    op.create_index('ix_forms_category', 'forms', ['category'])

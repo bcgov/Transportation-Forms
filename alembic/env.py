@@ -2,7 +2,7 @@
 
 from logging.config import fileConfig
 import logging
-from sqlalchemy import engine_from_config
+from sqlalchemy import engine_from_config, text
 from sqlalchemy import pool
 from alembic import context
 import os
@@ -55,6 +55,21 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Widen version_num to varchar(128) so long revision IDs (>32 chars) don't fail.
+        # This is idempotent — PostgreSQL accepts widening a varchar column at any time.
+        connection.execute(text("""
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_name = 'alembic_version'
+                ) THEN
+                    ALTER TABLE alembic_version
+                        ALTER COLUMN version_num TYPE varchar(128);
+                END IF;
+            END $$;
+        """))
+        connection.commit()
+
         context.configure(
             connection=connection,
             target_metadata=target_metadata

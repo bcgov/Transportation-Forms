@@ -69,7 +69,11 @@ class FormCreateRequest(BaseModel):
         if self.collects_personal_info is not None:
             if self.collects_personal_info not in ("Yes", "No"):
                 raise ValueError("collects_personal_info must be 'Yes' or 'No'")
-        
+
+        # TASK-418: at most one business area per form
+        if self.business_area_ids is not None and len(self.business_area_ids) > 1:
+            raise ValueError("At most one business area may be selected")
+
         return self
 
 
@@ -98,6 +102,9 @@ class FormUpdateRequest(BaseModel):
             if src_upper not in ("URL", "DOWNLOAD"):
                 raise ValueError("form_source must be 'URL' or 'Download'")
             self.form_source = "URL" if src_upper == "URL" else "Download"
+        # TASK-418: at most one business area per form
+        if self.business_area_ids is not None and len(self.business_area_ids) > 1:
+            raise ValueError("At most one business area may be selected")
         return self
 
 
