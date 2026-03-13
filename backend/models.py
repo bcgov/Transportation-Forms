@@ -8,7 +8,7 @@ from sqlalchemy import (
     Table, Integer, Index, UniqueConstraint, CheckConstraint, JSON,
     text as sa_text,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID, JSONB, TSVECTOR
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.types import TypeDecorator
@@ -136,7 +136,7 @@ class Form(Base):
     is_public = Column(Boolean, default=False, nullable=False, index=True)
     current_version = Column(Integer, default=0, nullable=False)
     keywords = Column(PortableJSON, nullable=False, default=[])  # Array of search keywords
-    search_vector = Column(String, nullable=True)  # Full-text search vector (tsvector)
+    search_vector = Column(TSVECTOR, nullable=True)  # Full-text search vector (tsvector)
     embedding = Column(String, nullable=True)  # Semantic embedding (vector)
     created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     effective_date = Column(DateTime, nullable=True)
@@ -165,6 +165,7 @@ class Form(Base):
     __table_args__ = (
         Index('idx_forms_status_public', 'status', 'is_public'),
         Index('idx_forms_created_by', 'created_by_id'),
+        Index('idx_forms_search_vector', 'search_vector', postgresql_using='gin'),
         CheckConstraint("collects_personal_info IN ('Yes', 'No')", name='check_collects_personal_info_values'),
     )
 

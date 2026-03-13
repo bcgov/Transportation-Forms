@@ -155,6 +155,12 @@ class FormListItem(BaseModel):
     updated_at: str
 
 
+class FormAutocompleteResponse(BaseModel):
+    """Autocomplete response model."""
+    query: str
+    suggestions: List[str]
+
+
 # ============================================================================
 # Router Setup
 # ============================================================================
@@ -280,6 +286,21 @@ async def create_form(
         )
 
 
+@router.get("/autocomplete", response_model=FormAutocompleteResponse)
+async def autocomplete_forms(
+    q: str = Query(..., min_length=2, description="Autocomplete query (minimum 2 characters)"),
+    max_suggestions: int = Query(10, ge=1, le=10, description="Maximum suggestions (1-10)"),
+    db: Session = Depends(get_db),
+) -> FormAutocompleteResponse:
+    """Return autocomplete suggestions for form titles/keywords."""
+    suggestions = FormService.get_autocomplete_suggestions(
+        db=db,
+        query_text=q,
+        max_suggestions=max_suggestions,
+    )
+    return FormAutocompleteResponse(query=q, suggestions=suggestions)
+
+
 @router.get("/{form_id}", response_model=FormResponse)
 async def get_form(
     form_id: str,
@@ -403,30 +424,53 @@ async def delete_form(
 @router.get("", response_model=FormListResponse)
 async def list_forms(
     skip: int = Query(0, ge=0, description="Number of forms to skip"),
-    limit: int = Query(20, ge=1, le=100, description="Number of forms to return (max 100)"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    limit: int = Query(25, description="Number of forms to return (allowed: 25, 50, 100)"),
+    q: Optional[str] = Query(None, description="Keyword full-text search query"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
+    business_area_ids: Optional[List[str]] = Query(None, description="Filter by business area IDs (multi-select)"),
+    form_source: Optional[str] = Query(None, pattern="^(Link|Download)$", description="Filter by source type"),
     is_public: Optional[bool] = Query(None, description="Filter by public status"),
-    sort_by: str = Query("created_at", regex="^(created_at|updated_at|title)$", description="Sort field"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
     db: Session = Depends(get_db),
 ) -> FormListResponse:
     """
     List forms with filtering, pagination, and sorting.
     
     - **skip**: Number of forms to skip (for pagination)
-    - **limit**: Max forms to return (1-100, default 20)
+    - **limit**: Max forms to return (25, 50, 100)
+    - **q**: Full-text keyword search query
     - **status**: Filter by status (draft, pending_review, approved, published, archived)
+    - **business_area_ids**: Optional list of business area IDs to filter by
+    - **form_source**: Filter by source type (Link or Download)
     - **is_public**: Filter by public/private status
-    - **sort_by**: Sort by created_at, updated_at, or title
-    - **sort_order**: Sort ascending (asc) or descending (desc)
+    - **sort_order**: Sort by Date Created ascending (asc) or descending (desc)
     """
+
+    if limit not in {25, 50, 100}:
+        raise HTTPException(
+            status_code=422,
+            detail="limit must be one of: 25, 50, 100",
+        )
+
+    business_area_uuid_list: Optional[List[UUID]] = None
+    if business_area_ids:
+        try:
+            business_area_uuid_list = [UUID(value) for value in business_area_ids]
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid business area ID format",
+            )
+
     forms, total = FormService.list_forms(
         db=db,
         skip=skip,
         limit=limit,
-        status=status,
+        q=q,
+        status=status_filter,
+        business_area_ids=business_area_uuid_list,
+        form_source=form_source,
         is_public=is_public,
-        sort_by=sort_by,
         sort_order=sort_order,
     )
     
