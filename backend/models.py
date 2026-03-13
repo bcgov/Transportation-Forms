@@ -141,7 +141,6 @@ class Form(Base):
     created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     effective_date = Column(DateTime, nullable=True)
     # TASK-110C: Form creation enhancement fields
-    version_number = Column(Integer, default=1, nullable=True)  # User-visible form document version
     form_source = Column(String(50), nullable=True)              # 'URL' or 'Download'
     form_source_url = Column(String(500), nullable=True)         # URL when form_source == 'URL'
     form_attachment_url = Column(String(500), nullable=True)     # MinIO object URL when form_source == 'Download'

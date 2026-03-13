@@ -179,7 +179,7 @@ As an administrator,
 - **FR-PUB-016:** Download initiates within 100ms
 
 #### 4.1.4 Form Details
-- **FR-PUB-017:** Title, description, version number
+- **FR-PUB-017:** Title and description
 - **FR-PUB-018:** Last updated date, published date, status
 - **FR-PUB-019:** Business area(s) associated
 - **FR-PUB-020:** File format, file size
@@ -207,7 +207,6 @@ As an administrator,
   - Description (required)
   - Category (required)
   - Business area(s) - multiple selection
-  - Version number (auto-incremented)
   - Form access (public/internal) (required)
   - Status - 'Active' or 'Archived' (set Active by default)
   - Keywords
@@ -250,7 +249,7 @@ As an administrator,
 - **FR-STAFF-029:** Filter by status (all statuses)
 - **FR-STAFF-030:** Filter by category (all categories)
 - **FR-STAFF-031:** Filter by business area (all business area)
-- **FR-STAFF-032:** Advanced filters: date range, version, file type
+- **FR-STAFF-032:** Advanced filters: date range, file type
 
 ### 4.3 Admin Portal
 
@@ -551,8 +550,7 @@ Desktop:    > 1024px (Full layout)
 - **Staff Backend:** See all forms regardless of status (filtered by permissions)
 
 #### 9.4.2 Version Management
-- Version number auto-increments on new file upload
-- Previous versions stored in `form_versions` table
+- Internal version history is maintained in the `form_versions` table
 - S3 versioning enabled for audit trail
 - Users can download previous versions (staff only)
 
