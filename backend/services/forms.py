@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc, func
+from sqlalchemy import and_, or_, desc, asc
 
 from backend.models import (
     Form, FormBusinessArea, FormVersion, FormWorkflow, 
@@ -35,7 +35,6 @@ class FormService:
         business_area_ids: Optional[List[UUID]],
         created_by_id: UUID,
         effective_date: Optional[datetime] = None,
-        version_number: Optional[int] = None,
         form_source: Optional[str] = None,
         form_source_url: Optional[str] = None,
         form_attachment_url: Optional[str] = None,
@@ -55,7 +54,6 @@ class FormService:
             business_area_ids: List of associated business area IDs
             created_by_id: UUID of user creating the form
             effective_date: When the form becomes effective
-            version_number: User-specified version number; auto-incremented if None
             form_source: 'URL' or 'DOWNLOAD' (or None)
             form_source_url: Source URL when form_source == 'URL'
             form_attachment_url: MinIO object URL when form_source == 'DOWNLOAD'
@@ -72,13 +70,6 @@ class FormService:
         # Validate description is provided (required per TASK-110C)
         if not description or not description.strip():
             raise ValueError("description is required")
-
-        # Auto-increment version_number when not provided
-        if version_number is None:
-            max_version = db.query(func.max(Form.version_number)).filter(
-                Form.deleted_at.is_(None)
-            ).scalar()
-            version_number = (max_version or 0) + 1
 
         # TASK-413: Validate and link form number reservation
         if form_number_reservation_id:
@@ -112,7 +103,6 @@ class FormService:
             effective_date=effective_date,
             status='draft',
             current_version=0,
-            version_number=version_number,
             form_source=form_source,
             form_source_url=form_source_url,
             form_attachment_url=form_attachment_url,
@@ -144,7 +134,6 @@ class FormService:
             "id": str(form.id),
             "title": title,
             "is_public": is_public,
-            "version_number": version_number,
             "form_source": form_source,
             "collects_personal_info": form.collects_personal_info,
         }
@@ -546,7 +535,6 @@ class FormService:
             },
             "effective_date": form.effective_date.isoformat() if form.effective_date else None,
             # TASK-110C fields
-            "version_number": form.version_number,
             "form_source": form.form_source,
             "form_source_url": form.form_source_url,
             "form_attachment_url": form.form_attachment_url,

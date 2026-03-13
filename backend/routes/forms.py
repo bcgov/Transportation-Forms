@@ -37,7 +37,6 @@ class FormCreateRequest(BaseModel):
     business_area_ids: Optional[List[str]] = Field(default=None, description="Associated business area IDs")
     effective_date: Optional[datetime] = Field(None, description="When form becomes effective")
     # TASK-110C: new fields
-    version_number: Optional[int] = Field(None, ge=1, description="Form document version number; auto-incremented if omitted")
     form_source: Optional[str] = Field(None, description="Form source type: 'URL' or 'Download'")
     form_source_url: Optional[str] = Field(None, max_length=500, description="Source URL (required when form_source='URL')")
     form_attachment_url: Optional[str] = Field(None, max_length=500, description="MinIO object URL (set after file upload when form_source='Download')")
@@ -121,7 +120,6 @@ class FormResponse(BaseModel):
     created_by: Dict[str, str]
     effective_date: Optional[str]
     # TASK-110C: new fields
-    version_number: Optional[int]
     form_source: Optional[str]
     form_source_url: Optional[str]
     form_attachment_url: Optional[str]
@@ -259,7 +257,6 @@ async def create_form(
             business_area_ids=business_area_ids,
             created_by_id=UUID(current_user.sub),
             effective_date=request.effective_date,
-            version_number=request.version_number,
             form_source=request.form_source,
             form_source_url=request.form_source_url,
             form_attachment_url=request.form_attachment_url,

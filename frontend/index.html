@@ -153,13 +153,6 @@
                         <small class="text-muted">Add keywords to help users find this form in searches</small>
                     </div>
                     
-                    <!-- Version Number (TASK-110C) -->
-                    <div class="mb-3">
-                        <label for="versionNumber" class="form-label">Version Number</label>
-                        <input type="number" class="form-control" id="versionNumber" name="versionNumber" min="1" placeholder="Auto-assigned if left blank" style="max-width: 200px;">
-                        <small class="text-muted">Leave blank to auto-assign the next available version number</small>
-                    </div>
-
                     <!-- Form Source (TASK-110C) -->
                     <div class="mb-3">
                         <label for="formSource" class="form-label">Form Source</label>
@@ -886,24 +879,6 @@
 
         // ── end TASK-419 ─────────────────────────────────────────────────────
 
-        // Fetch and pre-populate the next version number (TASK-110C)
-        async function prefillNextVersionNumber() {
-            try {
-                const response = await fetch(`${API_BASE}/forms?skip=0&limit=1&sort_by=created_at&sort_order=desc`);
-                if (!response.ok) return;
-                const data = await response.json();
-                // Determine next version: max of existing versions + 1, or 1 if none
-                let maxVersion = 0;
-                if (data.items && data.items.length > 0) {
-                    // We only get the latest form; rely on the server for proper increment.
-                    // Leave field blank so server auto-increments â€“ just show placeholder.
-                }
-                document.getElementById('versionNumber').placeholder = 'Auto-assigned if left blank';
-            } catch (_) {
-                // Non-critical â€“ leave placeholder as-is
-            }
-        }
-
         function getFormNumberDisplay(form) {
             const possibleValues = [
                 form?.full_form_number,
@@ -950,7 +925,6 @@
                                         ${form.is_public ? 'Public' : 'Private'}
                                     </span>
                                     <span class="badge bg-info">${form.status}</span>
-                                    ${form.version_number ? `<span class="badge bg-light text-dark border">v${form.version_number}</span>` : ''}
                                 </div>
                             </div>
                             <div class="col-md-4 text-end">
@@ -997,9 +971,6 @@
                         
                         <dt class="col-sm-3">Public:</dt>
                         <dd class="col-sm-9">${form.is_public ? 'Yes' : 'No'}</dd>
-
-                        <dt class="col-sm-3">Version:</dt>
-                        <dd class="col-sm-9">${form.version_number !== null && form.version_number !== undefined ? 'v' + form.version_number : 'N/A'}</dd>
 
                         <dt class="col-sm-3">Does this form collect personal info?</dt>
                         <dd class="col-sm-9">${form.collects_personal_info || 'No'}</dd>
@@ -1052,7 +1023,6 @@
                 document.getElementById('isPublic').checked = form.is_public;
                 document.getElementById('collectsPersonalInfo').value = form.collects_personal_info || 'No';
                 document.getElementById('effectiveDate').value = form.effective_date ? form.effective_date.split('T')[0] : '';
-                document.getElementById('versionNumber').value = form.version_number || '';
                 document.getElementById('formSource').value = form.form_source || '';
                 document.getElementById('formSourceUrl').value = form.form_source_url || '';
 
@@ -1294,7 +1264,6 @@
                 effective_date: document.getElementById('effectiveDate').value || null,
                 collects_personal_info: document.getElementById('collectsPersonalInfo').value,
                 // TASK-110C fields
-                version_number: document.getElementById('versionNumber').value ? parseInt(document.getElementById('versionNumber').value, 10) : null,
                 form_source: effectiveFormSource,
                 form_source_url: effectiveFormSource === 'URL' ? document.getElementById('formSourceUrl').value : null,
                 form_attachment_url: effectiveFormSource === 'Download' ? uploadedFileUrl : null,
@@ -1336,11 +1305,10 @@
                 }
 
                 const savedForm = await response.json();
-                const vLabel = savedForm.version_number ? ` (v${savedForm.version_number})` : '';
                 showAlert(
                     currentFormId
-                        ? `Form updated successfully${vLabel}`
-                        : `Form created successfully${vLabel}`,
+                        ? 'Form updated successfully'
+                        : 'Form created successfully',
                     'success'
                 );
                 currentFormId = null;
@@ -1430,7 +1398,6 @@
             // Load dynamic data
             loadBusinessAreas();
             loadFormNumberReservations();
-            prefillNextVersionNumber();
         }
         
         function showEditView(formId) {

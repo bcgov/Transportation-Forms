@@ -201,6 +201,64 @@ No backend, service, or test changes are required.
 
 ---
 
+### 2.2.7 TASK-420: Remove User-Facing Version Field from Forms
+
+- **Status:** COMPLETED ✅ (March 13, 2026)
+- **Priority:** P1
+- **Effort:** 5pt
+- **Assigned To:** AI Code Agent
+- **Dependencies:** TASK-110C, TASK-416, TASK-419
+- **Description:** Remove the user-facing `version_number` field from form schema, frontend UI, API contracts, and related backend logic. Keep internal versioning infrastructure (`current_version`, `form_versions.version_number`, and `FormVersion`) unchanged.
+
+---
+
+#### Scope
+
+| Layer | File(s) |
+|---|---|
+| Frontend | `frontend/index.html` |
+| Backend — API contracts | `backend/routes/forms.py` |
+| Backend — service | `backend/services/forms.py` |
+| Backend — model | `backend/models.py` |
+| Database migration | `alembic/versions/` (new migration to drop `forms.version_number` only) |
+| Documentation | `TASKS.md`, `SPECIFICATION.md` |
+
+---
+
+#### Acceptance Criteria
+
+- [x] Version field input, label, and helper text are removed from Add New Form and Edit Form views
+- [x] Version display is removed from forms list badges and View modal
+- [x] Form submission payload no longer includes `version_number`
+- [x] `FormCreateRequest` and `FormResponse` no longer expose `version_number`
+- [x] Form service logic removes `version_number` auto-increment, serialization output, and audit payload references
+- [x] `Form` model no longer defines `version_number`
+- [x] New Alembic migration drops `forms.version_number`; downgrade restores it
+- [x] No orphaned references remain for `versionNumber`, `version_number`, or user-facing Version label usage
+- [x] Internal versioning features remain intact (`forms.current_version`, `form_versions.version_number`, `FormVersion` model/table)
+
+---
+
+#### Implementation Notes
+
+1. **Breaking change coordination:** Removing `version_number` changes API request/response shape. Frontend and backend deployment should be coordinated.
+2. **Migration safety:** Only drop `forms.version_number`; do not modify `form_versions` table or `current_version`.
+3. **Orphan sweep required:** After implementation, run a repository-wide search to verify only internal version-history references remain.
+
+---
+
+#### Implemented
+
+- **`frontend/index.html`** — Removed the Version Number form field (label/input/helper text) from the Add/Edit form UI.
+- **`frontend/index.html`** — Removed user-facing version display from forms-list badges and the View modal details panel.
+- **`frontend/index.html`** — Removed `version_number` from create/update request payload construction and success-message formatting.
+- **`backend/routes/forms.py`** — Removed `version_number` from `FormCreateRequest`, `FormResponse`, and from the `FormService.create_form()` call path.
+- **`backend/services/forms.py`** — Removed `version_number` arg handling, auto-increment query logic, `Form(...)` assignment, audit payload reference, and response serialization field.
+- **`backend/models.py`** — Removed `Form.version_number` column definition.
+- **`alembic/versions/008_task_420_remove_form_user_version_field.py`** — Added migration to drop `forms.version_number`; downgrade restores nullable integer column with default `1`.
+
+---
+
 ### 2.2.4 TASK-417: Remove Category Field from Forms
 
 - **Status:** COMPLETED ✅ (March 12, 2026)
@@ -1069,23 +1127,85 @@ No backend, service, or test changes are required.
 #### TASK-111: Search Service - Keyword Search
 - **Status:** NOT_STARTED
 - **Priority:** P0
-- **Effort:** 3pt
+- **Effort:** 5pt
 - **Assigned To:** AI Code Agent
-- **Description:** Implement keyword-based full-text search
-- **Acceptance Criteria:**
-  - [ ] PostgreSQL tsvector full-text search
-  - [ ] Search on title, description, keywords
-  - [ ] Filter by: category, business_area, date_range
-  - [ ] Sort by: relevance, date_updated, title, downloads
-  - [ ] Pagination: 20 results per page default, max 100
-  - [ ] Response time: < 500ms (p95)
-  - [ ] Autocomplete suggestions endpoint
-  - [ ] Anonymous users see only public+published forms
-  - [ ] Staff see all published forms
-  - [ ] Admin see all forms regardless of status
-  - [ ] Unit tests: 80%+ coverage
-- **Dependencies:** TASK-110
-- **PR Title:** "api: implement keyword-based search with filters"
+- **Description:** Implement search for forms with PostgreSQL full-text search (`tsvector`) across all form columns, autocomplete suggestions while typing, core filters, and stable list-page pagination.
+- **Dependencies:** TASK-110, TASK-419
+- **PR Title:** "feat: implement form search with autocomplete, filters, and pagination"
+
+---
+
+#### Scope
+
+| Layer | File(s) |
+|---|---|
+| Database migration | `alembic/versions/009_task_111_search_vector.py` (new) |
+| Backend — model | `backend/models.py` |
+| Backend — service | `backend/services/forms.py` |
+| Backend — routes | `backend/routes/forms.py` |
+| Frontend | `frontend/index.html` |
+| Tests | `tests/test_search_api.py` (new) |
+
+---
+
+#### Acceptance Criteria
+
+**Schema / Database**
+- [ ] PostgreSQL `tsvector` infrastructure is implemented for forms full-text search across all form columns.
+- [ ] GIN index exists for the search vector.
+- [ ] DB trigger (or equivalent DB-side mechanism) keeps search vectors updated on insert/update.
+
+**API / Backend**
+- [ ] `GET /forms` supports full-text keyword search via `q`.
+- [ ] `GET /forms` supports filters:
+  - [ ] `business_area_ids` (multi-select filter)
+  - [ ] `form_source` (`Link` or `Download`)
+  - [ ] `is_public` (`Yes` / `No`)
+- [ ] `GET /forms` supports sorting by Date Created only: `sort_order=asc|desc`.
+- [ ] Pagination contract:
+  - [ ] default page size is 25
+  - [ ] allowed page-size values are 25, 50, 100
+  - [ ] unsupported page-size values return HTTP 422
+  - [ ] response returns `total`, `skip`, `limit`, `items`
+- [ ] New autocomplete endpoint returns suggestions as user types (min 2 characters, max 10 suggestions).
+
+**Frontend / UI**
+- [ ] Search input provides live autocomplete suggestions as the user types.
+- [ ] Search/filter controls are implemented on forms list page:
+  - [ ] Business Areas multi-select filter using TASK-419 combobox pattern
+  - [ ] Form Source filter (`Link`, `Download`)
+  - [ ] Public filter (`Yes`, `No`)
+  - [ ] Date Created sort (`ASC`, `DESC`)
+- [ ] Pagination controls include:
+  - [ ] page-size dropdown with 25 (default), 50, 100
+  - [ ] prev/next navigation
+  - [ ] "Showing X–Y of Z" summary
+- [ ] Changing page size resets to first page and preserves active search/filter/sort selections.
+- [ ] Forms list page layout remains stable and does not break when switching page size between 25/50/100.
+
+**Tests**
+- [ ] Full-text search test validates keyword matches across indexed form fields.
+- [ ] Autocomplete test validates suggestions for 2+ characters and max suggestion count.
+- [ ] Filter tests validate each filter independently and in combination:
+  - [ ] business_area_ids (multi-select)
+  - [ ] form_source
+  - [ ] is_public
+- [ ] Sort test validates Date Created `asc` and `desc` behavior.
+- [ ] Pagination tests validate:
+  - [ ] default limit = 25
+  - [ ] limit = 50 works
+  - [ ] limit = 100 works
+  - [ ] invalid limit is rejected with HTTP 422
+- [ ] Frontend integration test confirms page-size dropdown changes do not break list-page UI layout.
+
+---
+
+#### Implementation Notes
+
+1. Use PostgreSQL full-text search (`to_tsvector` / `plainto_tsquery`) with DB-managed vector updates.
+2. Reuse TASK-419 combobox pattern for Business Areas filter UI.
+3. Keep search scope focused on this task: no semantic search (TASK-112), no extra sort modes.
+4. Keep pagination options fixed to 25/50/100 and ensure UI remains stable across these sizes.
 
 #### TASK-112: Search Service - Semantic Search
 - **Status:** NOT_STARTED
