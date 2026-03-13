@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc
+from sqlalchemy import and_, or_, desc, asc, text
 
 from backend.models import (
     Form, FormBusinessArea, FormVersion, FormWorkflow, 
@@ -178,10 +178,12 @@ class FormService:
     def list_forms(
         db: Session,
         skip: int = 0,
-        limit: int = 20,
+        limit: int = 25,
+        q: Optional[str] = None,
         status: Optional[str] = None,
+        business_area_ids: Optional[List[UUID]] = None,
+        form_source: Optional[str] = None,
         is_public: Optional[bool] = None,
-        sort_by: str = "created_at",
         sort_order: str = "desc",
     ) -> tuple[List[Form], int]:
         """
@@ -190,10 +192,12 @@ class FormService:
         Args:
             db: Database session
             skip: Number of records to skip
-            limit: Max records to return (max 100)
+            limit: Max records to return
+            q: Full-text search query
             status: Filter by status (draft, pending_review, approved, published, archived)
+            business_area_ids: Optional list of business area IDs (match any)
+            form_source: Filter by source ('Link' or 'Download')
             is_public: Filter by public status
-            sort_by: Field to sort by (created_at, updated_at, title)
             sort_order: asc or desc
             
         Returns:
@@ -201,22 +205,48 @@ class FormService:
         """
         query = db.query(Form).filter(Form.deleted_at.is_(None))
         
+        if q and q.strip():
+            query = query.filter(
+                text(
+                    """
+                    COALESCE(
+                        forms.search_vector,
+                        setweight(to_tsvector('english', coalesce(forms.title, '')), 'A') ||
+                        setweight(to_tsvector('english', coalesce(forms.description, '')), 'B') ||
+                        setweight(to_tsvector('english', coalesce(forms.keywords::text, '')), 'C') ||
+                        setweight(to_tsvector('english', coalesce(forms.form_source, '')), 'D') ||
+                        setweight(to_tsvector('english', coalesce(forms.form_source_url, '')), 'D')
+                    ) @@ plainto_tsquery('english', :search_query)
+                    """
+                )
+            ).params(search_query=q.strip())
+
         # Apply filters
         if status:
             query = query.filter(Form.status == status)
+
+        if business_area_ids:
+            query = query.join(
+                FormBusinessArea,
+                and_(
+                    FormBusinessArea.form_id == Form.id,
+                    FormBusinessArea.deleted_at.is_(None),
+                ),
+            ).filter(FormBusinessArea.business_area_id.in_(business_area_ids))
+
+        if form_source:
+            normalized_source = "URL" if form_source.lower() == "link" else "Download"
+            query = query.filter(Form.form_source == normalized_source)
+
         if is_public is not None:
             query = query.filter(Form.is_public == is_public)
+
+        query = query.distinct()
         
         # Count total
         total = query.count()
-        
-        # Apply sorting
-        if sort_by == "title":
-            sort_column = Form.title
-        elif sort_by == "updated_at":
-            sort_column = Form.updated_at
-        else:
-            sort_column = Form.created_at
+
+        sort_column = Form.created_at
         
         if sort_order.lower() == "asc":
             query = query.order_by(asc(sort_column))
@@ -224,10 +254,51 @@ class FormService:
             query = query.order_by(desc(sort_column))
         
         # Apply pagination
-        limit = min(limit, 100)  # Max 100 per request
         forms = query.offset(skip).limit(limit).all()
         
         return forms, total
+
+    @staticmethod
+    def get_autocomplete_suggestions(
+        db: Session,
+        query_text: str,
+        max_suggestions: int = 10,
+    ) -> List[str]:
+        """Get autocomplete suggestions from form titles and keywords."""
+        normalized_query = (query_text or "").strip()
+        if len(normalized_query) < 2:
+            return []
+
+        sql = text(
+            """
+            SELECT suggestion
+            FROM (
+                SELECT DISTINCT f.title AS suggestion
+                FROM forms f
+                WHERE f.deleted_at IS NULL
+                  AND f.title ILIKE :pattern
+
+                UNION
+
+                SELECT DISTINCT jsonb_array_elements_text(COALESCE(f.keywords::jsonb, '[]'::jsonb)) AS suggestion
+                FROM forms f
+                WHERE f.deleted_at IS NULL
+            ) s
+            WHERE s.suggestion ILIKE :pattern
+            ORDER BY s.suggestion ASC
+            LIMIT :max_suggestions
+            """
+        )
+
+        rows = db.execute(
+            sql,
+            {
+                "pattern": f"%{normalized_query}%",
+                "max_suggestions": min(max(max_suggestions, 1), 10),
+            },
+        ).fetchall()
+
+        return [row[0] for row in rows if row and row[0]]
     
     # =====================================================================
     # UPDATE OPERATIONS

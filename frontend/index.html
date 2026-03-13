@@ -56,20 +56,84 @@
     <div class="container">
         <!-- List View -->
         <div id="listView">
-            <div class="row mb-3">
+            <div class="row g-3 mb-3">
                 <div class="col-md-6">
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="searchInput" placeholder="Search forms...">
-                        <button class="btn btn-bc-primary" type="button" onclick="searchForms()">
-                            <i class="fas fa-search"></i> Search
-                        </button>
+                    <label for="searchInput" class="form-label">Search</label>
+                    <div class="position-relative">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchInput" placeholder="Search forms..." autocomplete="off">
+                            <button class="btn btn-bc-primary" type="button" onclick="searchForms()">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </div>
+                        <ul id="searchSuggestions" class="dropdown-menu w-100" style="display:none; max-height:240px; overflow-y:auto;"></ul>
                     </div>
                 </div>
-                <div class="col-md-6 text-end">
+                <div class="col-md-3">
+                    <label for="formSourceFilter" class="form-label">Form Source</label>
+                    <select class="form-select" id="formSourceFilter" onchange="applyFilters()">
+                        <option value="">All</option>
+                        <option value="Link">Link</option>
+                        <option value="Download">Download</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="isPublicFilter" class="form-label">Public</label>
+                    <select class="form-select" id="isPublicFilter" onchange="applyFilters()">
+                        <option value="">All</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label for="filterBusinessAreaInput" class="form-label">Business Areas</label>
+                    <div class="position-relative" id="filterBusinessAreaCombobox">
+                        <input type="text"
+                               id="filterBusinessAreaInput"
+                               class="form-control"
+                               placeholder="Type to add business area filters..."
+                               autocomplete="off"
+                               role="combobox"
+                               aria-expanded="false"
+                               aria-controls="filterBusinessAreaDropdown"
+                               aria-haspopup="listbox"
+                               aria-autocomplete="list">
+                        <ul id="filterBusinessAreaDropdown"
+                            role="listbox"
+                            class="dropdown-menu w-100 p-0"
+                            style="display:none; max-height:220px; overflow-y:auto; z-index:1060;"></ul>
+                    </div>
+                    <div id="selectedBusinessAreaFilters" class="mt-2"></div>
+                </div>
+                <div class="col-md-3">
+                    <label for="sortOrder" class="form-label">Date Created</label>
+                    <select class="form-select" id="sortOrder" onchange="applyFilters()">
+                        <option value="desc">Newest First</option>
+                        <option value="asc">Oldest First</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="pageSizeSelect" class="form-label">Page Size</label>
+                    <select class="form-select" id="pageSizeSelect" onchange="onPageSizeChange()">
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
                 </div>
             </div>
             
             <div id="formsList"></div>
+
+            <div class="d-flex justify-content-between align-items-center mt-3" id="paginationContainer" style="display:none;">
+                <small class="text-muted" id="paginationSummary">Showing 0-0 of 0</small>
+                <div class="btn-group" role="group" aria-label="Pagination">
+                    <button class="btn btn-outline-secondary" id="prevPageBtn" type="button" onclick="goToPreviousPage()">Previous</button>
+                    <button class="btn btn-outline-secondary" id="nextPageBtn" type="button" onclick="goToNextPage()">Next</button>
+                </div>
+            </div>
         </div>
         
         <!-- Create/Edit View -->
@@ -617,6 +681,12 @@
 
         // TASK-419: Business area combobox options cache
         let businessAreaOptions = [];
+        let selectedBusinessAreaFilters = [];
+
+        // TASK-111: list/search/pagination state
+        let currentSkip = 0;
+        let currentLimit = 25;
+        let lastListTotal = 0;
         
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -636,6 +706,10 @@
 
             // TASK-419: Initialise business area combobox
             initBusinessAreaCombobox();
+
+            // TASK-111: initialise list view controls
+            initListSearchAutocomplete();
+            initFilterBusinessAreaCombobox();
         });
         
         // Main router handler
@@ -709,7 +783,29 @@
         async function loadForms() {
             try {
                 showSpinner('#formsList', true);
-                const response = await fetch(`${API_BASE}/forms?skip=0&limit=100`);
+
+                const params = new URLSearchParams();
+                params.set('skip', String(currentSkip));
+                params.set('limit', String(currentLimit));
+
+                const query = document.getElementById('searchInput').value.trim();
+                if (query) params.set('q', query);
+
+                if (selectedBusinessAreaFilters.length > 0) {
+                    selectedBusinessAreaFilters.forEach(id => params.append('business_area_ids', id));
+                }
+
+                const formSource = document.getElementById('formSourceFilter').value;
+                if (formSource) params.set('form_source', formSource);
+
+                const isPublic = document.getElementById('isPublicFilter').value;
+                if (isPublic === 'Yes') params.set('is_public', 'true');
+                if (isPublic === 'No') params.set('is_public', 'false');
+
+                const sortOrder = document.getElementById('sortOrder').value || 'desc';
+                params.set('sort_order', sortOrder);
+
+                const response = await fetch(`${API_BASE}/forms?${params.toString()}`);
 
                 if (!response.ok) {
                     let detail = `HTTP ${response.status}`;
@@ -725,11 +821,30 @@
                 }
 
                 const data = await response.json();
+                lastListTotal = data.total || 0;
                 displayForms(data.items || []);
+                updatePaginationControls(lastListTotal);
             } catch (error) {
                 showAlert('Error loading forms: ' + error.message, 'danger');
                 console.error(error);
+                updatePaginationControls(0);
             }
+        }
+
+        function updatePaginationControls(total) {
+            const paginationContainer = document.getElementById('paginationContainer');
+            const summary = document.getElementById('paginationSummary');
+            const prevBtn = document.getElementById('prevPageBtn');
+            const nextBtn = document.getElementById('nextPageBtn');
+
+            const start = total === 0 ? 0 : currentSkip + 1;
+            const end = total === 0 ? 0 : Math.min(currentSkip + currentLimit, total);
+
+            summary.textContent = `Showing ${start}-${end} of ${total}`;
+            paginationContainer.style.display = 'flex';
+
+            prevBtn.disabled = currentSkip <= 0;
+            nextBtn.disabled = currentSkip + currentLimit >= total;
         }
 
         // Load business areas dynamically from the API (TASK-419: combobox type-to-search)
@@ -755,6 +870,12 @@
                         document.getElementById('businessAreaInput').value = found.label;
                         document.getElementById('businessAreaValue').value = found.id;
                     }
+                }
+
+                renderSelectedBusinessAreaFilters();
+                const filterInput = document.getElementById('filterBusinessAreaInput');
+                if (filterInput) {
+                    renderFilterBusinessAreaDropdown(filterInput.value.toLowerCase());
                 }
             } catch (error) {
                 console.error('Business areas load error:', error);
@@ -875,6 +996,202 @@
 
         function closeBusinessAreaDropdown() {
             setBusinessAreaDropdownVisible(false);
+        }
+
+        function initListSearchAutocomplete() {
+            const input = document.getElementById('searchInput');
+            const suggestions = document.getElementById('searchSuggestions');
+            if (!input || !suggestions) return;
+
+            let debounceTimer = null;
+
+            input.addEventListener('input', () => {
+                if (debounceTimer) {
+                    clearTimeout(debounceTimer);
+                }
+
+                const query = input.value.trim();
+                if (query.length < 2) {
+                    suggestions.style.display = 'none';
+                    suggestions.innerHTML = '';
+                    return;
+                }
+
+                debounceTimer = setTimeout(() => fetchSearchSuggestions(query), 250);
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    searchForms();
+                } else if (e.key === 'Escape') {
+                    suggestions.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#searchInput') && !e.target.closest('#searchSuggestions')) {
+                    suggestions.style.display = 'none';
+                }
+            });
+        }
+
+        async function fetchSearchSuggestions(query) {
+            const suggestions = document.getElementById('searchSuggestions');
+            try {
+                const response = await fetch(`${API_BASE}/forms/autocomplete?q=${encodeURIComponent(query)}&max_suggestions=10`);
+                if (!response.ok) {
+                    suggestions.style.display = 'none';
+                    return;
+                }
+
+                const payload = await response.json();
+                const items = payload.suggestions || [];
+
+                if (items.length === 0) {
+                    suggestions.style.display = 'none';
+                    suggestions.innerHTML = '';
+                    return;
+                }
+
+                suggestions.innerHTML = items.map(item => `
+                    <li><button class="dropdown-item" type="button" onclick="selectSearchSuggestion('${escapeHtml(item).replace(/'/g, "&#39;")}')">${escapeHtml(item)}</button></li>
+                `).join('');
+                suggestions.style.display = 'block';
+            } catch (error) {
+                suggestions.style.display = 'none';
+            }
+        }
+
+        function selectSearchSuggestion(value) {
+            document.getElementById('searchInput').value = value;
+            document.getElementById('searchSuggestions').style.display = 'none';
+            searchForms();
+        }
+
+        function initFilterBusinessAreaCombobox() {
+            const input = document.getElementById('filterBusinessAreaInput');
+            const dropdown = document.getElementById('filterBusinessAreaDropdown');
+            if (!input || !dropdown) return;
+
+            input.addEventListener('input', () => {
+                renderFilterBusinessAreaDropdown(input.value.toLowerCase());
+                setFilterBusinessAreaDropdownVisible(true);
+            });
+
+            input.addEventListener('focus', () => {
+                renderFilterBusinessAreaDropdown(input.value.toLowerCase());
+                setFilterBusinessAreaDropdownVisible(true);
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const firstItem = dropdown.querySelector('[role="option"]');
+                    if (firstItem) firstItem.focus();
+                } else if (e.key === 'Escape' || e.key === 'Tab') {
+                    closeFilterBusinessAreaDropdown();
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#filterBusinessAreaCombobox')) {
+                    closeFilterBusinessAreaDropdown();
+                }
+            });
+        }
+
+        function renderFilterBusinessAreaDropdown(query) {
+            const dropdown = document.getElementById('filterBusinessAreaDropdown');
+            if (!dropdown) return;
+
+            const filtered = (query
+                ? businessAreaOptions.filter(o => o.label.toLowerCase().includes(query))
+                : businessAreaOptions
+            ).filter(o => !selectedBusinessAreaFilters.includes(o.id));
+
+            dropdown.innerHTML = '';
+            if (filtered.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'dropdown-item disabled text-muted py-2';
+                li.setAttribute('aria-disabled', 'true');
+                li.textContent = query ? 'No matching business areas' : 'No more business areas available';
+                dropdown.appendChild(li);
+                return;
+            }
+
+            filtered.forEach(option => {
+                const li = document.createElement('li');
+                li.className = 'dropdown-item py-2';
+                li.style.cursor = 'pointer';
+                li.setAttribute('role', 'option');
+                li.setAttribute('tabindex', '-1');
+                li.textContent = option.label;
+                li.addEventListener('mousedown', (e) => e.preventDefault());
+                li.addEventListener('click', () => addBusinessAreaFilter(option.id));
+                li.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        addBusinessAreaFilter(option.id);
+                    } else if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        const next = li.nextElementSibling;
+                        if (next && next.getAttribute('role') === 'option') next.focus();
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        const prev = li.previousElementSibling;
+                        if (prev && prev.getAttribute('role') === 'option') prev.focus();
+                        else document.getElementById('filterBusinessAreaInput').focus();
+                    } else if (e.key === 'Escape' || e.key === 'Tab') {
+                        closeFilterBusinessAreaDropdown();
+                    }
+                });
+                dropdown.appendChild(li);
+            });
+        }
+
+        function addBusinessAreaFilter(id) {
+            if (!selectedBusinessAreaFilters.includes(id)) {
+                selectedBusinessAreaFilters.push(id);
+            }
+            document.getElementById('filterBusinessAreaInput').value = '';
+            renderSelectedBusinessAreaFilters();
+            renderFilterBusinessAreaDropdown('');
+            closeFilterBusinessAreaDropdown();
+            applyFilters();
+        }
+
+        function removeBusinessAreaFilter(id) {
+            selectedBusinessAreaFilters = selectedBusinessAreaFilters.filter(value => value !== id);
+            renderSelectedBusinessAreaFilters();
+            applyFilters();
+        }
+
+        function renderSelectedBusinessAreaFilters() {
+            const container = document.getElementById('selectedBusinessAreaFilters');
+            if (!container) return;
+
+            container.innerHTML = selectedBusinessAreaFilters.map(id => {
+                const option = businessAreaOptions.find(o => o.id === id);
+                if (!option) return '';
+                return `
+                    <span class="badge bg-primary me-1 mb-1">
+                        ${escapeHtml(option.label)}
+                        <button type="button" class="btn-close btn-close-white btn-sm ms-1" aria-label="Remove" onclick="removeBusinessAreaFilter('${id}')" style="font-size: 0.55rem;"></button>
+                    </span>
+                `;
+            }).join('');
+        }
+
+        function setFilterBusinessAreaDropdownVisible(visible) {
+            const input = document.getElementById('filterBusinessAreaInput');
+            const dropdown = document.getElementById('filterBusinessAreaDropdown');
+            if (input) input.setAttribute('aria-expanded', String(visible));
+            if (dropdown) dropdown.style.display = visible ? 'block' : 'none';
+        }
+
+        function closeFilterBusinessAreaDropdown() {
+            setFilterBusinessAreaDropdownVisible(false);
         }
 
         // ── end TASK-419 ─────────────────────────────────────────────────────
@@ -1046,7 +1363,11 @@
                 loadBusinessAreas().then(() => {
                     const firstArea = (form.business_areas || [])[0];
                     if (firstArea) {
-                        document.getElementById('businessAreaSelect').value = firstArea.id;
+                        const selected = businessAreaOptions.find(o => o.id === firstArea.id);
+                        if (selected) {
+                            document.getElementById('businessAreaInput').value = selected.label;
+                            document.getElementById('businessAreaValue').value = selected.id;
+                        }
                     }
                 });
 
@@ -1258,7 +1579,7 @@
                 is_public: document.getElementById('isPublic').checked,
                 keywords: keywords,
                 business_area_ids: (() => {
-                    const v = document.getElementById('businessAreaSelect').value;
+                    const v = document.getElementById('businessAreaValue').value;
                     return v ? [v] : [];
                 })(),
                 effective_date: document.getElementById('effectiveDate').value || null,
@@ -1369,6 +1690,7 @@
             hideAllViews();
             document.getElementById('listView').style.display = 'block';
             document.getElementById('pageTitle').textContent = 'Manage Forms - BC Gov';
+            loadBusinessAreas();
             loadForms();
         }
         
@@ -2493,6 +2815,9 @@
             document.getElementById('sourceDownloadSection').style.display = 'none';
             document.getElementById('uploadProgress').style.display = 'none';
             document.getElementById('uploadedFileInfo').style.display = 'none';
+            document.getElementById('businessAreaInput').value = '';
+            document.getElementById('businessAreaValue').value = '';
+            closeBusinessAreaDropdown();
             clearAllFieldErrors();
         }
         
@@ -2540,14 +2865,33 @@
         
         // Search forms
         function searchForms() {
-            const query = document.getElementById('searchInput').value;
-            // Implement search functionality
-            showAlert('Search functionality would filter forms by title/description', 'info');
+            currentSkip = 0;
+            const suggestions = document.getElementById('searchSuggestions');
+            suggestions.style.display = 'none';
+            loadForms();
         }
         
         // Apply filters
         function applyFilters() {
-            // Implement filtering
+            currentSkip = 0;
+            loadForms();
+        }
+
+        function onPageSizeChange() {
+            currentLimit = parseInt(document.getElementById('pageSizeSelect').value, 10);
+            currentSkip = 0;
+            loadForms();
+        }
+
+        function goToPreviousPage() {
+            if (currentSkip <= 0) return;
+            currentSkip = Math.max(0, currentSkip - currentLimit);
+            loadForms();
+        }
+
+        function goToNextPage() {
+            if (currentSkip + currentLimit >= lastListTotal) return;
+            currentSkip += currentLimit;
             loadForms();
         }
     </script>
