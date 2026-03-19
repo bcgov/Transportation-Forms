@@ -1,11 +1,14 @@
 """Application configuration settings."""
 
 from pydantic_settings import BaseSettings
+from pydantic import model_validator
 from typing import Optional
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    ENVIRONMENT: str = "development"
     
     # Database
     DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/transportation_forms"
@@ -20,11 +23,15 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8000,http://localhost:8080,http://localhost:30300,http://localhost:30800,http://127.0.0.1:3000,http://127.0.0.1:8000,http://127.0.0.1:30300,http://127.0.0.1:30800"
     
     # KeyCloak
-    KEYCLOAK_SERVER_URL: Optional[str] = "http://localhost:8080"
-    KEYCLOAK_REALM: Optional[str] = "test-realm"
-    KEYCLOAK_CLIENT_ID: Optional[str] = "test-client"
-    KEYCLOAK_CLIENT_SECRET: Optional[str] = "test-secret"
-    KEYCLOAK_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/callback"
+    KEYCLOAK_SERVER_URL: Optional[str] = None
+    KEYCLOAK_REALM: Optional[str] = None
+    KEYCLOAK_CLIENT_ID: Optional[str] = None
+    KEYCLOAK_CLIENT_SECRET: Optional[str] = None
+    KEYCLOAK_REDIRECT_URI: Optional[str] = None
+    KEYCLOAK_VERIFY_TLS: bool = True
+
+    # Authentication
+    AUTH_DEMO_MODE: bool = False
     
     # AWS S3
     AWS_ACCESS_KEY_ID: Optional[str] = None
@@ -45,6 +52,28 @@ class Settings(BaseSettings):
     
     # Logging
     LOG_LEVEL: str = "INFO"
+
+    @model_validator(mode="after")
+    def validate_keycloak_config(self):
+        """Require Keycloak config from environment when demo auth mode is disabled."""
+        if self.AUTH_DEMO_MODE or self.ENVIRONMENT.lower() == "development":
+            return self
+
+        required = {
+            "KEYCLOAK_SERVER_URL": self.KEYCLOAK_SERVER_URL,
+            "KEYCLOAK_REALM": self.KEYCLOAK_REALM,
+            "KEYCLOAK_CLIENT_ID": self.KEYCLOAK_CLIENT_ID,
+            "KEYCLOAK_CLIENT_SECRET": self.KEYCLOAK_CLIENT_SECRET,
+            "KEYCLOAK_REDIRECT_URI": self.KEYCLOAK_REDIRECT_URI,
+        }
+
+        missing = [key for key, value in required.items() if not value]
+        if missing:
+            raise ValueError(
+                "Missing required Keycloak configuration in .env: " + ", ".join(missing)
+            )
+
+        return self
     
     class Config:
         env_file = ".env"

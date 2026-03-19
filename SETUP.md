@@ -48,8 +48,25 @@ CORS_ORIGINS=["http://localhost:3000", "http://localhost:8080", "http://127.0.0.
 CORS_ALLOW_CREDENTIALS=true
 CORS_ALLOW_METHODS=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 CORS_ALLOW_HEADERS=["*"]
+AUTH_DEMO_MODE=false
+KEYCLOAK_SERVER_URL=https://<existing-keycloak-host>/auth
+KEYCLOAK_REALM=<existing-realm>
+KEYCLOAK_CLIENT_ID=<existing-client-id>
+KEYCLOAK_CLIENT_SECRET=<existing-client-secret>
+KEYCLOAK_REDIRECT_URI=http://localhost:30300/callback
 # ... rest of variables from .env.example
 ```
+
+### Keycloak Authentication Configuration (Required)
+
+- `KEYCLOAK_SERVER_URL` must point to your existing Keycloak server base URL.
+- `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, and `KEYCLOAK_CLIENT_SECRET` must match an existing client configured in that realm.
+- `KEYCLOAK_REDIRECT_URI` is the **fallback** redirect URI used when the frontend does not supply one.  
+  It must resolve to the **frontend** `/callback` route (e.g. `http://localhost:30300/callback`), **not** a backend API endpoint.
+- The Keycloak client registered in the realm must list **both** the fallback URI and any other origin/callback URLs as valid redirect URIs.  
+  For the BC Gov dev environment: `http://localhost:30300/callback`.
+- The frontend automatically sends its own `window.location.origin + '/callback'` as the redirect URI when calling `/api/v1/auth/login`, so the backend will use that value (validated against `CORS_ORIGINS`) instead of the static env-var wherever possible.
+- Keep `AUTH_DEMO_MODE=false` by default; set `AUTH_DEMO_MODE=true` only for explicit local development bypass with `demo-token`.
 
 ## Step 3: Build Container Image
 

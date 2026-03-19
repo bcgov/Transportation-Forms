@@ -48,6 +48,15 @@
                         <i class="fas fa-check-double"></i> Approvals
                     </a>
                 </div>
+                <div class="d-flex align-items-center ms-auto gap-2 mt-2 mt-lg-0">
+                    <span id="authUserDisplay" class="text-muted small" style="display:none;"></span>
+                    <button id="signInBtn" class="btn btn-bc-primary btn-sm" type="button" onclick="startLogin()">
+                        <i class="fas fa-sign-in-alt"></i> Sign In
+                    </button>
+                    <button id="signOutBtn" class="btn btn-outline-secondary btn-sm" type="button" style="display:none;" onclick="signOut()">
+                        <i class="fas fa-sign-out-alt"></i> Sign Out
+                    </button>
+                </div>
             </div>
         </div>
     </nav>
@@ -664,8 +673,16 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const API_BASE = 'http://localhost:30300/api/v1';
+        const AUTH_STORAGE_ACCESS = 'tf_access_token';
+        const AUTH_STORAGE_REFRESH = 'tf_refresh_token';
+        const AUTH_STORAGE_USER = 'tf_user';
+
         let keywords = [];
         let currentFormId = null;
+        let currentUser = null;
+        let isAuthInitialized = false;
+        let authInterceptorInstalled = false;
+        let authRefreshInProgress = false;
 
         // Uploaded file state (TASK-110C)
         let uploadedFileUrl = null;
@@ -687,14 +704,19 @@
         let currentSkip = 0;
         let currentLimit = 25;
         let lastListTotal = 0;
+
+        installAuthFetchInterceptor();
         
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             // Set up popstate listener for browser back/forward buttons
             window.addEventListener('popstate', routeHandler);
-            
-            // Handle initial route
-            routeHandler();
+
+            initializeAuth().finally(() => {
+                isAuthInitialized = true;
+                updateAuthUi();
+                routeHandler();
+            });
             
             // Set up Enter key for keywords
             document.getElementById('keywordInput').addEventListener('keypress', function(e) {
@@ -715,12 +737,28 @@
         // Main router handler
         function routeHandler() {
             const path = window.location.pathname;
+
+            if (!isAuthInitialized) {
+                return;
+            }
+
+            if (!isAuthenticated() && path !== '/callback') {
+                currentRoute = 'list';
+                routeParams = {};
+                showListView();
+                updateNavbar();
+                return;
+            }
             
             // Parse route
             if (path === '/' || path === '') {
                 currentRoute = 'list';
                 routeParams = {};
                 showListView();
+            } else if (path === '/callback') {
+                currentRoute = 'callback';
+                routeParams = {};
+                handleAuthCallback();
             } else if (path === '/create') {
                 currentRoute = 'create';
                 routeParams = {};
@@ -756,6 +794,11 @@
             if (event) {
                 event.preventDefault();
             }
+            if (!isAuthenticated() && path !== '/callback') {
+                window.history.pushState({}, '', '/');
+                routeHandler();
+                return;
+            }
             window.history.pushState({}, '', path);
             routeHandler();
         }
@@ -777,6 +820,262 @@
             } else if (currentRoute === 'approvals') {
                 document.getElementById('approvalsLink').classList.add('active');
             }
+        }
+
+        function getAuthToken() {
+            return sessionStorage.getItem(AUTH_STORAGE_ACCESS) || '';
+        }
+
+        function getRefreshToken() {
+            return sessionStorage.getItem(AUTH_STORAGE_REFRESH) || '';
+        }
+
+        function isAuthenticated() {
+            return Boolean(getAuthToken());
+        }
+
+        function saveAuthSession(accessToken, refreshToken, user) {
+            sessionStorage.setItem(AUTH_STORAGE_ACCESS, accessToken);
+            sessionStorage.setItem(AUTH_STORAGE_REFRESH, refreshToken);
+            sessionStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(user || {}));
+            currentUser = user || null;
+            updateAuthUi();
+        }
+
+        function clearAuthSession() {
+            sessionStorage.removeItem(AUTH_STORAGE_ACCESS);
+            sessionStorage.removeItem(AUTH_STORAGE_REFRESH);
+            sessionStorage.removeItem(AUTH_STORAGE_USER);
+            currentUser = null;
+            updateAuthUi();
+        }
+
+        function updateAuthUi() {
+            const signInBtn = document.getElementById('signInBtn');
+            const signOutBtn = document.getElementById('signOutBtn');
+            const authUserDisplay = document.getElementById('authUserDisplay');
+            const navLinks = [
+                document.getElementById('manageFormsLink'),
+                document.getElementById('createFormLink'),
+                document.getElementById('reserveNumberLink'),
+                document.getElementById('myReservationsLink'),
+                document.getElementById('approvalsLink')
+            ];
+
+            if (isAuthenticated()) {
+                signInBtn.style.display = 'none';
+                signOutBtn.style.display = 'inline-block';
+                const displayName = currentUser?.name || currentUser?.email || 'Signed in';
+                authUserDisplay.textContent = displayName;
+                authUserDisplay.style.display = 'inline';
+                navLinks.forEach(link => link.classList.remove('disabled'));
+            } else {
+                signInBtn.style.display = 'inline-block';
+                signOutBtn.style.display = 'none';
+                authUserDisplay.style.display = 'none';
+                navLinks.forEach(link => link.classList.add('disabled'));
+            }
+        }
+
+        async function initializeAuth() {
+            const accessToken = getAuthToken();
+            if (!accessToken) {
+                clearAuthSession();
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/me`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+
+                if (response.ok) {
+                    currentUser = await response.json();
+                    sessionStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(currentUser));
+                    return;
+                }
+
+                if (response.status === 401) {
+                    const refreshed = await tryRefreshToken();
+                    if (refreshed) {
+                        const meResponse = await fetch(`${API_BASE}/auth/me`, {
+                            method: 'GET',
+                            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                        });
+                        if (meResponse.ok) {
+                            currentUser = await meResponse.json();
+                            sessionStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(currentUser));
+                            return;
+                        }
+                    }
+                }
+
+                clearAuthSession();
+            } catch (error) {
+                console.error('Auth initialization failed:', error);
+                clearAuthSession();
+            }
+        }
+
+        async function startLogin() {
+            try {
+                const frontendRedirectUri = window.location.origin + '/callback';
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ frontend_redirect_uri: frontendRedirectUri })
+                });
+                if (!response.ok) {
+                    throw new Error('Failed to initiate sign-in');
+                }
+
+                const payload = await response.json();
+                if (!payload.authorization_url) {
+                    throw new Error('Authorization URL missing from response');
+                }
+
+                window.location.href = payload.authorization_url;
+            } catch (error) {
+                showAlert('Unable to start sign-in flow. Check Keycloak configuration.', 'danger');
+            }
+        }
+
+        async function handleAuthCallback() {
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('code');
+            const state = params.get('state');
+
+            if (!code || !state) {
+                showAlert('Invalid authentication callback.', 'danger');
+                navigateTo(null, '/');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/callback`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code, state })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.detail || 'Authentication callback failed');
+                }
+
+                const payload = await response.json();
+                saveAuthSession(payload.access_token, payload.refresh_token, payload.user);
+                showAlert('Signed in successfully.', 'success');
+                window.history.replaceState({}, '', '/');
+                routeHandler();
+            } catch (error) {
+                console.error('Auth callback failed:', error);
+                clearAuthSession();
+                showAlert('Sign-in failed. Please try again.', 'danger');
+                window.history.replaceState({}, '', '/');
+                routeHandler();
+            }
+        }
+
+        async function tryRefreshToken() {
+            if (authRefreshInProgress) {
+                return false;
+            }
+
+            const refreshToken = getRefreshToken();
+            if (!refreshToken) {
+                return false;
+            }
+
+            try {
+                authRefreshInProgress = true;
+                const response = await fetch(`${API_BASE}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: refreshToken })
+                });
+
+                if (!response.ok) {
+                    return false;
+                }
+
+                const payload = await response.json();
+                sessionStorage.setItem(AUTH_STORAGE_ACCESS, payload.access_token);
+                return true;
+            } catch (error) {
+                return false;
+            } finally {
+                authRefreshInProgress = false;
+            }
+        }
+
+        async function signOut() {
+            const refreshToken = getRefreshToken();
+
+            try {
+                await fetch(`${API_BASE}/auth/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ refresh_token: refreshToken || null })
+                });
+            } catch (error) {
+                console.error('Logout request failed:', error);
+            }
+
+            clearAuthSession();
+            showAlert('Signed out successfully.', 'success');
+            navigateTo(null, '/');
+        }
+
+        function installAuthFetchInterceptor() {
+            if (authInterceptorInstalled) {
+                return;
+            }
+
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = async function(input, init = {}) {
+                const requestUrl = typeof input === 'string' ? input : input.url;
+                const isApiRequest = requestUrl.includes('/api/v1/');
+                const isAuthRequest = requestUrl.includes('/api/v1/auth/');
+
+                const headers = new Headers(init.headers || {});
+                if (isApiRequest && !isAuthRequest && !headers.has('Authorization') && getAuthToken()) {
+                    headers.set('Authorization', `Bearer ${getAuthToken()}`);
+                }
+
+                const requestInit = { ...init, headers };
+                let response = await originalFetch(input, requestInit);
+
+                if (isApiRequest && response.status === 401 && !isAuthRequest && !requestInit.__retried) {
+                    const refreshed = await tryRefreshToken();
+                    if (refreshed) {
+                        const retryHeaders = new Headers(requestInit.headers || {});
+                        retryHeaders.set('Authorization', `Bearer ${getAuthToken()}`);
+                        response = await originalFetch(input, {
+                            ...requestInit,
+                            __retried: true,
+                            headers: retryHeaders,
+                        });
+                    }
+
+                    if (response.status === 401) {
+                        clearAuthSession();
+                        if (window.location.pathname !== '/callback') {
+                            showAlert('Your session has expired. Please sign in again.', 'warning');
+                            window.history.replaceState({}, '', '/');
+                            routeHandler();
+                        }
+                    }
+                }
+
+                return response;
+            };
+
+            authInterceptorInstalled = true;
         }
         
         // Load and display forms
@@ -2856,11 +3155,6 @@
                     </div>
                 `;
             }
-        }
-        
-        function getAuthToken() {
-            // In production, this would retrieve from localStorage or session
-            return 'demo-token';
         }
         
         // Search forms

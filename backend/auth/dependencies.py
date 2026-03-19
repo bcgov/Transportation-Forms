@@ -7,6 +7,7 @@ from fastapi.security import HTTPBearer
 from fastapi.security.http import HTTPAuthorizationCredentials
 
 from backend.auth.jwt_handler import jwt_handler, TokenData
+from backend.config import settings
 from backend.auth.authorization import (
     require_permission,
     require_any_permission,
@@ -26,6 +27,7 @@ security = HTTPBearer(
 # Development mode - bypass authentication
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production").lower()
 IS_DEVELOPMENT = ENVIRONMENT == "development"
+DEMO_AUTH_ENABLED = IS_DEVELOPMENT and settings.AUTH_DEMO_MODE
 
 
 async def get_current_user(
@@ -45,8 +47,8 @@ async def get_current_user(
     """
     token = credentials.credentials
     
-    # Development mode: allow demo token
-    if IS_DEVELOPMENT and token == "demo-token":
+    # Development mode: allow demo token only when explicitly enabled
+    if DEMO_AUTH_ENABLED and token == "demo-token":
         return TokenData(
             sub="550e8400-e29b-41d4-a716-446655440000",  # Demo UUID
             email="demo@example.com",

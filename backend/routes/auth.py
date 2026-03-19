@@ -2,19 +2,21 @@
 
 import logging
 import secrets
+from datetime import datetime, timezone
 from uuid import UUID
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status, Depends, Query, Response
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, EmailStr
+from urllib.parse import urlparse
+from fastapi import APIRouter, HTTPException, status, Depends, Request, Body
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import User, Role, UserRole
+from backend.models import User, Role, UserRole, AuditLog
 from backend.auth.keycloak_service import keycloak_service
 from backend.auth.jwt_handler import jwt_handler
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,11 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 # Request/Response Models
+class LoginRequest(BaseModel):
+    """Optional request body for login initiation."""
+    frontend_redirect_uri: Optional[str] = None
+
+
 class LoginResponse(BaseModel):
     """Response for successful login."""
     access_token: str
@@ -29,6 +36,18 @@ class LoginResponse(BaseModel):
     token_type: str
     expires_in: int
     user: dict
+
+
+class LoginInitResponse(BaseModel):
+    """Response for login initiation."""
+    authorization_url: str
+    state: str
+
+
+class CallbackRequest(BaseModel):
+    """Request to exchange Keycloak code for app tokens."""
+    code: str
+    state: str
 
 
 class RefreshTokenRequest(BaseModel):
@@ -42,54 +61,136 @@ class LogoutRequest(BaseModel):
 
 
 # In-memory state storage (in production, use Redis or similar)
-# Maps state -> {created_at, purpose}
+# Maps state -> {created_at, purpose, redirect_uri}
 _auth_states = {}
 
 
-def generate_state() -> str:
+def generate_state(redirect_uri: Optional[str] = None) -> str:
     """Generate a secure random state for CSRF protection."""
     state = secrets.token_urlsafe(32)
-    _auth_states[state] = {"purpose": "login"}
+    _auth_states[state] = {"purpose": "login", "redirect_uri": redirect_uri}
     return state
 
 
-def validate_state(state: str) -> bool:
-    """Validate and consume a state token."""
-    if state in _auth_states:
-        _auth_states.pop(state)
-        return True
-    return False
+def validate_state(state: str) -> Optional[dict]:
+    """Validate and consume a state token. Returns state data dict or None if invalid."""
+    return _auth_states.pop(state, None)
 
 
-@router.get("/login")
-async def login():
+def _get_request_metadata(request: Request) -> tuple[Optional[str], Optional[str]]:
+    """Extract request metadata for audit logs."""
+    return request.client.host if request.client else None, request.headers.get("user-agent")
+
+
+def _is_allowed_redirect_uri(uri: str) -> bool:
+    """Check whether the redirect URI's origin is in the configured CORS origins allowlist."""
+    try:
+        parsed = urlparse(uri)
+        if not parsed.scheme or not parsed.netloc:
+            return False
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        allowed_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+        return origin in allowed_origins
+    except Exception:
+        return False
+
+
+def _resolve_redirect_uri(http_request: Request, body: Optional[LoginRequest]) -> str:
+    """
+    Determine the redirect URI to embed in the Keycloak authorization URL.
+
+    Priority:
+      1. Explicit ``frontend_redirect_uri`` from the request body (if present and allowed).
+      2. Derived from the ``Origin`` request header + '/callback' (if origin is allowed).
+      3. Configured ``KEYCLOAK_REDIRECT_URI`` as a final fallback.
+    """
+    # Priority 1: explicit URI supplied by the frontend
+    if body and body.frontend_redirect_uri:
+        if not _is_allowed_redirect_uri(body.frontend_redirect_uri):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Redirect URI origin is not in the allowed origins list",
+            )
+        return body.frontend_redirect_uri
+
+    # Priority 2: derive from the browser's Origin header
+    origin = http_request.headers.get("origin")
+    if origin:
+        derived = f"{origin}/callback"
+        if _is_allowed_redirect_uri(derived):
+            return derived
+
+    # Priority 3: fall back to static env-var config
+    return settings.KEYCLOAK_REDIRECT_URI or ""
+
+
+def _create_auth_audit_log(
+    db: Session,
+    *,
+    action: str,
+    user: Optional[User],
+    keycloak_id: Optional[str],
+    ip_address: Optional[str],
+    user_agent: Optional[str],
+    extra_values: Optional[dict] = None,
+) -> None:
+    """Create and persist authentication audit record."""
+    payload = {"keycloak_id": keycloak_id} if keycloak_id else {}
+    if extra_values:
+        payload.update(extra_values)
+
+    db.add(
+        AuditLog(
+            entity_type="auth",
+            entity_id=str(user.id) if user else "unknown",
+            action=action,
+            user_id=user.id if user else None,
+            new_values=payload or None,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            description=f"{action} event",
+        )
+    )
+
+
+@router.post("/login", response_model=LoginInitResponse)
+async def login(
+    http_request: Request,
+    request: Optional[LoginRequest] = Body(default=None),
+):
     """
     Initiate KeyCloak OIDC login flow.
-    
-    Returns redirect to KeyCloak login page.
+
+    Accepts an optional JSON body with ``frontend_redirect_uri`` — the URL
+    Keycloak should redirect the browser back to after authentication (must
+    resolve to the frontend ``/callback`` page).  When omitted the redirect
+    URI is derived from the request ``Origin`` header or the configured
+    ``KEYCLOAK_REDIRECT_URI`` fallback.
+
+    Returns Keycloak authorization URL for frontend redirect.
     """
     try:
-        # Generate CSRF state token
-        state = generate_state()
-        
-        # Get KeyCloak authorization URL
-        auth_url = keycloak_service.get_auth_url(state=state)
-        
-        logger.info("Redirecting to KeyCloak login")
-        return RedirectResponse(url=auth_url, status_code=status.HTTP_302_FOUND)
-        
+        redirect_uri = _resolve_redirect_uri(http_request, request)
+        state = generate_state(redirect_uri=redirect_uri)
+        auth_url = keycloak_service.get_auth_url(state=state, redirect_uri=redirect_uri)
+
+        logger.info("Generated Keycloak login URL")
+        return LoginInitResponse(authorization_url=auth_url, state=state)
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Login initiation failed: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to initiate login: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to initiate login flow"
         )
 
 
-@router.get("/callback")
+@router.post("/callback", response_model=LoginResponse)
 async def auth_callback(
-    code: str = Query(..., description="Authorization code from KeyCloak"),
-    state: str = Query(..., description="CSRF protection state"),
+    request: CallbackRequest,
+    http_request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -104,89 +205,93 @@ async def auth_callback(
     6. Returns tokens to client
     """
     try:
-        # Validate state to prevent CSRF attacks
-        if not validate_state(state):
-            logger.warning(f"Invalid or expired state parameter: {state}")
+        if not request.code or not request.state:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Both code and state are required"
+            )
+
+        state_data = validate_state(request.state)
+        if state_data is None:
+            logger.warning(f"Invalid or expired state parameter: {request.state}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid state parameter. Please try logging in again."
             )
-        
-        # Exchange authorization code for tokens
-        keycloak_tokens = keycloak_service.exchange_code_for_token(code)
+
+        # Use the redirect_uri that was stored when the state was generated so
+        # that it exactly matches the value Keycloak received during the auth
+        # request — required by the OIDC spec for the token exchange.
+        stored_redirect_uri = state_data.get("redirect_uri") or settings.KEYCLOAK_REDIRECT_URI
+        keycloak_tokens = keycloak_service.exchange_code_for_token(request.code, redirect_uri=stored_redirect_uri)
         keycloak_access_token = keycloak_tokens["access_token"]
-        
-        # Get user information from KeyCloak
+
         userinfo = keycloak_service.get_user_info(keycloak_access_token)
-        
-        # Extract user details
-        keycloak_user_id = userinfo.get("sub")  # KeyCloak user ID
+
+        keycloak_user_id = userinfo.get("sub")
         email = userinfo.get("email")
         first_name = userinfo.get("given_name", "")
         last_name = userinfo.get("family_name", "")
-        full_name = userinfo.get("name", f"{first_name} {last_name}".strip())
-        
+
         if not email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email not provided by KeyCloak"
             )
-        
-        # Decode KeyCloak token to extract roles
+
         keycloak_payload = keycloak_service.decode_token(keycloak_access_token)
         keycloak_roles = keycloak_service.extract_roles(keycloak_payload)
-        
-        # Find or create user in local database
+
         user = db.query(User).filter(User.email == email).first()
-        
+
         if not user:
-            # Create new user
             user = User(
-                keycloak_id=keycloak_user_id,  # Store Keycloak user UUID
+                keycloak_id=keycloak_user_id,
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                is_active=True
+                is_active=True,
+                last_login=datetime.now(timezone.utc),
             )
             db.add(user)
             db.flush()
             logger.info(f"Created new user: {email}")
         else:
-            # Update existing user
-            user.keycloak_id = keycloak_user_id  # Update Keycloak ID
+            user.keycloak_id = keycloak_user_id
             user.first_name = first_name
             user.last_name = last_name
+            user.last_login = datetime.now(timezone.utc)
             logger.info(f"Updated existing user: {email}")
-        
-        # Map KeyCloak roles to local roles
+
         local_role_names = map_keycloak_roles_to_local(keycloak_roles)
-        
-        # Ensure user has at least a default role if no roles found
+
         if not local_role_names:
-            local_role_names = ["staff_viewer"]  # Default minimum role
+            local_role_names = ["staff_viewer"]
             logger.warning(f"No roles found for user {email}, defaulting to staff_viewer")
-        
-        # Get local role objects
+
         local_roles = db.query(Role).filter(Role.name.in_(local_role_names)).all()
-        
-        # Assign roles to user (clear existing UserRoles and create new ones)
-        # Clear existing user role associations
+
         db.query(UserRole).filter(UserRole.user_id == user.id).delete()
-        
-        # Create new user role associations
+
         for role in local_roles:
-            user_role = UserRole(
-                user_id=user.id,
-                role_id=role.id
-            )
+            user_role = UserRole(user_id=user.id, role_id=role.id)
             db.add(user_role)
-        
+
+        ip_address, user_agent = _get_request_metadata(http_request)
+        _create_auth_audit_log(
+            db,
+            action="LOGIN",
+            user=user,
+            keycloak_id=keycloak_user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            extra_values={"last_login": user.last_login.isoformat()},
+        )
+
         db.commit()
         db.refresh(user)
-        
-        # Generate our application JWT tokens
+
         user_full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
-        # Extract role names from user.roles (UserRole objects)
         role_names = [user_role.role.name for user_role in user.roles]
         app_tokens = keycloak_service.generate_app_tokens(
             user_id=str(user.id),
@@ -194,9 +299,8 @@ async def auth_callback(
             name=user_full_name,
             roles=role_names
         )
-        
         logger.info(f"Successfully authenticated user: {email}")
-        
+
         return LoginResponse(
             access_token=app_tokens["access_token"],
             refresh_token=app_tokens["refresh_token"],
@@ -209,21 +313,22 @@ async def auth_callback(
                 "roles": role_names
             }
         )
-        
+
     except HTTPException:
         raise
     except ValueError as e:
         logger.error(f"KeyCloak error during callback: {str(e)}")
+        db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Keycloak authentication failed"
         )
     except Exception as e:
         logger.error(f"Callback processing failed: {str(e)}")
         db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Authentication failed: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Authentication failed"
         )
 
 
@@ -235,23 +340,24 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
     This uses our application's refresh token (not KeyCloak's).
     """
     try:
-        # Validate our refresh token
         token_data = jwt_handler.validate_token(
             request.refresh_token,
             token_type="refresh"
         )
-        
-        # Get user from database (convert string UUID to UUID object)
+
         user_id = UUID(token_data.sub) if isinstance(token_data.sub, str) else token_data.sub
         user = db.query(User).filter(User.id == user_id).first()
-        
+
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found or inactive"
             )
-        
-        # Generate new access token
+
+        user.last_login = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(user)
+
         user_full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
         role_names = [user_role.role.name for user_role in user.roles]
         new_access_token = jwt_handler.generate_access_token(
@@ -260,22 +366,26 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
             name=user_full_name,
             roles=role_names
         )
-        
+
         logger.info(f"Refreshed access token for user: {user.email}")
-        
+
         return {
             "access_token": new_access_token,
             "token_type": "Bearer",
             "expires_in": 1800
         }
-        
+
+    except HTTPException:
+        raise
     except ValueError as e:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
+            detail="Invalid or expired refresh token"
         )
     except Exception as e:
         logger.error(f"Token refresh failed: {str(e)}")
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Token refresh failed"
@@ -285,7 +395,9 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
 @router.post("/logout")
 async def logout(
     request: LogoutRequest,
-    current_user: TokenData = Depends(get_current_user)
+    http_request: Request,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Logout user by clearing tokens.
@@ -294,22 +406,34 @@ async def logout(
     For now, client should discard tokens.
     """
     try:
-        # If KeyCloak refresh token provided, invalidate it
+        user_id = UUID(current_user.sub) if isinstance(current_user.sub, str) else current_user.sub
+        user = db.query(User).filter(User.id == user_id).first()
+
         if request.refresh_token:
             try:
-                # This would be the KeyCloak refresh token, not ours
-                # For now, we just log it - client discards tokens
-                logger.info(f"Logout requested for user: {current_user.email}")
+                keycloak_service.logout(request.refresh_token)
             except Exception as e:
                 logger.warning(f"KeyCloak logout failed: {str(e)}")
-        
+
+        ip_address, user_agent = _get_request_metadata(http_request)
+        _create_auth_audit_log(
+            db,
+            action="LOGOUT",
+            user=user,
+            keycloak_id=user.keycloak_id if user else None,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        db.commit()
+
         return {
             "message": "Successfully logged out",
             "detail": "Please discard your tokens"
         }
-        
+
     except Exception as e:
         logger.error(f"Logout failed: {str(e)}")
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Logout failed"
@@ -341,6 +465,7 @@ async def get_current_user_info(
             "email": user.email,
             "name": user_full_name,
             "roles": [user_role.role.name for user_role in user.roles],
+            "keycloak_id": user.keycloak_id,
             "is_active": user.is_active,
             "created_at": user.created_at.isoformat(),
             "updated_at": user.updated_at.isoformat()
