@@ -23,13 +23,32 @@ class KeyCloakService:
     
     def __init__(self):
         """Initialize KeyCloak OIDC client."""
+        self.enabled = True
+        self.keycloak_openid = None
+        self.base_url = ""
+        self.realm_url = ""
+        self._well_known_config = None
+
+        required_values = [
+            settings.KEYCLOAK_SERVER_URL,
+            settings.KEYCLOAK_REALM,
+            settings.KEYCLOAK_CLIENT_ID,
+            settings.KEYCLOAK_CLIENT_SECRET,
+            settings.KEYCLOAK_REDIRECT_URI,
+        ]
+
+        if not all(required_values):
+            self.enabled = False
+            logger.warning("KeyCloak disabled: missing configuration values.")
+            return
+
         try:
             self.keycloak_openid = KeycloakOpenID(
                 server_url=settings.KEYCLOAK_SERVER_URL,
                 client_id=settings.KEYCLOAK_CLIENT_ID,
                 realm_name=settings.KEYCLOAK_REALM,
                 client_secret_key=settings.KEYCLOAK_CLIENT_SECRET,
-                verify=True
+                verify=settings.KEYCLOAK_VERIFY_TLS
             )
             
             # For BC Gov: Construct correct base URLs manually
@@ -38,30 +57,35 @@ class KeyCloakService:
                 self.base_url = f"{self.base_url}/auth"
             self.realm_url = f"{self.base_url}/realms/{settings.KEYCLOAK_REALM}"
             
-            # Cache the well-known configuration
-            self._well_known_config = None
-            
             logger.info(f"KeyCloak client initialized for realm: {settings.KEYCLOAK_REALM}")
             logger.info(f"Realm URL: {self.realm_url}")
         except Exception as e:
             logger.error(f"Failed to initialize KeyCloak client: {str(e)}")
             raise
+
+    def _ensure_enabled(self) -> None:
+        """Ensure Keycloak is configured before use."""
+        if not self.enabled:
+            raise ValueError("Keycloak is not configured. Set KEYCLOAK_* environment variables.")
     
     def _get_well_known_config(self) -> Dict[str, Any]:
         """Get OpenID well-known configuration (cached)."""
+        self._ensure_enabled()
         if self._well_known_config is None:
             url = f"{self.realm_url}/.well-known/openid-configuration"
-            response = requests.get(url, timeout=10, verify=True)
+            response = requests.get(url, timeout=10, verify=settings.KEYCLOAK_VERIFY_TLS)
             response.raise_for_status()
             self._well_known_config = response.json()
         return self._well_known_config
     
-    def get_auth_url(self, state: str) -> str:
+    def get_auth_url(self, state: str, redirect_uri: Optional[str] = None) -> str:
         """
         Get the authorization URL for OIDC login.
         
         Args:
             state: CSRF protection state parameter
+            redirect_uri: Frontend callback URL to embed in the auth URL.
+                          Falls back to KEYCLOAK_REDIRECT_URI when not supplied.
             
         Returns:
             Authorization URL for redirect
@@ -73,7 +97,7 @@ class KeyCloakService:
             
             params = {
                 'client_id': settings.KEYCLOAK_CLIENT_ID,
-                'redirect_uri': settings.KEYCLOAK_REDIRECT_URI,
+                'redirect_uri': redirect_uri or settings.KEYCLOAK_REDIRECT_URI,
                 'response_type': 'code',
                 'scope': 'openid email profile',
                 'state': state
@@ -86,12 +110,14 @@ class KeyCloakService:
             logger.error(f"Failed to generate auth URL: {str(e)}")
             raise ValueError(f"Failed to generate authorization URL: {str(e)}")
     
-    def exchange_code_for_token(self, code: str) -> Dict[str, Any]:
+    def exchange_code_for_token(self, code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         """
         Exchange authorization code for tokens.
         
         Args:
             code: Authorization code from KeyCloak callback
+            redirect_uri: Must match the redirect_uri used in the original auth URL.
+                          Falls back to KEYCLOAK_REDIRECT_URI when not supplied.
             
         Returns:
             Token response with access_token, refresh_token, etc.
@@ -108,7 +134,7 @@ class KeyCloakService:
             data = {
                 'grant_type': 'authorization_code',
                 'code': code,
-                'redirect_uri': settings.KEYCLOAK_REDIRECT_URI,
+                'redirect_uri': redirect_uri or settings.KEYCLOAK_REDIRECT_URI,
                 'client_id': settings.KEYCLOAK_CLIENT_ID,
                 'client_secret': settings.KEYCLOAK_CLIENT_SECRET
             }
@@ -118,7 +144,7 @@ class KeyCloakService:
                 data=data,
                 headers={'Content-Type': 'application/x-www-form-urlencoded'},
                 timeout=10,
-                verify=True
+                verify=settings.KEYCLOAK_VERIFY_TLS
             )
             response.raise_for_status()
             token_response = response.json()
@@ -156,7 +182,7 @@ class KeyCloakService:
                 userinfo_endpoint,
                 headers={'Authorization': f'Bearer {access_token}'},
                 timeout=10,
-                verify=True
+                verify=settings.KEYCLOAK_VERIFY_TLS
             )
             response.raise_for_status()
             userinfo = response.json()
@@ -183,6 +209,7 @@ class KeyCloakService:
         Raises:
             ValueError: If introspection fails
         """
+        self._ensure_enabled()
         try:
             introspection = self.keycloak_openid.introspect(token)
             return introspection
@@ -203,6 +230,7 @@ class KeyCloakService:
         Raises:
             ValueError: If token refresh fails
         """
+        self._ensure_enabled()
         try:
             token_response = self.keycloak_openid.refresh_token(refresh_token)
             logger.info("Successfully refreshed access token")
@@ -224,8 +252,36 @@ class KeyCloakService:
         Returns:
             True if logout successful
         """
+        self._ensure_enabled()
         try:
-            self.keycloak_openid.logout(refresh_token)
+            config = self._get_well_known_config()
+            logout_endpoint = config.get('end_session_endpoint')
+
+            if logout_endpoint:
+                response = requests.post(
+                    logout_endpoint,
+                    data={
+                        'client_id': settings.KEYCLOAK_CLIENT_ID,
+                        'client_secret': settings.KEYCLOAK_CLIENT_SECRET,
+                        'refresh_token': refresh_token,
+                    },
+                    headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                    timeout=10,
+                    verify=settings.KEYCLOAK_VERIFY_TLS,
+                )
+                # Some Keycloak installations return 204 No Content, some return 200.
+                if response.status_code not in (200, 204):
+                    logger.warning(
+                        "Keycloak end-session endpoint returned non-success status: %s",
+                        response.status_code,
+                    )
+
+            # Keep library call as fallback/compatibility.
+            try:
+                self.keycloak_openid.logout(refresh_token)
+            except Exception as fallback_error:
+                logger.debug(f"Library logout fallback warning: {str(fallback_error)}")
+
             logger.info("Successfully logged out user")
             return True
         except Exception as e:

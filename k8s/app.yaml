@@ -63,6 +63,31 @@ spec:
               value: "form-attachments"
             - name: MINIO_PUBLIC_URL
               value: "http://localhost:30900"
+            - name: KEYCLOAK_SERVER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: keycloak-server-url
+            - name: KEYCLOAK_REALM
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: keycloak-realm
+            - name: KEYCLOAK_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: keycloak-client-id
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: keycloak-client-secret
+            - name: KEYCLOAK_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: keycloak-redirect-uri
           command:
             - sh
             - /app/entrypoint.sh
