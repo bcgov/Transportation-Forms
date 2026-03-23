@@ -121,6 +121,7 @@ def test_callback_success_creates_user_updates_last_login_and_returns_tokens(
     assert payload["access_token"]
     assert payload["refresh_token"]
     assert payload["user"]["email"] == "task421@example.com"
+    assert payload["user"]["roles"] == ["staff_viewer"]
 
     user = db.query(User).filter(User.email == "task421@example.com").first()
     assert user is not None
@@ -168,6 +169,10 @@ def test_refresh_success_returns_new_access_token_and_updates_last_login(
 
     assert response.status_code == 200
     assert response.json()["access_token"]
+
+    # T1: Verify JWT role claims are embedded in the refreshed access token.
+    refreshed_token_data = jwt_handler.validate_token(response.json()["access_token"])
+    assert "staff_viewer" in (refreshed_token_data.roles or [])
 
     db.refresh(user)
     assert user.last_login is not None
@@ -366,3 +371,55 @@ def test_callback_uses_redirect_uri_stored_in_state(
 
     assert callback_response.status_code == 200
     assert captured["redirect_uri"] == "http://localhost:30300/callback"
+
+
+@pytest.mark.integration
+def test_callback_preserves_existing_portal_roles(
+    auth_client: TestClient,
+    db,
+    monkeypatch,
+    seeded_roles,
+    user_factory,
+):
+    """A user whose portal role was upgraded to admin by an admin retains it on every subsequent login."""
+    # Pre-create user with admin role assigned through the portal by an admin.
+    user = user_factory(email="admin.existing@example.com")
+    admin_role = db.query(Role).filter(Role.name == "admin").first()
+    db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=admin_role.id))
+    db.flush()
+
+    monkeypatch.setattr(
+        auth_routes.keycloak_service,
+        "get_auth_url",
+        lambda state, redirect_uri=None: f"https://keycloak.example/auth?state={state}",
+    )
+    login_response = auth_client.post("/api/v1/auth/login")
+    state = login_response.json()["state"]
+
+    monkeypatch.setattr(
+        auth_routes.keycloak_service,
+        "exchange_code_for_token",
+        lambda code, redirect_uri=None: {"access_token": "kc-access", "refresh_token": "kc-refresh"},
+    )
+    monkeypatch.setattr(
+        auth_routes.keycloak_service,
+        "get_user_info",
+        lambda token: {
+            "sub": "aaaabbbb-1111-2222-3333-ccccddddeeee",
+            "email": "admin.existing@example.com",
+            "given_name": "Admin",
+            "family_name": "Existing",
+        },
+    )
+    monkeypatch.setattr(auth_routes.keycloak_service, "decode_token", lambda token: {})
+    monkeypatch.setattr(auth_routes.keycloak_service, "extract_roles", lambda payload: [])
+
+    response = auth_client.post(
+        "/api/v1/auth/callback",
+        json={"code": "valid-code", "state": state},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "admin" in payload["user"]["roles"]
+    assert "staff_viewer" not in payload["user"]["roles"]

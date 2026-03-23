@@ -239,9 +239,6 @@ async def auth_callback(
                 detail="Email not provided by KeyCloak"
             )
 
-        keycloak_payload = keycloak_service.decode_token(keycloak_access_token)
-        keycloak_roles = keycloak_service.extract_roles(keycloak_payload)
-
         user = db.query(User).filter(User.email == email).first()
 
         if not user:
@@ -263,19 +260,21 @@ async def auth_callback(
             user.last_login = datetime.now(timezone.utc)
             logger.info(f"Updated existing user: {email}")
 
-        local_role_names = map_keycloak_roles_to_local(keycloak_roles)
+        # New-user bootstrap only — never overwrite DB-assigned portal roles.
+        existing_role_count = db.query(UserRole).filter(
+            UserRole.user_id == user.id,
+            UserRole.deleted_at.is_(None),
+        ).count()
 
-        if not local_role_names:
-            local_role_names = ["staff_viewer"]
-            logger.warning(f"No roles found for user {email}, defaulting to staff_viewer")
-
-        local_roles = db.query(Role).filter(Role.name.in_(local_role_names)).all()
-
-        db.query(UserRole).filter(UserRole.user_id == user.id).delete()
-
-        for role in local_roles:
-            user_role = UserRole(user_id=user.id, role_id=role.id)
-            db.add(user_role)
+        if existing_role_count == 0:
+            default_role = db.query(Role).filter(
+                Role.name == "staff_viewer",
+                Role.deleted_at.is_(None),
+                Role.is_active == True,
+            ).first()
+            if default_role:
+                db.add(UserRole(user_id=user.id, role_id=default_role.id))
+                logger.info(f"Assigned default staff_viewer role to new user: {email}")
 
         ip_address, user_agent = _get_request_metadata(http_request)
         _create_auth_audit_log(
@@ -289,10 +288,11 @@ async def auth_callback(
         )
 
         db.commit()
-        db.refresh(user)
+        user = db.query(User).filter(User.id == user.id).first()
 
         user_full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
-        role_names = [user_role.role.name for user_role in user.roles]
+        from backend.routes.admin_users import _active_user_roles
+        role_names = [ur.role.name for ur in _active_user_roles(user)]
         app_tokens = keycloak_service.generate_app_tokens(
             user_id=str(user.id),
             email=user.email,
@@ -356,10 +356,11 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
 
         user.last_login = datetime.now(timezone.utc)
         db.commit()
-        db.refresh(user)
+        user = db.query(User).filter(User.id == user.id).first()
 
         user_full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
-        role_names = [user_role.role.name for user_role in user.roles]
+        from backend.routes.admin_users import _active_user_roles
+        role_names = [ur.role.name for ur in _active_user_roles(user)]
         new_access_token = jwt_handler.generate_access_token(
             user_id=str(user.id),
             email=user.email,
@@ -460,11 +461,13 @@ async def get_current_user_info(
             )
         
         user_full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+        from backend.routes.admin_users import _active_user_roles
+        active_roles = _active_user_roles(user)
         return {
             "id": str(user.id),
             "email": user.email,
             "name": user_full_name,
-            "roles": [user_role.role.name for user_role in user.roles],
+            "roles": [ur.role.name for ur in active_roles],
             "keycloak_id": user.keycloak_id,
             "is_active": user.is_active,
             "created_at": user.created_at.isoformat(),
