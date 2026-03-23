@@ -1901,7 +1901,7 @@ Draft (initial) → Pending Review → Approved → Published → Archived
   - **`tests/test_admin_roles_api.py`** — Added integration tests for admin-only access, custom role create/delete, system role update/delete behavior, role membership detail response, duplicate-name conflict, and 404 handling.
 
 #### TASK-423: Access Request Workflow API (First-Login, Admin Approval)
-- **Status:** NOT_STARTED
+- **Status:** COMPLETED ✅ (March 23, 2026)
 - **Priority:** P0
 - **Effort:** 3pt
 - **Assigned To:** AI Code Agent
@@ -1918,15 +1918,29 @@ Draft (initial) → Pending Review → Approved → Published → Archived
   - `POST /api/v1/admin/access-requests/{request_id}/approve` - Approve request
   - `POST /api/v1/admin/access-requests/{request_id}/reject` - Reject request
 - **Acceptance Criteria:**
-  - [ ] User with no roles can submit a generic request
-  - [ ] Duplicate pending request for the same user is blocked (409)
-  - [ ] Admin can list pending/processed requests and approve/reject
-  - [ ] Non-admin users cannot access admin request endpoints (403)
-  - [ ] Request states persisted: `pending`, `approved`, `rejected`
-  - [ ] Audit logging captures request submit/approve/reject actions
-  - [ ] Clear API responses for success and failure scenarios
+  - [x] User with no roles can submit a generic request
+  - [x] Duplicate pending request for the same user is blocked (409)
+  - [x] Admin can list pending/processed requests and approve/reject
+  - [x] Non-admin users cannot access admin request endpoints (403)
+  - [x] Request states persisted: `pending`, `approved`, `rejected`
+  - [x] Audit logging captures request submit/approve/reject actions
+  - [x] Clear API responses for success and failure scenarios
 - **Dependencies:** TASK-109, TASK-115, TASK-421
 - **PR Title:** "api: implement access request workflow for forms portal"
+
+- **Implemented:**
+  - **`backend/models.py`** — Added `AccessRequest` model with states (`pending`, `approved`, `rejected`), reviewer metadata, and partial unique index enforcing one active pending request per user.
+  - **`alembic/versions/010_task_423_access_requests.py`** — Added migration creating `access_requests` table, indexes, status check constraint, and partial unique pending-user index.
+  - **`backend/services/access_requests.py`** — Added `AccessRequestService` with submit, list/filter, latest-for-user lookup, and admin approve/reject operations plus audit logging (`SUBMIT`, `APPROVE`, `REJECT`).
+  - **`backend/routes/access_requests.py`** — Added endpoints:
+    - `POST /api/v1/access-requests`
+    - `GET /api/v1/access-requests/me`
+    - `GET /api/v1/admin/access-requests`
+    - `POST /api/v1/admin/access-requests/{request_id}/approve`
+    - `POST /api/v1/admin/access-requests/{request_id}/reject`
+    Includes explicit 400/401/403/404/409 handling.
+  - **`backend/main.py`** — Registered access-request router.
+  - **`tests/test_access_requests_api.py`** — Added integration tests covering no-role submission, duplicate pending conflicts, admin list/approve/reject, 403 for non-admin admin-route access, self-status retrieval, and audit log verification.
 
 #### TASK-424: Frontend Admin Navigation & Route Visibility (Forms Portal)
 - **Status:** NOT_STARTED
@@ -3729,7 +3743,7 @@ This epic introduces **3 new database tables** and modifications to seed data:
 | TASK-120 | Admin API Endpoints - Users | 3pt | 1 | - |
 | TASK-121 | OpenAPI Documentation | 2pt | 1 | - |
 | TASK-422 | Admin Role Management API | 5pt | 1 | ✅ COMPLETED |
-| TASK-423 | Access Request Workflow API | 3pt | 1 | - |
+| TASK-423 | Access Request Workflow API | 3pt | 1 | ✅ COMPLETED |
 | TASK-125 | README & Setup Instructions | 2pt | 1 | - |
 | TASK-126 | Architecture Decision Records | 2pt | 1 | - |
 | TASK-301 | API Documentation Review | 1pt | 3 | - |

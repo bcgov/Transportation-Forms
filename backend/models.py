@@ -433,3 +433,35 @@ class FormReservationApprover(Base):
     __table_args__ = (
         UniqueConstraint("reservation_id", "approver_id", name="uq_reservation_approver"),
     )
+
+
+# ============================================================================
+# TABLE 15: access_requests (TASK-423)
+# Tracks first-login access requests for users without assigned portal roles
+# ============================================================================
+class AccessRequest(Base):
+    __tablename__ = "access_requests"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, approved, rejected
+    review_notes = Column(Text, nullable=True)
+    processed_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    processed_at = Column(DateTime, nullable=True, index=True)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    processed_by = relationship("User", foreign_keys=[processed_by_id])
+
+    __table_args__ = (
+        Index(
+            "ix_access_requests_pending_user",
+            "user_id",
+            unique=True,
+            postgresql_where=sa_text("deleted_at IS NULL AND status = 'pending'"),
+        ),
+        CheckConstraint("status IN ('pending', 'approved', 'rejected')", name="ck_access_request_status"),
+    )
