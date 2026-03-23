@@ -176,13 +176,32 @@ class AccessRequestService:
         admin_user_id: UUID,
         review_notes: Optional[str] = None,
     ) -> AccessRequest:
-        """Approve a pending access request."""
+        """Approve a pending access request and assign default staff_viewer role."""
         request = AccessRequestService._get_pending_or_raise(db, request_id)
 
         request.status = "approved"
         request.review_notes = review_notes
         request.processed_by_id = admin_user_id
         request.processed_at = datetime.utcnow()
+
+        # Assign the default staff_viewer role if the user doesn't already have it.
+        staff_viewer_role = (
+            db.query(Role)
+            .filter(Role.name == "staff_viewer", Role.deleted_at.is_(None), Role.is_active == True)
+            .first()
+        )
+        if staff_viewer_role:
+            already_assigned = (
+                db.query(UserRole)
+                .filter(
+                    UserRole.user_id == request.user_id,
+                    UserRole.role_id == staff_viewer_role.id,
+                    UserRole.deleted_at.is_(None),
+                )
+                .first()
+            )
+            if not already_assigned:
+                db.add(UserRole(user_id=request.user_id, role_id=staff_viewer_role.id))
 
         db.add(
             AuditLog(
