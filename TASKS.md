@@ -1865,7 +1865,7 @@ Draft (initial) → Pending Review → Approved → Published → Archived
 - **PR Title:** "docs: auto-generate openapi documentation"
 
 #### TASK-422: Admin Role Management API (Forms Portal)
-- **Status:** NOT_STARTED
+- **Status:** COMPLETED ✅ (March 23, 2026)
 - **Priority:** P0
 - **Effort:** 5pt
 - **Assigned To:** AI Code Agent
@@ -1878,15 +1878,27 @@ Draft (initial) → Pending Review → Approved → Published → Archived
   - `PUT /api/v1/admin/roles/{role_id}` - Update role name/description/permissions
   - `DELETE /api/v1/admin/roles/{role_id}` - Delete custom role
 - **Acceptance Criteria:**
-  - [ ] Admin role required on all role-management endpoints
-  - [ ] System roles (`admin`, `staff_manager`, `reviewer`, `staff_viewer`) are editable but NOT deletable
-  - [ ] Custom roles can be created, edited, and deleted
-  - [ ] Role detail endpoint returns role metadata and list of users assigned to that role
-  - [ ] Permission updates are persisted and reflected in authorization behavior
-  - [ ] Audit logging records role create/update/delete and permission changes
-  - [ ] Error handling includes 400, 401, 403, 404, 409 with clear messages
+  - [x] Admin role required on all role-management endpoints
+  - [x] System roles (`admin`, `staff_manager`, `reviewer`, `staff_viewer`) are editable but NOT deletable
+  - [x] Custom roles can be created, edited, and deleted
+  - [x] Role detail endpoint returns role metadata and list of users assigned to that role
+  - [x] Permission updates are persisted and reflected in authorization behavior
+  - [x] Audit logging records role create/update/delete and permission changes
+  - [x] Error handling includes 400, 401, 403, 404, 409 with clear messages
 - **Dependencies:** TASK-109, TASK-421
 - **PR Title:** "api: implement admin role management for forms portal"
+
+- **Implemented:**
+  - **`backend/services/roles.py`** — Added `RoleService` with role listing (search/pagination), detail loading with assigned users, custom-role create/update/delete, system-role delete guard, and audit logging for CREATE/UPDATE/DELETE/UPDATE_PERMISSIONS.
+  - **`backend/routes/roles.py`** — Added admin-only endpoints:
+    - `GET /api/v1/admin/roles`
+    - `POST /api/v1/admin/roles`
+    - `GET /api/v1/admin/roles/{role_id}`
+    - `PUT /api/v1/admin/roles/{role_id}`
+    - `DELETE /api/v1/admin/roles/{role_id}`
+    Includes consistent 400/401/403/404/409 error handling and response models with role membership details.
+  - **`backend/main.py`** — Registered roles router under `/api/v1`.
+  - **`tests/test_admin_roles_api.py`** — Added integration tests for admin-only access, custom role create/delete, system role update/delete behavior, role membership detail response, duplicate-name conflict, and 404 handling.
 
 #### TASK-423: Access Request Workflow API (First-Login, Admin Approval)
 - **Status:** NOT_STARTED
@@ -3716,7 +3728,7 @@ This epic introduces **3 new database tables** and modifications to seed data:
 | TASK-119 | Auth API Endpoints | 2pt | 1 | - |
 | TASK-120 | Admin API Endpoints - Users | 3pt | 1 | - |
 | TASK-121 | OpenAPI Documentation | 2pt | 1 | - |
-| TASK-422 | Admin Role Management API | 5pt | 1 | - |
+| TASK-422 | Admin Role Management API | 5pt | 1 | ✅ COMPLETED |
 | TASK-423 | Access Request Workflow API | 3pt | 1 | - |
 | TASK-125 | README & Setup Instructions | 2pt | 1 | - |
 | TASK-126 | Architecture Decision Records | 2pt | 1 | - |
