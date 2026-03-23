@@ -82,13 +82,14 @@ async def startup_event():
 
 
 # Include API routes FIRST (before catch-all)
-from backend.routes import auth, forms, business_areas
+from backend.routes import auth, forms, business_areas, workflow
 from backend.routes.prefixes import public_router as prefixes_public_router
 from backend.routes.prefixes import admin_router as prefixes_admin_router
 from backend.routes.reservations import router as reservations_router
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(forms.router, prefix="/api/v1")
+app.include_router(workflow.router, prefix="/api/v1")
 app.include_router(business_areas.router, prefix="/api/v1")
 app.include_router(prefixes_public_router, prefix="/api/v1")
 app.include_router(prefixes_admin_router, prefix="/api/v1")
