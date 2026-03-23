@@ -9,6 +9,7 @@ from datetime import datetime
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc, asc, text
+from sqlalchemy.exc import OperationalError
 
 from backend.models import (
     Form, FormBusinessArea, FormVersion, FormWorkflow, 
@@ -18,8 +19,28 @@ from backend.config import settings
 from backend.services import minio_service
 
 
+class FormWorkflowValidationError(ValueError):
+    """Raised when a workflow transition request is invalid (HTTP 400)."""
+
+
+class FormWorkflowConflictError(ValueError):
+    """Raised for workflow conflicts (HTTP 409)."""
+
+
+class FormNotFoundError(ValueError):
+    """Raised when a form cannot be found (HTTP 404)."""
+
+
 class FormService:
     """Service class for form management operations."""
+
+    VALID_TRANSITIONS = {
+        "draft": ["pending_review"],
+        "pending_review": ["approved", "draft"],
+        "approved": ["published"],
+        "published": ["archived", "draft"],
+        "archived": ["published"],
+    }
     
     # =====================================================================
     # CREATE OPERATIONS
@@ -432,9 +453,179 @@ class FormService:
         )
         
         return True
+
+    @staticmethod
+    def _get_form_for_transition(db: Session, form_id: UUID, lock: bool = True) -> Form:
+        query = db.query(Form).filter(
+            Form.id == form_id,
+            Form.deleted_at.is_(None),
+        )
+        if lock:
+            query = query.with_for_update(nowait=True)
+
+        try:
+            form = query.first()
+        except OperationalError as exc:
+            raise FormWorkflowConflictError(
+                "Form status was changed by another user; unable to acquire lock"
+            ) from exc
+
+        if not form:
+            raise FormNotFoundError("Form not found")
+
+        return form
+
+    @staticmethod
+    def _validate_workflow_transition(current_status: str, target_status: str) -> None:
+        if current_status == target_status:
+            raise FormWorkflowValidationError(f"Form is already in '{target_status}' state")
+
+        allowed = FormService.VALID_TRANSITIONS.get(current_status, [])
+        if target_status not in allowed:
+            raise FormWorkflowValidationError(
+                f"Invalid transition from '{current_status}' to '{target_status}'"
+            )
+
+    @staticmethod
+    def _is_separation_of_duties_enforced(db: Session) -> bool:
+        """Read DB-level setting; defaults to off when undefined."""
+        try:
+            value = db.execute(
+                text("SELECT current_setting('app.enforce_separation_of_duties', true)")
+            ).scalar()
+        except Exception:
+            return False
+
+        if value is None:
+            return False
+
+        return str(value).strip().lower() in {"1", "true", "on", "yes"}
+
+    @staticmethod
+    def _transition_form_status(
+        db: Session,
+        form: Form,
+        *,
+        action: str,
+        to_status: str,
+        triggered_by_id: UUID,
+        reason_notes: Optional[str] = None,
+    ) -> Form:
+        from_status = form.status
+        FormService._validate_workflow_transition(from_status, to_status)
+
+        workflow = FormWorkflow(
+            form_id=form.id,
+            action=action,
+            from_status=from_status,
+            to_status=to_status,
+            triggered_by_id=triggered_by_id,
+            reason_notes=reason_notes,
+        )
+        db.add(workflow)
+        db.flush()
+
+        form.status = to_status
+        db.flush()
+
+        db.add(AuditLog(
+            entity_type="forms",
+            entity_id=str(form.id),
+            action="WORKFLOW_TRANSITION",
+            user_id=triggered_by_id,
+            old_values={"status": from_status},
+            new_values={"status": to_status, "action": action, "reason_notes": reason_notes},
+        ))
+
+        db.commit()
+        db.refresh(form)
+        return form
+
+    @staticmethod
+    def submit_form_for_review(db: Session, form_id: UUID, user_id: UUID) -> Form:
+        form = FormService._get_form_for_transition(db, form_id, lock=True)
+
+        if form.form_number_reservation_id:
+            reservation = db.query(FormNumberReservation).filter(
+                FormNumberReservation.id == form.form_number_reservation_id,
+                FormNumberReservation.deleted_at.is_(None),
+            ).first()
+
+            if not reservation or reservation.status != "approved":
+                raise FormWorkflowConflictError(
+                    "Form number reservation must be approved before submission"
+                )
+
+        return FormService._transition_form_status(
+            db,
+            form,
+            action="submit",
+            to_status="pending_review",
+            triggered_by_id=user_id,
+        )
+
+    @staticmethod
+    def approve_form(db: Session, form_id: UUID, approver_id: UUID) -> Form:
+        form = FormService._get_form_for_transition(db, form_id, lock=True)
+
+        if (
+            FormService._is_separation_of_duties_enforced(db)
+            and str(form.created_by_id) == str(approver_id)
+        ):
+            raise FormWorkflowValidationError("You cannot approve your own form submission.")
+
+        return FormService._transition_form_status(
+            db,
+            form,
+            action="approve",
+            to_status="approved",
+            triggered_by_id=approver_id,
+        )
+
+    @staticmethod
+    def reject_form(db: Session, form_id: UUID, reviewer_id: UUID, reason_notes: str) -> Form:
+        if not reason_notes or not reason_notes.strip():
+            raise FormWorkflowValidationError("Rejection reason (reason_notes) is required")
+
+        form = FormService._get_form_for_transition(db, form_id, lock=True)
+        return FormService._transition_form_status(
+            db,
+            form,
+            action="reject",
+            to_status="draft",
+            triggered_by_id=reviewer_id,
+            reason_notes=reason_notes.strip(),
+        )
+
+    @staticmethod
+    def publish_form(db: Session, form_id: UUID, user_id: UUID) -> Form:
+        form = FormService._get_form_for_transition(db, form_id, lock=True)
+        return FormService._transition_form_status(
+            db,
+            form,
+            action="publish",
+            to_status="published",
+            triggered_by_id=user_id,
+        )
+
+    @staticmethod
+    def unpublish_form(db: Session, form_id: UUID, user_id: UUID) -> Form:
+        form = FormService._get_form_for_transition(db, form_id, lock=True)
+        return FormService._transition_form_status(
+            db,
+            form,
+            action="unpublish",
+            to_status="draft",
+            triggered_by_id=user_id,
+        )
     
     @staticmethod
-    def archive_form(db: Session, form_id: UUID, archived_by_id: UUID) -> Optional[Form]:
+    def archive_form(
+        db: Session,
+        form_id: UUID,
+        archived_by_id: Optional[UUID] = None,
+        user_id: Optional[UUID] = None,
+    ) -> Optional[Form]:
         """
         Archive a form (change status to archived).
         
@@ -446,41 +637,21 @@ class FormService:
         Returns:
             Archived Form object or None if not found
         """
-        form = FormService.get_form_by_id(db, form_id)
-        if not form:
-            return None
-        
-        old_status = form.status
-        form.status = 'archived'
-        db.commit()
-        db.refresh(form)
-        
-        # Log workflow change
-        workflow = FormWorkflow(
-            form_id=form.id,
-            action='archive',
-            from_status=old_status,
-            to_status='archived',
-            triggered_by_id=archived_by_id,
+        actor_id = user_id or archived_by_id
+        if actor_id is None:
+            raise FormWorkflowValidationError("A user_id is required")
+
+        form = FormService._get_form_for_transition(db, form_id, lock=True)
+        return FormService._transition_form_status(
+            db,
+            form,
+            action="archive",
+            to_status="archived",
+            triggered_by_id=actor_id,
         )
-        db.add(workflow)
-        db.commit()
-        
-        # Audit log
-        FormService._audit_log(
-            db=db,
-            entity_type="forms",
-            entity_id=str(form.id),
-            action="UPDATE",
-            user_id=archived_by_id,
-            old_values={"status": old_status},
-            new_values={"status": "archived"}
-        )
-        
-        return form
     
     @staticmethod
-    def unarchive_form(db: Session, form_id: UUID, unarchived_by_id: UUID) -> Optional[Form]:
+    def restore_form(db: Session, form_id: UUID, user_id: UUID) -> Form:
         """
         Unarchive a form (change status back to published).
         
@@ -492,38 +663,36 @@ class FormService:
         Returns:
             Unarchived Form object or None if not found
         """
+        form = FormService._get_form_for_transition(db, form_id, lock=True)
+        return FormService._transition_form_status(
+            db,
+            form,
+            action="restore",
+            to_status="published",
+            triggered_by_id=user_id,
+        )
+
+    @staticmethod
+    def unarchive_form(db: Session, form_id: UUID, unarchived_by_id: UUID) -> Optional[Form]:
+        """Backward-compatible alias for restore_form."""
+        return FormService.restore_form(db=db, form_id=form_id, user_id=unarchived_by_id)
+
+    @staticmethod
+    def get_workflow_history(db: Session, form_id: UUID) -> List[FormWorkflow]:
+        """Return workflow history ordered by newest first."""
         form = FormService.get_form_by_id(db, form_id)
-        if not form or form.status != 'archived':
-            return None
-        
-        old_status = form.status
-        form.status = 'published'
-        db.commit()
-        db.refresh(form)
-        
-        # Log workflow change
-        workflow = FormWorkflow(
-            form_id=form.id,
-            action='unarchive',
-            from_status=old_status,
-            to_status='published',
-            triggered_by_id=unarchived_by_id,
+        if not form:
+            raise FormNotFoundError("Form not found")
+
+        return (
+            db.query(FormWorkflow)
+            .filter(
+                FormWorkflow.form_id == form_id,
+                FormWorkflow.deleted_at.is_(None),
+            )
+            .order_by(desc(FormWorkflow.created_at))
+            .all()
         )
-        db.add(workflow)
-        db.commit()
-        
-        # Audit log
-        FormService._audit_log(
-            db=db,
-            entity_type="forms",
-            entity_id=str(form.id),
-            action="UPDATE",
-            user_id=unarchived_by_id,
-            old_values={"status": old_status},
-            new_values={"status": "published"}
-        )
-        
-        return form
     
     # =====================================================================
     # HELPER METHODS

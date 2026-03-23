@@ -62,9 +62,8 @@ KEYCLOAK_REDIRECT_URI=http://localhost:30300/callback
 - `KEYCLOAK_SERVER_URL` must point to your existing Keycloak server base URL.
 - `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, and `KEYCLOAK_CLIENT_SECRET` must match an existing client configured in that realm.
 - `KEYCLOAK_REDIRECT_URI` is the **fallback** redirect URI used when the frontend does not supply one.  
-  It must resolve to the **frontend** `/callback` route (e.g. `http://localhost:30300/callback`), **not** a backend API endpoint.
-- The Keycloak client registered in the realm must list **both** the fallback URI and any other origin/callback URLs as valid redirect URIs.  
-  For the BC Gov dev environment: `http://localhost:30300/callback`.
+  It should resolve to the **frontend** `/callback` route (e.g. `http://localhost:30300/callback`), **not** a backend API endpoint.
+- Your Keycloak client should be configured with valid redirect URIs that include both the fallback URI and any other frontend callback origins you intend to use.
 - The frontend automatically sends its own `window.location.origin + '/callback'` as the redirect URI when calling `/api/v1/auth/login`, so the backend will use that value (validated against `CORS_ORIGINS`) instead of the static env-var wherever possible.
 - Keep `AUTH_DEMO_MODE=false` by default; set `AUTH_DEMO_MODE=true` only for explicit local development bypass with `demo-token`.
 
