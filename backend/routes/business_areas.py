@@ -18,8 +18,10 @@ from backend.models import BusinessArea
 # Pydantic Models
 # ============================================================================
 
+
 class BusinessAreaResponse(BaseModel):
     """Response model for a single business area."""
+
     id: str
     name: str
     description: str | None

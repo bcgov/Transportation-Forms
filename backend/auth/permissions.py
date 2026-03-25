@@ -15,35 +15,36 @@ from typing import List, Dict, Set
 # PERMISSION DEFINITIONS
 # ============================================================================
 
+
 class Permission(str, Enum):
     """All available permissions in the system."""
-    
+
     # Form Management Permissions
     FORM_CREATE = "form:create"
     FORM_READ = "form:read"
     FORM_EDIT = "form:edit"
     FORM_DELETE = "form:delete"
     FORM_ARCHIVE = "form:archive"
-    
+
     # Form Workflow Permissions
     FORM_SUBMIT_FOR_REVIEW = "form:submit_for_review"
     FORM_REVIEW = "form:review"
     FORM_APPROVE = "form:approve"
     FORM_PUBLISH = "form:publish"
-    
+
     # Business Area Permissions
     BUSINESS_AREA_CREATE = "business_area:create"
     BUSINESS_AREA_READ = "business_area:read"
     BUSINESS_AREA_EDIT = "business_area:edit"
     BUSINESS_AREA_DELETE = "business_area:delete"
     BUSINESS_AREA_MANAGE = "business_area:manage"
-    
+
     # Category Management Permissions
     CATEGORY_CREATE = "category:create"
     CATEGORY_READ = "category:read"
     CATEGORY_EDIT = "category:edit"
     CATEGORY_DELETE = "category:delete"
-    
+
     # User Management Permissions
     USER_CREATE = "user:create"
     USER_READ = "user:read"
@@ -51,18 +52,18 @@ class Permission(str, Enum):
     USER_DELETE = "user:delete"
     USER_MANAGE_ROLES = "user:manage_roles"
     USER_MANAGE_PERMISSIONS = "user:manage_permissions"
-    
+
     # Role Management Permissions
     ROLE_CREATE = "role:create"
     ROLE_READ = "role:read"
     ROLE_EDIT = "role:edit"
     ROLE_DELETE = "role:delete"
-    
+
     # Audit & Reporting Permissions
     AUDIT_LOG_VIEW = "audit_log:view"
     AUDIT_LOG_EXPORT = "audit_log:export"
     REPORT_VIEW = "report:view"
-    
+
     # Form Number Reservation Permissions
     RESERVATION_CREATE = "reservation:create"
     RESERVATION_READ = "reservation:read"
@@ -97,20 +98,17 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.FORM_REVIEW,
             Permission.FORM_APPROVE,
             Permission.FORM_PUBLISH,
-            
             # All business area permissions
             Permission.BUSINESS_AREA_CREATE,
             Permission.BUSINESS_AREA_READ,
             Permission.BUSINESS_AREA_EDIT,
             Permission.BUSINESS_AREA_DELETE,
             Permission.BUSINESS_AREA_MANAGE,
-            
             # All category permissions
             Permission.CATEGORY_CREATE,
             Permission.CATEGORY_READ,
             Permission.CATEGORY_EDIT,
             Permission.CATEGORY_DELETE,
-            
             # All user permissions
             Permission.USER_CREATE,
             Permission.USER_READ,
@@ -118,18 +116,15 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.USER_DELETE,
             Permission.USER_MANAGE_ROLES,
             Permission.USER_MANAGE_PERMISSIONS,
-            
             # All role permissions
             Permission.ROLE_CREATE,
             Permission.ROLE_READ,
             Permission.ROLE_EDIT,
             Permission.ROLE_DELETE,
-            
             # All audit permissions
             Permission.AUDIT_LOG_VIEW,
             Permission.AUDIT_LOG_EXPORT,
             Permission.REPORT_VIEW,
-            
             # All reservation permissions
             Permission.RESERVATION_CREATE,
             Permission.RESERVATION_READ,
@@ -139,13 +134,11 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.RESERVATION_REQUEST_CHANGES,
             Permission.RESERVATION_RELEASE,
             Permission.RESERVATION_ADMIN,
-
             # System configuration
             Permission.SYSTEM_CONFIG,
             Permission.SYSTEM_HEALTH,
         ],
     },
-    
     "staff_manager": {
         "description": "Staff manager responsible for form workflow and staff coordination",
         "is_system": True,
@@ -156,22 +149,17 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.FORM_EDIT,
             Permission.FORM_DELETE,
             Permission.FORM_ARCHIVE,
-            
             # Form workflow
             Permission.FORM_SUBMIT_FOR_REVIEW,
             Permission.FORM_REVIEW,
             Permission.FORM_APPROVE,
-            
             # Business areas (read + manage)
             Permission.BUSINESS_AREA_READ,
             Permission.BUSINESS_AREA_MANAGE,
-            
             # Category read
             Permission.CATEGORY_READ,
-            
             # User management (limited)
             Permission.USER_READ,
-            
             # Reservation permissions (manager)
             Permission.RESERVATION_CREATE,
             Permission.RESERVATION_READ,
@@ -180,13 +168,11 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.RESERVATION_REJECT,
             Permission.RESERVATION_REQUEST_CHANGES,
             Permission.RESERVATION_RELEASE,
-
             # Audit log viewing
             Permission.AUDIT_LOG_VIEW,
             Permission.REPORT_VIEW,
         ],
     },
-    
     "reviewer": {
         "description": "Form reviewer responsible for reviewing and approving forms",
         "is_system": True,
@@ -195,38 +181,30 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.FORM_READ,
             Permission.FORM_REVIEW,
             Permission.FORM_APPROVE,
-            
             # Business areas (read only)
             Permission.BUSINESS_AREA_READ,
-            
             # Categories (read only)
             Permission.CATEGORY_READ,
-            
             # Reservation review permissions
             Permission.RESERVATION_READ,
             Permission.RESERVATION_APPROVE,
             Permission.RESERVATION_REJECT,
             Permission.RESERVATION_REQUEST_CHANGES,
             Permission.RESERVATION_RELEASE,
-
             # Audit log viewing
             Permission.AUDIT_LOG_VIEW,
         ],
     },
-    
     "staff_viewer": {
         "description": "Staff member with read-only access to published forms",
         "is_system": True,
         "permissions": [
             # Form read only
             Permission.FORM_READ,
-            
             # Business areas (read only)
             Permission.BUSINESS_AREA_READ,
-            
             # Categories (read only)
             Permission.CATEGORY_READ,
-
             # Reservation basic permissions
             Permission.RESERVATION_CREATE,
             Permission.RESERVATION_READ,
@@ -289,35 +267,39 @@ PERMISSION_GROUPS: Dict[str, List[Permission]] = {
 # PERMISSION INHERITANCE RULES
 # ============================================================================
 
+
 def get_inherited_permissions(permissions: List[str]) -> Set[str]:
     """
     Apply permission inheritance rules.
-    
+
     Inheritance hierarchy:
     - No inheritance by default
     - This function can be extended to add inheritance logic
-    
+
     Args:
         permissions: List of permission strings
-        
+
     Returns:
         Set of permissions including inherited ones
     """
     result = set(permissions)
-    
+
     # Example inheritance rules (can be extended):
     # If user has form delete, they implicitly have form edit
     if Permission.FORM_DELETE in result or "form:delete" in permissions:
         result.add(Permission.FORM_EDIT)
-    
+
     # If user has user management role, they can read users
     if Permission.USER_MANAGE_ROLES in result or "user:manage_roles" in permissions:
         result.add(Permission.USER_READ)
-    
+
     # If user can manage business areas, they can read them
-    if Permission.BUSINESS_AREA_MANAGE in result or "business_area:manage" in permissions:
+    if (
+        Permission.BUSINESS_AREA_MANAGE in result
+        or "business_area:manage" in permissions
+    ):
         result.add(Permission.BUSINESS_AREA_READ)
-    
+
     return result
 
 
@@ -391,21 +373,21 @@ RESOURCE_ACTION_PERMISSIONS: Dict[str, Dict[str, str]] = {
 def get_permission_for_resource_action(resource: str, action: str) -> str:
     """
     Get the required permission for a resource-action pair.
-    
+
     Args:
         resource: Resource name (e.g., 'forms', 'users')
         action: Action name (e.g., 'create', 'read')
-        
+
     Returns:
         Permission string
-        
+
     Raises:
         ValueError: If resource-action combination is not found
     """
     if resource not in RESOURCE_ACTION_PERMISSIONS:
         raise ValueError(f"Unknown resource: {resource}")
-    
+
     if action not in RESOURCE_ACTION_PERMISSIONS[resource]:
         raise ValueError(f"Unknown action '{action}' for resource '{resource}'")
-    
+
     return RESOURCE_ACTION_PERMISSIONS[resource][action]

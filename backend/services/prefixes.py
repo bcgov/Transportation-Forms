@@ -65,7 +65,9 @@ class PrefixService:
         )
 
     @staticmethod
-    def get_prefix_by_value(db: Session, prefix_value: str) -> Optional[FormNumberPrefix]:
+    def get_prefix_by_value(
+        db: Session, prefix_value: str
+    ) -> Optional[FormNumberPrefix]:
         """Look up a prefix by its string value (case-insensitive)."""
         return (
             db.query(FormNumberPrefix)
@@ -264,12 +266,15 @@ class PrefixService:
         #  conditionally to avoid circular import before that table exists.)
         try:
             from backend.models import FormNumberReservation
+
             active_count = (
                 db.query(FormNumberReservation)
                 .filter(
                     FormNumberReservation.prefix_id == prefix_id,
                     FormNumberReservation.deleted_at.is_(None),
-                    FormNumberReservation.status.notin_(["released", "expired", "rejected"]),
+                    FormNumberReservation.status.notin_(
+                        ["released", "expired", "rejected"]
+                    ),
                 )
                 .count()
             )

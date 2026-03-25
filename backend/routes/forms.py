@@ -22,29 +22,55 @@ from backend.models import Form
 # Pydantic Models (Request/Response)
 # ============================================================================
 
+
 class BusinessAreaRef(BaseModel):
     """Reference to a business area."""
+
     id: str
     name: str
 
 
 class FormCreateRequest(BaseModel):
     """Request model for creating a form."""
+
     title: str = Field(..., min_length=1, max_length=255, description="Form title")
-    description: str = Field(..., min_length=1, max_length=2000, description="Form description (required)")
-    is_public: bool = Field(default=False, description="Whether form is publicly visible")
+    description: str = Field(
+        ..., min_length=1, max_length=2000, description="Form description (required)"
+    )
+    is_public: bool = Field(
+        default=False, description="Whether form is publicly visible"
+    )
     keywords: Optional[List[str]] = Field(default=None, description="Search keywords")
-    business_area_ids: Optional[List[str]] = Field(default=None, description="Associated business area IDs")
-    effective_date: Optional[datetime] = Field(None, description="When form becomes effective")
+    business_area_ids: Optional[List[str]] = Field(
+        default=None, description="Associated business area IDs"
+    )
+    effective_date: Optional[datetime] = Field(
+        None, description="When form becomes effective"
+    )
     # TASK-110C: new fields
-    form_source: Optional[str] = Field(None, description="Form source type: 'URL' or 'Download'")
-    form_source_url: Optional[str] = Field(None, max_length=500, description="Source URL (required when form_source='URL')")
-    form_attachment_url: Optional[str] = Field(None, max_length=500, description="MinIO object URL (set after file upload when form_source='Download')")
-    form_attachment_filename: Optional[str] = Field(None, max_length=255, description="Original filename of the uploaded attachment")
+    form_source: Optional[str] = Field(
+        None, description="Form source type: 'URL' or 'Download'"
+    )
+    form_source_url: Optional[str] = Field(
+        None, max_length=500, description="Source URL (required when form_source='URL')"
+    )
+    form_attachment_url: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="MinIO object URL (set after file upload when form_source='Download')",
+    )
+    form_attachment_filename: Optional[str] = Field(
+        None, max_length=255, description="Original filename of the uploaded attachment"
+    )
     # TASK-413: Form number reservation linkage
-    form_number_reservation_id: Optional[str] = Field(None, description="UUID of approved form number reservation to link (optional)")
+    form_number_reservation_id: Optional[str] = Field(
+        None, description="UUID of approved form number reservation to link (optional)"
+    )
     # Personal information collection indicator
-    collects_personal_info: Optional[str] = Field(default="No", description="Does this form collect personal information? ('Yes' or 'No')")
+    collects_personal_info: Optional[str] = Field(
+        default="No",
+        description="Does this form collect personal information? ('Yes' or 'No')",
+    )
 
     @model_validator(mode="after")
     def validate_form_source(self) -> "FormCreateRequest":
@@ -57,13 +83,15 @@ class FormCreateRequest(BaseModel):
             # Normalise to canonical casing per spec: 'URL' or 'Download'
             self.form_source = "URL" if src_upper == "URL" else "Download"
             if src_upper == "URL" and not self.form_source_url:
-                raise ValueError("form_source_url is required when form_source is 'URL'")
+                raise ValueError(
+                    "form_source_url is required when form_source is 'URL'"
+                )
             if src_upper == "DOWNLOAD" and not self.form_attachment_url:
                 raise ValueError(
                     "form_attachment_url is required when form_source is 'Download'. "
                     "Upload the file first via POST /api/v1/uploads, then provide the returned URL."
                 )
-        
+
         # Validate collects_personal_info field
         if self.collects_personal_info is not None:
             if self.collects_personal_info not in ("Yes", "No"):
@@ -78,22 +106,38 @@ class FormCreateRequest(BaseModel):
 
 class FormUpdateRequest(BaseModel):
     """Request model for updating a form."""
+
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
     is_public: Optional[bool] = None
     keywords: Optional[List[str]] = None
     business_area_ids: Optional[List[str]] = None
     effective_date: Optional[datetime] = None
-    collects_personal_info: Optional[str] = Field(None, description="Does this form collect personal information? ('Yes' or 'No')")
+    collects_personal_info: Optional[str] = Field(
+        None, description="Does this form collect personal information? ('Yes' or 'No')"
+    )
     # TASK-416: attachment fields — support updating/clearing file attachment
-    form_source: Optional[str] = Field(None, description="Form source type: 'URL' or 'Download' (null to clear)")
-    form_source_url: Optional[str] = Field(None, max_length=500, description="Source URL when form_source is 'URL'")
-    form_attachment_url: Optional[str] = Field(None, max_length=500, description="MinIO object URL when form_source is 'Download' (null to clear attachment)")
-    form_attachment_filename: Optional[str] = Field(None, max_length=255, description="Original filename of the uploaded attachment")
+    form_source: Optional[str] = Field(
+        None, description="Form source type: 'URL' or 'Download' (null to clear)"
+    )
+    form_source_url: Optional[str] = Field(
+        None, max_length=500, description="Source URL when form_source is 'URL'"
+    )
+    form_attachment_url: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="MinIO object URL when form_source is 'Download' (null to clear attachment)",
+    )
+    form_attachment_filename: Optional[str] = Field(
+        None, max_length=255, description="Original filename of the uploaded attachment"
+    )
 
     @model_validator(mode="after")
     def validate_update_fields(self) -> "FormUpdateRequest":
-        if self.collects_personal_info is not None and self.collects_personal_info not in ("Yes", "No"):
+        if (
+            self.collects_personal_info is not None
+            and self.collects_personal_info not in ("Yes", "No")
+        ):
             raise ValueError("collects_personal_info must be 'Yes' or 'No'")
         # Validate form_source if explicitly provided
         if self.form_source is not None:
@@ -109,6 +153,7 @@ class FormUpdateRequest(BaseModel):
 
 class FormResponse(BaseModel):
     """Response model for form details."""
+
     id: str
     title: str
     description: Optional[str]
@@ -132,13 +177,14 @@ class FormResponse(BaseModel):
     collects_personal_info: str
     created_at: str
     updated_at: str
-    
+
     class Config:
         from_attributes = True
 
 
 class FormListResponse(BaseModel):
     """Response model for form list."""
+
     total: int
     skip: int
     limit: int
@@ -147,6 +193,7 @@ class FormListResponse(BaseModel):
 
 class FormListItem(BaseModel):
     """List item for form summaries."""
+
     id: str
     title: str
     status: str
@@ -157,6 +204,7 @@ class FormListItem(BaseModel):
 
 class FormAutocompleteResponse(BaseModel):
     """Autocomplete response model."""
+
     query: str
     suggestions: List[str]
 
@@ -171,7 +219,7 @@ router = APIRouter(
     responses={
         404: {"description": "Form not found"},
         422: {"description": "Validation error"},
-    }
+    },
 )
 
 
@@ -179,14 +227,18 @@ router = APIRouter(
 # FILE UPLOAD ENDPOINT (TASK-110C)
 # ============================================================================
 
+
 class FileUploadResponse(BaseModel):
     """Response returned after a successful file upload to MinIO."""
+
     url: str
     filename: str
     object_key: str
 
 
-@router.post("/upload", response_model=FileUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/upload", response_model=FileUploadResponse, status_code=status.HTTP_201_CREATED
+)
 async def upload_form_attachment(
     file: UploadFile = File(..., description="Form attachment file to upload"),
     current_user: TokenData = Depends(get_current_user),
@@ -203,8 +255,7 @@ async def upload_form_attachment(
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded file is empty"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty"
         )
 
     content_type = file.content_type or "application/octet-stream"
@@ -216,17 +267,20 @@ async def upload_form_attachment(
             original_filename=original_filename,
             content_type=content_type,
         )
-        return FileUploadResponse(url=public_url, filename=original_filename, object_key=object_key)
+        return FileUploadResponse(
+            url=public_url, filename=original_filename, object_key=object_key
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"File upload failed: {exc}"
+            detail=f"File upload failed: {exc}",
         )
 
 
 # ============================================================================
 # CRUD ENDPOINTS
 # ============================================================================
+
 
 @router.post("", response_model=FormResponse, status_code=status.HTTP_201_CREATED)
 async def create_form(
@@ -236,7 +290,7 @@ async def create_form(
 ) -> FormResponse:
     """
     Create a new form.
-    
+
     - **title**: Form title (required, 1-255 chars)
     - **description**: Optional form description
     - **is_public**: Whether form is publicly visible
@@ -249,11 +303,11 @@ async def create_form(
         business_area_ids = None
         if request.business_area_ids:
             business_area_ids = [UUID(ba_id) for ba_id in request.business_area_ids]
-        
+
         form_number_reservation_id = None
         if request.form_number_reservation_id:
             form_number_reservation_id = UUID(request.form_number_reservation_id)
-        
+
         form = FormService.create_form(
             db=db,
             title=request.title,
@@ -270,26 +324,27 @@ async def create_form(
             form_number_reservation_id=form_number_reservation_id,
             collects_personal_info=request.collects_personal_info,
         )
-        
+
         return FormResponse(**FormService.get_form_with_details(db, form.id))
-    
+
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create form"
+            detail="Failed to create form",
         )
 
 
 @router.get("/autocomplete", response_model=FormAutocompleteResponse)
 async def autocomplete_forms(
-    q: str = Query(..., min_length=2, description="Autocomplete query (minimum 2 characters)"),
-    max_suggestions: int = Query(10, ge=1, le=10, description="Maximum suggestions (1-10)"),
+    q: str = Query(
+        ..., min_length=2, description="Autocomplete query (minimum 2 characters)"
+    ),
+    max_suggestions: int = Query(
+        10, ge=1, le=10, description="Maximum suggestions (1-10)"
+    ),
     db: Session = Depends(get_db),
 ) -> FormAutocompleteResponse:
     """Return autocomplete suggestions for form titles/keywords."""
@@ -310,19 +365,17 @@ async def get_form(
     try:
         form_uuid = UUID(form_id)
         form_data = FormService.get_form_with_details(db, form_uuid)
-        
+
         if not form_data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Form not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
-        
+
         return FormResponse(**form_data)
-    
+
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
         )
 
 
@@ -335,12 +388,12 @@ async def update_form(
 ) -> FormResponse:
     """
     Update a form (all fields except status and version).
-    
+
     Provide only the fields you want to update.
     """
     try:
         form_uuid = UUID(form_id)
-        
+
         # Build update kwargs
         update_data = {}
         if request.title is not None:
@@ -354,39 +407,42 @@ async def update_form(
         if request.effective_date is not None:
             update_data["effective_date"] = request.effective_date
         if request.business_area_ids is not None:
-            update_data["business_area_ids"] = [UUID(ba_id) for ba_id in request.business_area_ids]
+            update_data["business_area_ids"] = [
+                UUID(ba_id) for ba_id in request.business_area_ids
+            ]
         if request.collects_personal_info is not None:
             update_data["collects_personal_info"] = request.collects_personal_info
         # TASK-416: attachment fields — use model_fields_set to support explicit null (clearing)
-        for field in ("form_source", "form_source_url", "form_attachment_url", "form_attachment_filename"):
+        for field in (
+            "form_source",
+            "form_source_url",
+            "form_attachment_url",
+            "form_attachment_filename",
+        ):
             if field in request.model_fields_set:
                 update_data[field] = getattr(request, field)
-        
+
         form = FormService.update_form(
             db=db,
             form_id=form_uuid,
             updated_by_id=UUID(current_user.sub),
-            **update_data
+            **update_data,
         )
-        
+
         if not form:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Form not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
-        
+
         return FormResponse(**FormService.get_form_with_details(db, form.id))
-    
+
     except ValueError as e:
         if "invalid literal" in str(e).lower():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid form ID or business area ID format"
+                detail="Invalid form ID or business area ID format",
             )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/{form_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -397,45 +453,49 @@ async def delete_form(
 ) -> None:
     """
     Soft delete a form (sets deleted_at timestamp).
-    
+
     The form will no longer appear in list operations but the data is preserved.
     """
     try:
         form_uuid = UUID(form_id)
         deleted = FormService.delete_form(
-            db=db,
-            form_id=form_uuid,
-            deleted_by_id=UUID(current_user.sub)
+            db=db, form_id=form_uuid, deleted_by_id=UUID(current_user.sub)
         )
-        
+
         if not deleted:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Form not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
-    
+
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
         )
 
 
 @router.get("", response_model=FormListResponse)
 async def list_forms(
     skip: int = Query(0, ge=0, description="Number of forms to skip"),
-    limit: int = Query(25, description="Number of forms to return (allowed: 25, 50, 100)"),
+    limit: int = Query(
+        25, description="Number of forms to return (allowed: 25, 50, 100)"
+    ),
     q: Optional[str] = Query(None, description="Keyword full-text search query"),
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
-    business_area_ids: Optional[List[str]] = Query(None, description="Filter by business area IDs (multi-select)"),
-    form_source: Optional[str] = Query(None, pattern="^(Link|Download)$", description="Filter by source type"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by status"
+    ),
+    business_area_ids: Optional[List[str]] = Query(
+        None, description="Filter by business area IDs (multi-select)"
+    ),
+    form_source: Optional[str] = Query(
+        None, pattern="^(Link|Download)$", description="Filter by source type"
+    ),
     is_public: Optional[bool] = Query(None, description="Filter by public status"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
     db: Session = Depends(get_db),
 ) -> FormListResponse:
     """
     List forms with filtering, pagination, and sorting.
-    
+
     - **skip**: Number of forms to skip (for pagination)
     - **limit**: Max forms to return (25, 50, 100)
     - **q**: Full-text keyword search query
@@ -473,12 +533,11 @@ async def list_forms(
         is_public=is_public,
         sort_order=sort_order,
     )
-    
+
     items = [
-        FormResponse(**FormService.get_form_with_details(db, form.id))
-        for form in forms
+        FormResponse(**FormService.get_form_with_details(db, form.id)) for form in forms
     ]
-    
+
     return FormListResponse(
         total=total,
         skip=skip,
@@ -491,6 +550,7 @@ async def list_forms(
 # ARCHIVE & UNARCHIVE ENDPOINTS
 # ============================================================================
 
+
 @router.post("/{form_id}/archive", response_model=FormResponse)
 async def archive_form(
     form_id: str,
@@ -501,23 +561,19 @@ async def archive_form(
     try:
         form_uuid = UUID(form_id)
         form = FormService.archive_form(
-            db=db,
-            form_id=form_uuid,
-            archived_by_id=UUID(current_user.sub)
+            db=db, form_id=form_uuid, archived_by_id=UUID(current_user.sub)
         )
-        
+
         if not form:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Form not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
-        
+
         return FormResponse(**FormService.get_form_with_details(db, form.id))
-    
+
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
         )
 
 
@@ -531,21 +587,18 @@ async def unarchive_form(
     try:
         form_uuid = UUID(form_id)
         form = FormService.unarchive_form(
-            db=db,
-            form_id=form_uuid,
-            unarchived_by_id=UUID(current_user.sub)
+            db=db, form_id=form_uuid, unarchived_by_id=UUID(current_user.sub)
         )
-        
+
         if not form:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Form not found or not in archived status"
+                detail="Form not found or not in archived status",
             )
-        
+
         return FormResponse(**FormService.get_form_with_details(db, form.id))
-    
+
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
         )

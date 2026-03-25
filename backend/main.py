@@ -23,7 +23,9 @@ app = FastAPI(
 )
 
 # CORS Configuration (driven by CORS_ORIGINS environment variable)
-origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
+origins = [
+    origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,7 +36,9 @@ app.add_middleware(
 )
 
 # Mount static files for frontend
-frontend_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend"))
+frontend_dir = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+)
 if os.path.exists(frontend_dir):
     app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
@@ -44,7 +48,7 @@ async def health_check():
     """Health check endpoint for container orchestration"""
     return JSONResponse(
         status_code=200,
-        content={"status": "healthy", "service": "BC Transportation Forms API"}
+        content={"status": "healthy", "service": "BC Transportation Forms API"},
     )
 
 
@@ -65,8 +69,7 @@ async def serve_frontend():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return JSONResponse(
-        status_code=404,
-        content={"message": "Frontend index.html not found"}
+        status_code=404, content={"message": "Frontend index.html not found"}
     )
 
 
@@ -75,6 +78,7 @@ async def serve_frontend():
 async def startup_event():
     try:
         from backend.services.minio_service import ensure_bucket_exists
+
         ensure_bucket_exists()
         logger.info("MinIO bucket initialised.")
     except Exception as exc:  # noqa: BLE001
@@ -82,7 +86,15 @@ async def startup_event():
 
 
 # Include API routes FIRST (before catch-all)
-from backend.routes import auth, forms, business_areas, workflow, roles, access_requests, admin_users
+from backend.routes import (
+    auth,
+    forms,
+    business_areas,
+    workflow,
+    roles,
+    access_requests,
+    admin_users,
+)
 from backend.routes.prefixes import public_router as prefixes_public_router
 from backend.routes.prefixes import admin_router as prefixes_admin_router
 from backend.routes.reservations import router as reservations_router
@@ -107,37 +119,44 @@ async def serve_frontend_paths(path: str):
     # Check if this is an API route
     if path.startswith("api/"):
         return JSONResponse(
-            status_code=404,
-            content={"message": "API endpoint not found"}
+            status_code=404, content={"message": "API endpoint not found"}
         )
-    
+
     # Check if this is a static file request
-    if "." in path and path.split(".")[-1] in ["js", "css", "png", "jpg", "gif", "svg", "font", "woff", "woff2", "ttf", "eot"]:
+    if "." in path and path.split(".")[-1] in [
+        "js",
+        "css",
+        "png",
+        "jpg",
+        "gif",
+        "svg",
+        "font",
+        "woff",
+        "woff2",
+        "ttf",
+        "eot",
+    ]:
         # Resolve against the known frontend directory and normalize the path
         static_path = os.path.realpath(os.path.join(frontend_dir, path))
         # Ensure the resolved path is within the frontend directory to prevent directory traversal
         if os.path.commonpath([frontend_dir, static_path]) != frontend_dir:
             return JSONResponse(
-                status_code=404,
-                content={"message": "Static file not found"}
+                status_code=404, content={"message": "Static file not found"}
             )
         if os.path.exists(static_path):
             return FileResponse(static_path)
         return JSONResponse(
-            status_code=404,
-            content={"message": "Static file not found"}
+            status_code=404, content={"message": "Static file not found"}
         )
-    
+
     # Serve frontend index.html for all other routes (SPA routing)
     index_path = os.path.join(frontend_dir, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
-    return JSONResponse(
-        status_code=404,
-        content={"message": "Frontend not found"}
-    )
+    return JSONResponse(status_code=404, content={"message": "Frontend not found"})
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

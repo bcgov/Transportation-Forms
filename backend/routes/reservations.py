@@ -34,20 +34,27 @@ from backend.services.reservations import ReservationService
 # Pydantic Schemas
 # ============================================================================
 
+
 class AutoGenerateRequest(BaseModel):
     """Request body for auto-generating the next sequential form number."""
+
     prefix_id: str = Field(..., description="UUID of the form number prefix to use")
 
 
 class CustomReserveRequest(BaseModel):
     """Request body for reserving a custom (manual) form number."""
+
     prefix_id: str = Field(..., description="UUID of the form number prefix to use")
     form_number: str = Field(
-        ..., min_length=1, max_length=50,
+        ...,
+        min_length=1,
+        max_length=50,
         description="The custom number portion (e.g., '0020A')",
     )
     reason: str = Field(
-        ..., min_length=1, max_length=2000,
+        ...,
+        min_length=1,
+        max_length=2000,
         description="Justification for requesting a special number",
     )
 
@@ -58,12 +65,15 @@ class CustomReserveRequest(BaseModel):
         if not cleaned:
             raise ValueError("form_number must not be empty")
         if not cleaned.replace(" ", "").isalnum():
-            raise ValueError("form_number must be alphanumeric (letters and digits only)")
+            raise ValueError(
+                "form_number must be alphanumeric (letters and digits only)"
+            )
         return cleaned
 
 
 class ReservationResponse(BaseModel):
     """Response model for a form number reservation."""
+
     id: str
     prefix_id: str
     form_number: str
@@ -84,18 +94,32 @@ class ReservationResponse(BaseModel):
 
 # TASK-406: Approval workflow schemas
 
+
 class RejectRequest(BaseModel):
     """Request body for rejecting a reservation."""
-    reason: str = Field(..., min_length=1, max_length=2000, description="Reason for rejection (mandatory)")
+
+    reason: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Reason for rejection (mandatory)",
+    )
 
 
 class RequestChangesRequest(BaseModel):
     """Request body for requesting changes on a reservation."""
-    comments: str = Field(..., min_length=1, max_length=2000, description="Comments describing required changes (mandatory)")
+
+    comments: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Comments describing required changes (mandatory)",
+    )
 
 
 class ApproverDecisionResponse(BaseModel):
     """Response model for an approver's decision."""
+
     id: str
     approver_id: str
     approver_email: Optional[str] = None
@@ -112,6 +136,7 @@ class ApproverDecisionResponse(BaseModel):
 
 class PrefixInfoResponse(BaseModel):
     """Compact prefix info included in reservation detail."""
+
     id: str
     prefix: str
     description: Optional[str] = None
@@ -123,6 +148,7 @@ class PrefixInfoResponse(BaseModel):
 
 class ReservationDetailResponse(BaseModel):
     """Detailed response with nested approver and prefix information (TASK-408)."""
+
     id: str
     prefix_id: str
     form_number: str
@@ -147,6 +173,7 @@ class ReservationDetailResponse(BaseModel):
 
 class ReservationListResponse(BaseModel):
     """Paginated list of reservations."""
+
     total: int
     skip: int
     limit: int
@@ -155,6 +182,7 @@ class ReservationListResponse(BaseModel):
 
 class ApprovedUnusedReservationsResponse(BaseModel):
     """Response for approved and unused reservations (TASK-413)."""
+
     reservations: List[ReservationResponse]
 
     class Config:
@@ -163,6 +191,7 @@ class ApprovedUnusedReservationsResponse(BaseModel):
 
 class ExpiryResultResponse(BaseModel):
     """Response for the expiry trigger endpoint."""
+
     expired_count: int
     message: str
 
@@ -170,6 +199,7 @@ class ExpiryResultResponse(BaseModel):
 # ============================================================================
 # Helper: ORM → response
 # ============================================================================
+
 
 def _to_response(r) -> ReservationResponse:
     return ReservationResponse(
@@ -205,23 +235,31 @@ def _to_detail_response(r) -> ReservationDetailResponse:
         for a in r.approvers:
             if a.deleted_at is not None:
                 continue
-            approver_list.append(ApproverDecisionResponse(
-                id=str(a.id),
-                approver_id=str(a.approver_id),
-                approver_email=a.approver.email if a.approver else None,
-                approver_name=f"{a.approver.first_name or ''} {a.approver.last_name or ''}".strip() if a.approver else None,
-                decision=a.decision,
-                decision_reason=a.decision_reason,
-                decision_comments=a.decision_comments,
-                decided_at=a.decided_at.isoformat() if a.decided_at else None,
-                created_at=a.created_at.isoformat() if a.created_at else "",
-            ))
+            approver_list.append(
+                ApproverDecisionResponse(
+                    id=str(a.id),
+                    approver_id=str(a.approver_id),
+                    approver_email=a.approver.email if a.approver else None,
+                    approver_name=(
+                        f"{a.approver.first_name or ''} {a.approver.last_name or ''}".strip()
+                        if a.approver
+                        else None
+                    ),
+                    decision=a.decision,
+                    decision_reason=a.decision_reason,
+                    decision_comments=a.decision_comments,
+                    decided_at=a.decided_at.isoformat() if a.decided_at else None,
+                    created_at=a.created_at.isoformat() if a.created_at else "",
+                )
+            )
 
     reserved_by_email = None
     reserved_by_name = None
     if r.reserved_by:
         reserved_by_email = r.reserved_by.email
-        reserved_by_name = f"{r.reserved_by.first_name or ''} {r.reserved_by.last_name or ''}".strip()
+        reserved_by_name = (
+            f"{r.reserved_by.first_name or ''} {r.reserved_by.last_name or ''}".strip()
+        )
 
     return ReservationDetailResponse(
         id=str(r.id),
@@ -262,6 +300,7 @@ router = APIRouter(
 # ============================================================================
 # TASK-404 — POST /api/v1/reservations/generate
 # ============================================================================
+
 
 @router.post(
     "/generate",
@@ -312,6 +351,7 @@ async def reserve_auto_generated(
 # ============================================================================
 # TASK-405 — POST /api/v1/reservations/custom
 # ============================================================================
+
 
 @router.post(
     "/custom",
@@ -373,6 +413,7 @@ async def reserve_custom(
 # ============================================================================
 # TASK-406 — Approval Workflow Endpoints
 # ============================================================================
+
 
 @router.post(
     "/{reservation_id}/submit",
@@ -565,6 +606,7 @@ async def resubmit_reservation(
 # TASK-407 — Release & Expiry Endpoints
 # ============================================================================
 
+
 @router.post(
     "/{reservation_id}/release",
     response_model=ReservationResponse,
@@ -610,7 +652,9 @@ async def release_reservation(
     summary="List reservations approaching expiry",
 )
 async def list_expiring_reservations(
-    days_threshold: int = Query(3, ge=1, le=14, description="Days before expiry to flag"),
+    days_threshold: int = Query(
+        3, ge=1, le=14, description="Days before expiry to flag"
+    ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=100, description="Max records to return"),
     current_user: TokenData = Depends(get_current_user),
@@ -656,13 +700,18 @@ async def trigger_expiry(
     count = ReservationService.expire_stale_reservations(db)
     return ExpiryResultResponse(
         expired_count=count,
-        message=f"{count} reservation(s) expired." if count > 0 else "No stale reservations found.",
+        message=(
+            f"{count} reservation(s) expired."
+            if count > 0
+            else "No stale reservations found."
+        ),
     )
 
 
 # ============================================================================
 # TASK-408 — List & Detail Endpoints (enhanced)
 # ============================================================================
+
 
 @router.get(
     "/my",
@@ -699,12 +748,22 @@ async def list_my_reservations(
 )
 async def list_reservations(
     prefix_id: Optional[str] = Query(None, description="Filter by prefix UUID"),
-    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
-    numbering_method: Optional[str] = Query(None, description="Filter by numbering method (auto_generated or custom)"),
+    status_filter: Optional[str] = Query(
+        None, alias="status", description="Filter by status"
+    ),
+    numbering_method: Optional[str] = Query(
+        None, description="Filter by numbering method (auto_generated or custom)"
+    ),
     reserved_by_id: Optional[str] = Query(None, description="Filter by requester UUID"),
-    date_from: Optional[str] = Query(None, description="Filter by creation date (ISO format, inclusive lower bound)"),
-    date_to: Optional[str] = Query(None, description="Filter by creation date (ISO format, inclusive upper bound)"),
-    sort_by: Optional[str] = Query("created_at", description="Sort by: created_at, full_form_number, status"),
+    date_from: Optional[str] = Query(
+        None, description="Filter by creation date (ISO format, inclusive lower bound)"
+    ),
+    date_to: Optional[str] = Query(
+        None, description="Filter by creation date (ISO format, inclusive upper bound)"
+    ),
+    sort_by: Optional[str] = Query(
+        "created_at", description="Sort by: created_at, full_form_number, status"
+    ),
     sort_order: Optional[str] = Query("desc", description="Sort order: asc or desc"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(20, ge=1, le=100, description="Max records to return"),
@@ -797,16 +856,16 @@ async def get_approved_unused_reservations(
 ) -> ApprovedUnusedReservationsResponse:
     """
     Retrieve all approved, unused form number reservations across all prefixes.
-    
+
     Returns reservations that are:
     - Status = 'approved'
     - Not released
-    - Not deleted  
+    - Not deleted
     - Not expired (or have no expiry set)
     - Not linked to an existing form
-    
+
     Ordered by created_at DESC (newest first).
-    
+
     **Authentication:** Required (staff role minimum)
     """
     reservations = ReservationService.list_approved_unused_reservations(db)
@@ -842,6 +901,7 @@ async def get_reservation(
 # ============================================================================
 # Helpers
 # ============================================================================
+
 
 def _require_approver_role(user: TokenData) -> None:
     """Raise 403 if user lacks an approver role."""

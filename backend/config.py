@@ -9,19 +9,23 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     ENVIRONMENT: str = "development"
-    
+
     # Database
-    DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/transportation_forms"
+    DATABASE_URL: str = (
+        "postgresql://postgres:password@localhost:5432/transportation_forms"
+    )
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 3600
-    
+
     # API
     API_PREFIX: str = "/api/v1"
     SECRET_KEY: str = "dev-secret-key-change-in-production"
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8000,http://localhost:8080,http://localhost:30300,http://localhost:30800,http://127.0.0.1:3000,http://127.0.0.1:8000,http://127.0.0.1:30300,http://127.0.0.1:30800"
-    
+    CORS_ORIGINS: str = (
+        "http://localhost:3000,http://localhost:8000,http://localhost:8080,http://localhost:30300,http://localhost:30800,http://127.0.0.1:3000,http://127.0.0.1:8000,http://127.0.0.1:30300,http://127.0.0.1:30800"
+    )
+
     # KeyCloak
     KEYCLOAK_SERVER_URL: Optional[str] = None
     KEYCLOAK_REALM: Optional[str] = None
@@ -32,7 +36,7 @@ class Settings(BaseSettings):
 
     # Authentication
     AUTH_DEMO_MODE: bool = False
-    
+
     # AWS S3
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
@@ -45,11 +49,11 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET: str = "form-attachments"
     MINIO_PUBLIC_URL: str = "http://localhost:9000"  # URL accessible from browser
-    
+
     # Feature Flags
     ENABLE_SEMANTIC_SEARCH: bool = True
     ENABLE_EMAIL_NOTIFICATIONS: bool = False
-    
+
     # Logging
     LOG_LEVEL: str = "INFO"
 
@@ -74,7 +78,7 @@ class Settings(BaseSettings):
             )
 
         return self
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = True

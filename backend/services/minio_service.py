@@ -57,15 +57,19 @@ def ensure_bucket_exists() -> None:
     # Apply a public-read policy so uploaded objects are browser-accessible.
     # This replaces the deprecated ACL="public-read" approach which is no
     # longer supported by MinIO RELEASE.2022-10-29+.
-    public_read_policy = json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [{
-            "Effect": "Allow",
-            "Principal": {"AWS": "*"},
-            "Action": ["s3:GetObject"],
-            "Resource": [f"arn:aws:s3:::{bucket}/*"],
-        }],
-    })
+    public_read_policy = json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": "*"},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{bucket}/*"],
+                }
+            ],
+        }
+    )
     try:
         client.put_bucket_policy(Bucket=bucket, Policy=public_read_policy)
         logger.info("Public-read policy applied to bucket '%s'.", bucket)

@@ -43,15 +43,13 @@ BUSINESS_AREAS = [
 def seed_default_business_areas(db: Session) -> None:
     """
     Seed database with default business areas.
-    
+
     Only creates business areas that don't already exist.
     """
     for ba_data in BUSINESS_AREAS:
         # Check if business area already exists
-        existing = db.query(BusinessArea).filter_by(
-            id=UUID(ba_data["id"])
-        ).first()
-        
+        existing = db.query(BusinessArea).filter_by(id=UUID(ba_data["id"])).first()
+
         if not existing:
             business_area = BusinessArea(
                 id=UUID(ba_data["id"]),
@@ -61,6 +59,6 @@ def seed_default_business_areas(db: Session) -> None:
                 is_active=True,
             )
             db.add(business_area)
-    
+
     db.commit()
     print("✓ Default business areas seeded successfully")

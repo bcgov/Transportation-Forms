@@ -12,8 +12,14 @@ from sqlalchemy import and_, or_, desc, asc, text
 from sqlalchemy.exc import OperationalError
 
 from backend.models import (
-    Form, FormBusinessArea, FormVersion, FormWorkflow, 
-    BusinessArea, User, AuditLog, FormNumberReservation
+    Form,
+    FormBusinessArea,
+    FormVersion,
+    FormWorkflow,
+    BusinessArea,
+    User,
+    AuditLog,
+    FormNumberReservation,
 )
 from backend.config import settings
 from backend.services import minio_service
@@ -41,11 +47,11 @@ class FormService:
         "published": ["archived", "draft"],
         "archived": ["published"],
     }
-    
+
     # =====================================================================
     # CREATE OPERATIONS
     # =====================================================================
-    
+
     @staticmethod
     def create_form(
         db: Session,
@@ -65,7 +71,7 @@ class FormService:
     ) -> Form:
         """
         Create a new form.
-        
+
         Args:
             db: Database session
             title: Form title
@@ -81,10 +87,10 @@ class FormService:
             form_attachment_filename: Original filename of the uploaded attachment
             form_number_reservation_id: (Optional) UUID of approved reservation to link (TASK-413)
             collects_personal_info: 'Yes' or 'No' - whether this form collects personal information
-            
+
         Returns:
             Created Form object
-            
+
         Raises:
             ValueError: If business areas don't exist, form_source validation fails, or reservation is invalid
         """
@@ -94,23 +100,33 @@ class FormService:
 
         # TASK-413: Validate and link form number reservation
         if form_number_reservation_id:
-            reservation = db.query(FormNumberReservation).filter(
-                FormNumberReservation.id == form_number_reservation_id,
-                FormNumberReservation.deleted_at.is_(None),
-            ).first()
-            
+            reservation = (
+                db.query(FormNumberReservation)
+                .filter(
+                    FormNumberReservation.id == form_number_reservation_id,
+                    FormNumberReservation.deleted_at.is_(None),
+                )
+                .first()
+            )
+
             if not reservation:
                 raise ValueError(f"Reservation {form_number_reservation_id} not found")
-            
-            if reservation.status != 'approved':
-                raise ValueError(f"Reservation must be approved, current status: {reservation.status}")
-            
+
+            if reservation.status != "approved":
+                raise ValueError(
+                    f"Reservation must be approved, current status: {reservation.status}"
+                )
+
             # Check if this reservation is already used by another form
-            existing_form = db.query(Form).filter(
-                Form.form_number_reservation_id == form_number_reservation_id,
-                Form.deleted_at.is_(None),
-            ).first()
-            
+            existing_form = (
+                db.query(Form)
+                .filter(
+                    Form.form_number_reservation_id == form_number_reservation_id,
+                    Form.deleted_at.is_(None),
+                )
+                .first()
+            )
+
             if existing_form:
                 raise ValueError(f"Reservation is already used by another form")
 
@@ -122,34 +138,38 @@ class FormService:
             keywords=keywords or [],
             created_by_id=created_by_id,
             effective_date=effective_date,
-            status='draft',
+            status="draft",
             current_version=0,
             form_source=form_source,
             form_source_url=form_source_url,
             form_attachment_url=form_attachment_url,
             form_attachment_filename=form_attachment_filename,
             form_number_reservation_id=form_number_reservation_id,
-            collects_personal_info=collects_personal_info or 'No',
+            collects_personal_info=collects_personal_info or "No",
         )
-        
+
         # Associate business areas
         if business_area_ids:
-            business_areas = db.query(BusinessArea).filter(
-                BusinessArea.id.in_(business_area_ids),
-                BusinessArea.deleted_at.is_(None)
-            ).all()
-            
+            business_areas = (
+                db.query(BusinessArea)
+                .filter(
+                    BusinessArea.id.in_(business_area_ids),
+                    BusinessArea.deleted_at.is_(None),
+                )
+                .all()
+            )
+
             if len(business_areas) != len(business_area_ids):
                 raise ValueError("One or more business areas do not exist")
-            
+
             for ba in business_areas:
                 form_ba = FormBusinessArea(business_area=ba)
                 form.business_areas.append(form_ba)
-        
+
         db.add(form)
         db.commit()
         db.refresh(form)
-        
+
         # Audit log
         audit_new_values = {
             "id": str(form.id),
@@ -158,43 +178,44 @@ class FormService:
             "form_source": form_source,
             "collects_personal_info": form.collects_personal_info,
         }
-        
+
         # Include reservation_id in audit log if provided (TASK-413)
         if form_number_reservation_id:
-            audit_new_values["form_number_reservation_id"] = str(form_number_reservation_id)
-        
+            audit_new_values["form_number_reservation_id"] = str(
+                form_number_reservation_id
+            )
+
         FormService._audit_log(
             db=db,
             entity_type="forms",
             entity_id=str(form.id),
             action="CREATE",
             user_id=created_by_id,
-            new_values=audit_new_values
+            new_values=audit_new_values,
         )
-        
+
         return form
-    
+
     # =====================================================================
     # READ OPERATIONS
     # =====================================================================
-    
+
     @staticmethod
     def get_form_by_id(db: Session, form_id: UUID) -> Optional[Form]:
         """
         Get a form by ID (excluding soft-deleted).
-        
+
         Args:
             db: Database session
             form_id: Form UUID
-            
+
         Returns:
             Form object or None if not found
         """
-        return db.query(Form).filter(
-            Form.id == form_id,
-            Form.deleted_at.is_(None)
-        ).first()
-    
+        return (
+            db.query(Form).filter(Form.id == form_id, Form.deleted_at.is_(None)).first()
+        )
+
     @staticmethod
     def list_forms(
         db: Session,
@@ -209,7 +230,7 @@ class FormService:
     ) -> tuple[List[Form], int]:
         """
         List forms with filters and pagination.
-        
+
         Args:
             db: Database session
             skip: Number of records to skip
@@ -220,12 +241,12 @@ class FormService:
             form_source: Filter by source ('Link' or 'Download')
             is_public: Filter by public status
             sort_order: asc or desc
-            
+
         Returns:
             Tuple of (list of Form objects, total count)
         """
         query = db.query(Form).filter(Form.deleted_at.is_(None))
-        
+
         if q and q.strip():
             query = query.filter(
                 text(
@@ -263,20 +284,20 @@ class FormService:
             query = query.filter(Form.is_public == is_public)
 
         query = query.distinct()
-        
+
         # Count total
         total = query.count()
 
         sort_column = Form.created_at
-        
+
         if sort_order.lower() == "asc":
             query = query.order_by(asc(sort_column))
         else:
             query = query.order_by(desc(sort_column))
-        
+
         # Apply pagination
         forms = query.offset(skip).limit(limit).all()
-        
+
         return forms, total
 
     @staticmethod
@@ -320,35 +341,32 @@ class FormService:
         ).fetchall()
 
         return [row[0] for row in rows if row and row[0]]
-    
+
     # =====================================================================
     # UPDATE OPERATIONS
     # =====================================================================
-    
+
     @staticmethod
     def update_form(
-        db: Session,
-        form_id: UUID,
-        updated_by_id: UUID,
-        **kwargs
+        db: Session, form_id: UUID, updated_by_id: UUID, **kwargs
     ) -> Optional[Form]:
         """
         Update a form (all fields except status/version).
-        
+
         Args:
             db: Database session
             form_id: Form UUID to update
             updated_by_id: UUID of user performing update
-            **kwargs: Fields to update (title, description, is_public, 
+            **kwargs: Fields to update (title, description, is_public,
                      keywords, business_area_ids, effective_date)
-            
+
         Returns:
             Updated Form object or None if not found
         """
         form = FormService.get_form_by_id(db, form_id)
         if not form:
             return None
-        
+
         # Track old values for audit
         old_values = {
             "title": form.title,
@@ -357,7 +375,7 @@ class FormService:
             "keywords": form.keywords,
             "collects_personal_info": form.collects_personal_info,
         }
-        
+
         # Update fields
         if "title" in kwargs:
             form.title = kwargs["title"]
@@ -387,23 +405,27 @@ class FormService:
             form.form_attachment_url = new_url
         if "form_attachment_filename" in kwargs:
             form.form_attachment_filename = kwargs["form_attachment_filename"]
-        
+
         # Handle business area updates
         if "business_area_ids" in kwargs:
             form.business_areas.clear()
             business_area_ids = kwargs["business_area_ids"]
             if business_area_ids:
-                business_areas = db.query(BusinessArea).filter(
-                    BusinessArea.id.in_(business_area_ids),
-                    BusinessArea.deleted_at.is_(None)
-                ).all()
+                business_areas = (
+                    db.query(BusinessArea)
+                    .filter(
+                        BusinessArea.id.in_(business_area_ids),
+                        BusinessArea.deleted_at.is_(None),
+                    )
+                    .all()
+                )
                 for ba in business_areas:
                     form_ba = FormBusinessArea(business_area=ba)
                     form.business_areas.append(form_ba)
-        
+
         db.commit()
         db.refresh(form)
-        
+
         # Audit log
         FormService._audit_log(
             db=db,
@@ -412,35 +434,35 @@ class FormService:
             action="UPDATE",
             user_id=updated_by_id,
             old_values=old_values,
-            new_values=kwargs
+            new_values=kwargs,
         )
-        
+
         return form
-    
+
     # =====================================================================
     # DELETE OPERATIONS
     # =====================================================================
-    
+
     @staticmethod
     def delete_form(db: Session, form_id: UUID, deleted_by_id: UUID) -> bool:
         """
         Soft delete a form (set deleted_at).
-        
+
         Args:
             db: Database session
             form_id: Form UUID to delete
             deleted_by_id: UUID of user performing delete
-            
+
         Returns:
             True if deleted, False if not found
         """
         form = FormService.get_form_by_id(db, form_id)
         if not form:
             return False
-        
+
         form.deleted_at = datetime.utcnow()
         db.commit()
-        
+
         # Audit log
         FormService._audit_log(
             db=db,
@@ -449,9 +471,9 @@ class FormService:
             action="DELETE",
             user_id=deleted_by_id,
             old_values={"status": form.status},
-            new_values={"deleted_at": form.deleted_at.isoformat()}
+            new_values={"deleted_at": form.deleted_at.isoformat()},
         )
-        
+
         return True
 
     @staticmethod
@@ -478,7 +500,9 @@ class FormService:
     @staticmethod
     def _validate_workflow_transition(current_status: str, target_status: str) -> None:
         if current_status == target_status:
-            raise FormWorkflowValidationError(f"Form is already in '{target_status}' state")
+            raise FormWorkflowValidationError(
+                f"Form is already in '{target_status}' state"
+            )
 
         allowed = FormService.VALID_TRANSITIONS.get(current_status, [])
         if target_status not in allowed:
@@ -528,14 +552,20 @@ class FormService:
         form.status = to_status
         db.flush()
 
-        db.add(AuditLog(
-            entity_type="forms",
-            entity_id=str(form.id),
-            action="WORKFLOW_TRANSITION",
-            user_id=triggered_by_id,
-            old_values={"status": from_status},
-            new_values={"status": to_status, "action": action, "reason_notes": reason_notes},
-        ))
+        db.add(
+            AuditLog(
+                entity_type="forms",
+                entity_id=str(form.id),
+                action="WORKFLOW_TRANSITION",
+                user_id=triggered_by_id,
+                old_values={"status": from_status},
+                new_values={
+                    "status": to_status,
+                    "action": action,
+                    "reason_notes": reason_notes,
+                },
+            )
+        )
 
         db.commit()
         db.refresh(form)
@@ -546,10 +576,14 @@ class FormService:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
 
         if form.form_number_reservation_id:
-            reservation = db.query(FormNumberReservation).filter(
-                FormNumberReservation.id == form.form_number_reservation_id,
-                FormNumberReservation.deleted_at.is_(None),
-            ).first()
+            reservation = (
+                db.query(FormNumberReservation)
+                .filter(
+                    FormNumberReservation.id == form.form_number_reservation_id,
+                    FormNumberReservation.deleted_at.is_(None),
+                )
+                .first()
+            )
 
             if not reservation or reservation.status != "approved":
                 raise FormWorkflowConflictError(
@@ -568,11 +602,12 @@ class FormService:
     def approve_form(db: Session, form_id: UUID, approver_id: UUID) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
 
-        if (
-            FormService._is_separation_of_duties_enforced(db)
-            and str(form.created_by_id) == str(approver_id)
-        ):
-            raise FormWorkflowValidationError("You cannot approve your own form submission.")
+        if FormService._is_separation_of_duties_enforced(db) and str(
+            form.created_by_id
+        ) == str(approver_id):
+            raise FormWorkflowValidationError(
+                "You cannot approve your own form submission."
+            )
 
         return FormService._transition_form_status(
             db,
@@ -583,9 +618,13 @@ class FormService:
         )
 
     @staticmethod
-    def reject_form(db: Session, form_id: UUID, reviewer_id: UUID, reason_notes: str) -> Form:
+    def reject_form(
+        db: Session, form_id: UUID, reviewer_id: UUID, reason_notes: str
+    ) -> Form:
         if not reason_notes or not reason_notes.strip():
-            raise FormWorkflowValidationError("Rejection reason (reason_notes) is required")
+            raise FormWorkflowValidationError(
+                "Rejection reason (reason_notes) is required"
+            )
 
         form = FormService._get_form_for_transition(db, form_id, lock=True)
         return FormService._transition_form_status(
@@ -618,7 +657,7 @@ class FormService:
             to_status="draft",
             triggered_by_id=user_id,
         )
-    
+
     @staticmethod
     def archive_form(
         db: Session,
@@ -628,12 +667,12 @@ class FormService:
     ) -> Optional[Form]:
         """
         Archive a form (change status to archived).
-        
+
         Args:
             db: Database session
             form_id: Form UUID to archive
             archived_by_id: UUID of user archiving form
-            
+
         Returns:
             Archived Form object or None if not found
         """
@@ -649,17 +688,17 @@ class FormService:
             to_status="archived",
             triggered_by_id=actor_id,
         )
-    
+
     @staticmethod
     def restore_form(db: Session, form_id: UUID, user_id: UUID) -> Form:
         """
         Unarchive a form (change status back to published).
-        
+
         Args:
             db: Database session
             form_id: Form UUID to unarchive
             unarchived_by_id: UUID of user unarchiving form
-            
+
         Returns:
             Unarchived Form object or None if not found
         """
@@ -673,9 +712,13 @@ class FormService:
         )
 
     @staticmethod
-    def unarchive_form(db: Session, form_id: UUID, unarchived_by_id: UUID) -> Optional[Form]:
+    def unarchive_form(
+        db: Session, form_id: UUID, unarchived_by_id: UUID
+    ) -> Optional[Form]:
         """Backward-compatible alias for restore_form."""
-        return FormService.restore_form(db=db, form_id=form_id, user_id=unarchived_by_id)
+        return FormService.restore_form(
+            db=db, form_id=form_id, user_id=unarchived_by_id
+        )
 
     @staticmethod
     def get_workflow_history(db: Session, form_id: UUID) -> List[FormWorkflow]:
@@ -693,11 +736,11 @@ class FormService:
             .order_by(desc(FormWorkflow.created_at))
             .all()
         )
-    
+
     # =====================================================================
     # HELPER METHODS
     # =====================================================================
-    
+
     @staticmethod
     def _extract_minio_object_key(url: str) -> Optional[str]:
         """Extract the MinIO object key from a full public URL."""
@@ -705,9 +748,10 @@ class FormService:
             return None
         prefix = f"{settings.MINIO_PUBLIC_URL}/{settings.MINIO_BUCKET}/"
         if url.startswith(prefix):
-            return url[len(prefix):]
+            return url[len(prefix) :]
         # Fallback: look for the 'uploads/' path segment used by all stored objects
         import re
+
         match = re.search(r"(uploads/[^?#]+)", url)
         return match.group(1) if match else None
 
@@ -737,16 +781,16 @@ class FormService:
             db.rollback()
             # Don't let audit logging failures break the app
             pass
-    
+
     @staticmethod
     def get_form_with_details(db: Session, form_id: UUID) -> Optional[Dict[str, Any]]:
         """
         Get a form with all related details (business areas, versions, workflow).
-        
+
         Args:
             db: Database session
             form_id: Form UUID
-            
+
         Returns:
             Dictionary with form details or None
         """
@@ -755,7 +799,7 @@ class FormService:
             return None
 
         reservation = form.form_number_reservation
-        
+
         return {
             "id": str(form.id),
             "title": form.title,
@@ -771,9 +815,11 @@ class FormService:
             ],
             "created_by": {
                 "id": str(form.created_by.id),
-                "email": form.created_by.email
+                "email": form.created_by.email,
             },
-            "effective_date": form.effective_date.isoformat() if form.effective_date else None,
+            "effective_date": (
+                form.effective_date.isoformat() if form.effective_date else None
+            ),
             # TASK-110C fields
             "form_source": form.form_source,
             "form_source_url": form.form_source_url,
@@ -782,7 +828,11 @@ class FormService:
             # Personal information field
             "collects_personal_info": form.collects_personal_info,
             # TASK-413 fields
-            "form_number_reservation_id": str(form.form_number_reservation_id) if form.form_number_reservation_id else None,
+            "form_number_reservation_id": (
+                str(form.form_number_reservation_id)
+                if form.form_number_reservation_id
+                else None
+            ),
             "form_number": reservation.form_number if reservation else None,
             "full_form_number": reservation.full_form_number if reservation else None,
             "created_at": form.created_at.isoformat(),

@@ -14,7 +14,7 @@ load_dotenv()
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://transportation:password@localhost:5432/transportation_forms"
+    "postgresql://transportation:password@localhost:5432/transportation_forms",
 )
 
 # Connection pool settings
@@ -30,7 +30,7 @@ engine = create_engine(
     max_overflow=DB_MAX_OVERFLOW,
     pool_timeout=DB_POOL_TIMEOUT,
     pool_pre_ping=True,  # Test connections before use
-    pool_recycle=3600,   # Recycle connections hourly
+    pool_recycle=3600,  # Recycle connections hourly
     echo=os.getenv("SQLALCHEMY_ECHO", "false").lower() == "true",
 )
 

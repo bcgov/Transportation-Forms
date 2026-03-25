@@ -21,13 +21,28 @@ from backend.services.prefixes import PrefixService
 # Pydantic Schemas
 # ============================================================================
 
+
 class PrefixCreateRequest(BaseModel):
     """Request model for creating a new prefix."""
-    prefix: str = Field(..., min_length=1, max_length=10, description="Alphanumeric prefix (stored uppercase)")
-    description: Optional[str] = Field(None, max_length=500, description="Optional description")
-    padding_length: int = Field(default=4, ge=1, le=20, description="Zero-pad width for auto-generated numbers")
-    max_number_length: int = Field(default=10, ge=1, le=50, description="Max length for custom form numbers")
-    is_case_sensitive: bool = Field(default=False, description="Whether custom number matching is case-sensitive")
+
+    prefix: str = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="Alphanumeric prefix (stored uppercase)",
+    )
+    description: Optional[str] = Field(
+        None, max_length=500, description="Optional description"
+    )
+    padding_length: int = Field(
+        default=4, ge=1, le=20, description="Zero-pad width for auto-generated numbers"
+    )
+    max_number_length: int = Field(
+        default=10, ge=1, le=50, description="Max length for custom form numbers"
+    )
+    is_case_sensitive: bool = Field(
+        default=False, description="Whether custom number matching is case-sensitive"
+    )
 
     @field_validator("prefix")
     @classmethod
@@ -40,6 +55,7 @@ class PrefixCreateRequest(BaseModel):
 
 class PrefixUpdateRequest(BaseModel):
     """Request model for updating a prefix's configuration."""
+
     description: Optional[str] = Field(None, max_length=500)
     padding_length: Optional[int] = Field(None, ge=1, le=20)
     max_number_length: Optional[int] = Field(None, ge=1, le=50)
@@ -49,6 +65,7 @@ class PrefixUpdateRequest(BaseModel):
 
 class PrefixResponse(BaseModel):
     """Response model for a form number prefix."""
+
     id: str
     prefix: str
     description: Optional[str]
@@ -66,6 +83,7 @@ class PrefixResponse(BaseModel):
 
 class PrefixPublicResponse(BaseModel):
     """Lightweight response for the public dropdown endpoint."""
+
     id: str
     prefix: str
     description: Optional[str]
@@ -77,6 +95,7 @@ class PrefixPublicResponse(BaseModel):
 # ============================================================================
 # Helper: convert ORM → response
 # ============================================================================
+
 
 def _to_response(pfx) -> PrefixResponse:
     return PrefixResponse(
@@ -165,7 +184,9 @@ async def admin_get_prefix(
     return _to_response(pfx)
 
 
-@admin_router.post("", response_model=PrefixResponse, status_code=status.HTTP_201_CREATED)
+@admin_router.post(
+    "", response_model=PrefixResponse, status_code=status.HTTP_201_CREATED
+)
 async def admin_create_prefix(
     body: PrefixCreateRequest,
     db: Session = Depends(get_db),

@@ -53,7 +53,11 @@ class UserRoleUpdateRequest(BaseModel):
 
 
 def _active_user_roles(user: User) -> list[UserRole]:
-    return [ur for ur in (user.roles or []) if ur.deleted_at is None and ur.role and ur.role.deleted_at is None]
+    return [
+        ur
+        for ur in (user.roles or [])
+        if ur.deleted_at is None and ur.role and ur.role.deleted_at is None
+    ]
 
 
 def _to_role_summary(role: Role) -> UserRoleSummaryResponse:
@@ -66,7 +70,10 @@ def _to_role_summary(role: Role) -> UserRoleSummaryResponse:
 
 
 def _to_user_summary(user: User) -> AdminUserSummaryResponse:
-    active_roles = sorted(_active_user_roles(user), key=lambda ur: (ur.role.name if ur.role else "").lower())
+    active_roles = sorted(
+        _active_user_roles(user),
+        key=lambda ur: (ur.role.name if ur.role else "").lower(),
+    )
     first_sign_in = user.created_at or datetime.utcnow()
     return AdminUserSummaryResponse(
         id=str(user.id),
@@ -104,7 +111,11 @@ router = APIRouter(
 
 @router.get("", response_model=AdminUserListResponse)
 async def list_users(
-    q: Optional[str] = Query(default=None, max_length=100, description="Search by first name, last name, or email"),
+    q: Optional[str] = Query(
+        default=None,
+        max_length=100,
+        description="Search by first name, last name, or email",
+    ),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -127,12 +138,7 @@ async def list_users(
         )
 
     total = query.count()
-    users = (
-        query.order_by(User.email.asc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    users = query.order_by(User.email.asc()).offset(skip).limit(limit).all()
 
     return AdminUserListResponse(
         total=total,
@@ -155,7 +161,9 @@ async def get_user_detail(
         .first()
     )
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
     return _to_user_detail(user)
 
 
@@ -173,29 +181,44 @@ async def update_user_roles(
         .first()
     )
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     target_role_ids: set[UUID] = set()
     for role_id_str in body.role_ids:
         try:
             target_role_ids.add(UUID(role_id_str))
         except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role ID") from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role ID"
+            ) from exc
 
     if target_role_ids:
         role_count = (
             db.query(Role)
-            .filter(Role.id.in_(target_role_ids), Role.deleted_at.is_(None), Role.is_active.is_(True))
+            .filter(
+                Role.id.in_(target_role_ids),
+                Role.deleted_at.is_(None),
+                Role.is_active.is_(True),
+            )
             .count()
         )
         if role_count != len(target_role_ids):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="One or more role IDs are invalid")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more role IDs are invalid",
+            )
 
     now = datetime.utcnow()
     existing_memberships = db.query(UserRole).filter(UserRole.user_id == user.id).all()
     by_role_id = {membership.role_id: membership for membership in existing_memberships}
 
-    current_active_role_ids = {membership.role_id for membership in existing_memberships if membership.deleted_at is None}
+    current_active_role_ids = {
+        membership.role_id
+        for membership in existing_memberships
+        if membership.deleted_at is None
+    }
 
     for membership in existing_memberships:
         if membership.deleted_at is None and membership.role_id not in target_role_ids:
@@ -223,8 +246,16 @@ async def update_user_roles(
             entity_id=str(user.id),
             action="UPDATE_ROLES",
             user_id=UUID(admin_user.sub),
-            old_values={"role_ids": [str(role_id) for role_id in sorted(current_active_role_ids, key=str)]},
-            new_values={"role_ids": [str(role_id) for role_id in sorted(target_role_ids, key=str)]},
+            old_values={
+                "role_ids": [
+                    str(role_id) for role_id in sorted(current_active_role_ids, key=str)
+                ]
+            },
+            new_values={
+                "role_ids": [
+                    str(role_id) for role_id in sorted(target_role_ids, key=str)
+                ]
+            },
             description=f"Updated role assignments for user '{user.email}'",
         )
     )
@@ -238,6 +269,8 @@ async def update_user_roles(
         .first()
     )
     if refreshed_user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     return _to_user_detail(refreshed_user)

@@ -27,27 +27,25 @@ def get_public_key_path() -> Path:
 def generate_rsa_keys() -> tuple:
     """
     Generate RSA 2048-bit key pair for JWT signing.
-    
+
     Returns:
         tuple: (private_key_str, public_key_str)
     """
     private_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-        backend=default_backend()
+        public_exponent=65537, key_size=2048, backend=default_backend()
     )
     public_key = private_key.public_key()
 
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption()
-    ).decode('utf-8')
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
 
     public_pem = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-    ).decode('utf-8')
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode("utf-8")
 
     return private_pem, public_pem
 
@@ -55,7 +53,7 @@ def generate_rsa_keys() -> tuple:
 def ensure_keys_exist() -> tuple:
     """
     Ensure RSA keys exist. Generate them if not present.
-    
+
     Returns:
         tuple: (private_key_str, public_key_str)
     """
@@ -65,10 +63,10 @@ def ensure_keys_exist() -> tuple:
     # Generate keys if they don't exist
     if not private_key_path.exists() or not public_key_path.exists():
         private_pem, public_pem = generate_rsa_keys()
-        
-        private_key_path.write_text(private_pem, encoding='utf-8')
-        public_key_path.write_text(public_pem, encoding='utf-8')
-        
+
+        private_key_path.write_text(private_pem, encoding="utf-8")
+        public_key_path.write_text(public_pem, encoding="utf-8")
+
         # Restrict permissions on private key (Unix-like systems)
         try:
             os.chmod(private_key_path, 0o600)
@@ -76,8 +74,8 @@ def ensure_keys_exist() -> tuple:
             # Windows doesn't support chmod in the same way
             pass
 
-    private_pem = private_key_path.read_text(encoding='utf-8')
-    public_pem = public_key_path.read_text(encoding='utf-8')
+    private_pem = private_key_path.read_text(encoding="utf-8")
+    public_pem = public_key_path.read_text(encoding="utf-8")
 
     return private_pem, public_pem
 

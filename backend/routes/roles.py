@@ -107,8 +107,14 @@ def _to_role_detail_response(role) -> RoleDetailResponse:
                 email=membership.user.email,
                 first_name=membership.user.first_name,
                 last_name=membership.user.last_name,
-                assigned_at=membership.assigned_at.isoformat() if membership.assigned_at else "",
-                assigned_by_id=str(membership.assigned_by_id) if membership.assigned_by_id else None,
+                assigned_at=(
+                    membership.assigned_at.isoformat() if membership.assigned_at else ""
+                ),
+                assigned_by_id=(
+                    str(membership.assigned_by_id)
+                    if membership.assigned_by_id
+                    else None
+                ),
             )
         )
 
@@ -142,7 +148,9 @@ router = APIRouter(
 
 @router.get("", response_model=RoleListResponse)
 async def list_roles(
-    q: Optional[str] = Query(default=None, max_length=100, description="Search by role name or description"),
+    q: Optional[str] = Query(
+        default=None, max_length=100, description="Search by role name or description"
+    ),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -173,7 +181,10 @@ async def create_role(
         )
         role_with_users = RoleService.get_role_by_id(db, role.id)
         if role_with_users is None:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load created role")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to load created role",
+            )
         return _to_role_detail_response(role_with_users)
     except RoleConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
@@ -189,7 +200,9 @@ async def get_role(
 ) -> RoleDetailResponse:
     role = RoleService.get_role_by_id(db, role_id)
     if role is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
+        )
     return _to_role_detail_response(role)
 
 
@@ -211,7 +224,9 @@ async def update_role(
         )
         role = RoleService.get_role_by_id(db, role_id)
         if role is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
+            )
         return _to_role_detail_response(role)
     except RoleNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

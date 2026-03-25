@@ -78,14 +78,21 @@ def _to_status_response(form) -> WorkflowStatusResponse:
 
 def _handle_workflow_error(exc: Exception) -> NoReturn:
     if isinstance(exc, FormNotFoundError):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+        )
     if isinstance(exc, FormWorkflowConflictError):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if isinstance(exc, FormWorkflowValidationError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     if isinstance(exc, ValueError):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format")
-    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Workflow transition failed")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+        )
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Workflow transition failed",
+    )
 
 
 @router.post("/{form_id}/submit", response_model=WorkflowStatusResponse)
@@ -97,7 +104,9 @@ async def submit_form_for_review(
     _require_roles(current_user, {"admin", "staff_manager", "reviewer"})
 
     try:
-        form = FormService.submit_form_for_review(db, UUID(form_id), UUID(current_user.sub))
+        form = FormService.submit_form_for_review(
+            db, UUID(form_id), UUID(current_user.sub)
+        )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
         _handle_workflow_error(exc)
@@ -134,7 +143,9 @@ async def reject_form(
         )
 
     try:
-        form = FormService.reject_form(db, UUID(form_id), UUID(current_user.sub), request.reason_notes)
+        form = FormService.reject_form(
+            db, UUID(form_id), UUID(current_user.sub), request.reason_notes
+        )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
         _handle_workflow_error(exc)
@@ -179,7 +190,9 @@ async def archive_form(
     _require_roles(current_user, {"admin", "staff_manager"})
 
     try:
-        form = FormService.archive_form(db, UUID(form_id), user_id=UUID(current_user.sub))
+        form = FormService.archive_form(
+            db, UUID(form_id), user_id=UUID(current_user.sub)
+        )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
         _handle_workflow_error(exc)
@@ -217,7 +230,9 @@ async def get_workflow_history(
                 from_status=str(entry.from_status),
                 to_status=str(entry.to_status),
                 triggered_by_id=str(entry.triggered_by_id),
-                reason_notes=str(entry.reason_notes) if entry.reason_notes is not None else None,
+                reason_notes=(
+                    str(entry.reason_notes) if entry.reason_notes is not None else None
+                ),
                 created_at=entry.created_at.isoformat(),
             )
             for entry in entries
