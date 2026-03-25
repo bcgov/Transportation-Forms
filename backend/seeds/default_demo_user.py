@@ -11,13 +11,13 @@ DEMO_USER_ID = "550e8400-e29b-41d4-a716-446655440000"
 def seed_demo_user(db: Session) -> None:
     """
     Seed a demo user for development/testing.
-    
+
     This user is used when the application is in development mode
     and a "demo-token" is used for authentication.
     """
     # Check if demo user already exists
     existing = db.query(User).filter_by(id=UUID(DEMO_USER_ID)).first()
-    
+
     if not existing:
         # Create demo user
         demo_user = User(
@@ -30,16 +30,13 @@ def seed_demo_user(db: Session) -> None:
         )
         db.add(demo_user)
         db.flush()
-        
+
         # Assign admin role
         admin_role = db.query(Role).filter_by(name="admin").first()
         if admin_role:
-            user_role = UserRole(
-                user_id=demo_user.id,
-                role_id=admin_role.id
-            )
+            user_role = UserRole(user_id=demo_user.id, role_id=admin_role.id)
             db.add(user_role)
-        
+
         db.commit()
         print("✓ Demo user seeded successfully")
     else:

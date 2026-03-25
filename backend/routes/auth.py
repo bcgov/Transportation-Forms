@@ -26,11 +26,13 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 # Request/Response Models
 class LoginRequest(BaseModel):
     """Optional request body for login initiation."""
+
     frontend_redirect_uri: Optional[str] = None
 
 
 class LoginResponse(BaseModel):
     """Response for successful login."""
+
     access_token: str
     refresh_token: str
     token_type: str
@@ -40,23 +42,27 @@ class LoginResponse(BaseModel):
 
 class LoginInitResponse(BaseModel):
     """Response for login initiation."""
+
     authorization_url: str
     state: str
 
 
 class CallbackRequest(BaseModel):
     """Request to exchange Keycloak code for app tokens."""
+
     code: str
     state: str
 
 
 class RefreshTokenRequest(BaseModel):
     """Request to refresh access token."""
+
     refresh_token: str
 
 
 class LogoutRequest(BaseModel):
     """Request to logout."""
+
     refresh_token: Optional[str] = None
 
 
@@ -79,7 +85,9 @@ def validate_state(state: str) -> Optional[dict]:
 
 def _get_request_metadata(request: Request) -> tuple[Optional[str], Optional[str]]:
     """Extract request metadata for audit logs."""
-    return request.client.host if request.client else None, request.headers.get("user-agent")
+    return request.client.host if request.client else None, request.headers.get(
+        "user-agent"
+    )
 
 
 def _is_allowed_redirect_uri(uri: str) -> bool:
@@ -89,7 +97,9 @@ def _is_allowed_redirect_uri(uri: str) -> bool:
         if not parsed.scheme or not parsed.netloc:
             return False
         origin = f"{parsed.scheme}://{parsed.netloc}"
-        allowed_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+        allowed_origins = [
+            o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()
+        ]
         return origin in allowed_origins
     except Exception:
         return False
@@ -183,19 +193,17 @@ async def login(
         logger.error(f"Login initiation failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to initiate login flow"
+            detail="Failed to initiate login flow",
         )
 
 
 @router.post("/callback", response_model=LoginResponse)
 async def auth_callback(
-    request: CallbackRequest,
-    http_request: Request,
-    db: Session = Depends(get_db)
+    request: CallbackRequest, http_request: Request, db: Session = Depends(get_db)
 ):
     """
     Handle KeyCloak OIDC callback after user authentication.
-    
+
     This endpoint:
     1. Validates the state parameter (CSRF protection)
     2. Exchanges authorization code for KeyCloak tokens
@@ -208,7 +216,7 @@ async def auth_callback(
         if not request.code or not request.state:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Both code and state are required"
+                detail="Both code and state are required",
             )
 
         state_data = validate_state(request.state)
@@ -216,14 +224,18 @@ async def auth_callback(
             logger.warning(f"Invalid or expired state parameter: {request.state}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid state parameter. Please try logging in again."
+                detail="Invalid state parameter. Please try logging in again.",
             )
 
         # Use the redirect_uri that was stored when the state was generated so
         # that it exactly matches the value Keycloak received during the auth
         # request — required by the OIDC spec for the token exchange.
-        stored_redirect_uri = state_data.get("redirect_uri") or settings.KEYCLOAK_REDIRECT_URI
-        keycloak_tokens = keycloak_service.exchange_code_for_token(request.code, redirect_uri=stored_redirect_uri)
+        stored_redirect_uri = (
+            state_data.get("redirect_uri") or settings.KEYCLOAK_REDIRECT_URI
+        )
+        keycloak_tokens = keycloak_service.exchange_code_for_token(
+            request.code, redirect_uri=stored_redirect_uri
+        )
         keycloak_access_token = keycloak_tokens["access_token"]
 
         userinfo = keycloak_service.get_user_info(keycloak_access_token)
@@ -236,7 +248,7 @@ async def auth_callback(
         if not email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email not provided by KeyCloak"
+                detail="Email not provided by KeyCloak",
             )
 
         user = db.query(User).filter(User.email == email).first()
@@ -261,17 +273,25 @@ async def auth_callback(
             logger.info(f"Updated existing user: {email}")
 
         # New-user bootstrap only — never overwrite DB-assigned portal roles.
-        existing_role_count = db.query(UserRole).filter(
-            UserRole.user_id == user.id,
-            UserRole.deleted_at.is_(None),
-        ).count()
+        existing_role_count = (
+            db.query(UserRole)
+            .filter(
+                UserRole.user_id == user.id,
+                UserRole.deleted_at.is_(None),
+            )
+            .count()
+        )
 
         if existing_role_count == 0:
-            default_role = db.query(Role).filter(
-                Role.name == "staff_viewer",
-                Role.deleted_at.is_(None),
-                Role.is_active == True,
-            ).first()
+            default_role = (
+                db.query(Role)
+                .filter(
+                    Role.name == "staff_viewer",
+                    Role.deleted_at.is_(None),
+                    Role.is_active == True,
+                )
+                .first()
+            )
             if default_role:
                 db.add(UserRole(user_id=user.id, role_id=default_role.id))
                 logger.info(f"Assigned default staff_viewer role to new user: {email}")
@@ -290,14 +310,17 @@ async def auth_callback(
         db.commit()
         user = db.query(User).filter(User.id == user.id).first()
 
-        user_full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+        user_full_name = (
+            f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+        )
         from backend.routes.admin_users import _active_user_roles
+
         role_names = [ur.role.name for ur in _active_user_roles(user)]
         app_tokens = keycloak_service.generate_app_tokens(
             user_id=str(user.id),
             email=user.email,
             name=user_full_name,
-            roles=role_names
+            roles=role_names,
         )
         logger.info(f"Successfully authenticated user: {email}")
 
@@ -310,8 +333,8 @@ async def auth_callback(
                 "id": str(user.id),
                 "email": user.email,
                 "name": user_full_name,
-                "roles": role_names
-            }
+                "roles": role_names,
+            },
         )
 
     except HTTPException:
@@ -321,14 +344,13 @@ async def auth_callback(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Keycloak authentication failed"
+            detail="Keycloak authentication failed",
         )
     except Exception as e:
         logger.error(f"Callback processing failed: {str(e)}")
         db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Authentication failed"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Authentication failed"
         )
 
 
@@ -336,36 +358,40 @@ async def auth_callback(
 async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
     """
     Refresh access token using refresh token.
-    
+
     This uses our application's refresh token (not KeyCloak's).
     """
     try:
         token_data = jwt_handler.validate_token(
-            request.refresh_token,
-            token_type="refresh"
+            request.refresh_token, token_type="refresh"
         )
 
-        user_id = UUID(token_data.sub) if isinstance(token_data.sub, str) else token_data.sub
+        user_id = (
+            UUID(token_data.sub) if isinstance(token_data.sub, str) else token_data.sub
+        )
         user = db.query(User).filter(User.id == user_id).first()
 
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive"
+                detail="User not found or inactive",
             )
 
         user.last_login = datetime.now(timezone.utc)
         db.commit()
         user = db.query(User).filter(User.id == user.id).first()
 
-        user_full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+        user_full_name = (
+            f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+        )
         from backend.routes.admin_users import _active_user_roles
+
         role_names = [ur.role.name for ur in _active_user_roles(user)]
         new_access_token = jwt_handler.generate_access_token(
             user_id=str(user.id),
             email=user.email,
             name=user_full_name,
-            roles=role_names
+            roles=role_names,
         )
 
         logger.info(f"Refreshed access token for user: {user.email}")
@@ -373,7 +399,7 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
         return {
             "access_token": new_access_token,
             "token_type": "Bearer",
-            "expires_in": 1800
+            "expires_in": 1800,
         }
 
     except HTTPException:
@@ -382,14 +408,14 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token"
+            detail="Invalid or expired refresh token",
         )
     except Exception as e:
         logger.error(f"Token refresh failed: {str(e)}")
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Token refresh failed"
+            detail="Token refresh failed",
         )
 
 
@@ -402,12 +428,16 @@ async def logout(
 ):
     """
     Logout user by clearing tokens.
-    
+
     In a production system with Redis, this would blacklist the tokens.
     For now, client should discard tokens.
     """
     try:
-        user_id = UUID(current_user.sub) if isinstance(current_user.sub, str) else current_user.sub
+        user_id = (
+            UUID(current_user.sub)
+            if isinstance(current_user.sub, str)
+            else current_user.sub
+        )
         user = db.query(User).filter(User.id == user_id).first()
 
         if request.refresh_token:
@@ -429,39 +459,43 @@ async def logout(
 
         return {
             "message": "Successfully logged out",
-            "detail": "Please discard your tokens"
+            "detail": "Please discard your tokens",
         }
 
     except Exception as e:
         logger.error(f"Logout failed: {str(e)}")
         db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Logout failed"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Logout failed"
         )
 
 
 @router.get("/me")
 async def get_current_user_info(
-    current_user: TokenData = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: TokenData = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Get current authenticated user information.
     """
     try:
         # Convert string UUID to UUID object
-        user_id = UUID(current_user.sub) if isinstance(current_user.sub, str) else current_user.sub
+        user_id = (
+            UUID(current_user.sub)
+            if isinstance(current_user.sub, str)
+            else current_user.sub
+        )
         user = db.query(User).filter(User.id == user_id).first()
-        
+
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
-        
-        user_full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+
+        user_full_name = (
+            f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+        )
         from backend.routes.admin_users import _active_user_roles
+
         active_roles = _active_user_roles(user)
         return {
             "id": str(user.id),
@@ -471,26 +505,26 @@ async def get_current_user_info(
             "keycloak_id": user.keycloak_id,
             "is_active": user.is_active,
             "created_at": user.created_at.isoformat(),
-            "updated_at": user.updated_at.isoformat()
+            "updated_at": user.updated_at.isoformat(),
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get user info: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve user information"
+            detail="Failed to retrieve user information",
         )
 
 
 def map_keycloak_roles_to_local(keycloak_roles: list) -> list:
     """
     Map KeyCloak roles to local application roles.
-    
+
     Args:
         keycloak_roles: List of role names from KeyCloak
-        
+
     Returns:
         List of local role names
     """
@@ -505,13 +539,13 @@ def map_keycloak_roles_to_local(keycloak_roles: list) -> list:
         "administrator": "admin",
         "manager": "staff_manager",
         "approver": "reviewer",
-        "viewer": "staff_viewer"
+        "viewer": "staff_viewer",
     }
-    
+
     local_roles = []
     for keycloak_role in keycloak_roles:
         local_role = role_mapping.get(keycloak_role.lower())
         if local_role and local_role not in local_roles:
             local_roles.append(local_role)
-    
+
     return local_roles

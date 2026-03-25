@@ -6,4 +6,10 @@ from backend.services.reservations import ReservationService
 from backend.services.roles import RoleService
 from backend.services.access_requests import AccessRequestService
 
-__all__ = ["FormService", "PrefixService", "ReservationService", "RoleService", "AccessRequestService"]
+__all__ = [
+    "FormService",
+    "PrefixService",
+    "ReservationService",
+    "RoleService",
+    "AccessRequestService",
+]

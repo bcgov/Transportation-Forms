@@ -20,6 +20,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Ensure alembic version identifiers fit long revision IDs used in this project.
+    op.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)")
+
     # Add form_number_reservation_id column to forms table
     op.add_column(
         'forms',

@@ -58,9 +58,7 @@ def seed_default_prefixes(db: Session) -> None:
     Prefixes are stored uppercase by convention.
     """
     for pfx_data in FORM_NUMBER_PREFIXES:
-        existing = db.query(FormNumberPrefix).filter_by(
-            id=UUID(pfx_data["id"])
-        ).first()
+        existing = db.query(FormNumberPrefix).filter_by(id=UUID(pfx_data["id"])).first()
 
         if not existing:
             prefix = FormNumberPrefix(

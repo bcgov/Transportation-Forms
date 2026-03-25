@@ -57,7 +57,9 @@ def _to_response(request) -> AccessRequestResponse:
         user_email=request.user.email if request.user else None,
         status=request.status,
         review_notes=request.review_notes,
-        processed_by_id=str(request.processed_by_id) if request.processed_by_id else None,
+        processed_by_id=(
+            str(request.processed_by_id) if request.processed_by_id else None
+        ),
         processed_by_email=request.processed_by.email if request.processed_by else None,
         processed_at=request.processed_at.isoformat() if request.processed_at else None,
         created_at=request.created_at.isoformat() if request.created_at else "",
@@ -73,21 +75,32 @@ def _handle_error(exc: Exception) -> None:
     if isinstance(exc, AccessRequestNotFoundError):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     if isinstance(exc, ValueError):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid UUID format")
-    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Access request operation failed")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid UUID format"
+        )
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Access request operation failed",
+    )
 
 
 router = APIRouter(tags=["Access Requests"])
 
 
-@router.post("/access-requests", response_model=AccessRequestResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/access-requests",
+    response_model=AccessRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def submit_access_request(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AccessRequestResponse:
     """Submit a generic access request for authenticated users with no assigned roles."""
     try:
-        request = AccessRequestService.submit_request(db, user_id=UUID(current_user.sub))
+        request = AccessRequestService.submit_request(
+            db, user_id=UUID(current_user.sub)
+        )
         return _to_response(request)
     except Exception as exc:  # noqa: BLE001
         _handle_error(exc)
@@ -99,9 +112,14 @@ async def get_my_access_request(
     db: Session = Depends(get_db),
 ) -> AccessRequestResponse:
     """Get the current user's latest access request status."""
-    request = AccessRequestService.get_latest_for_user(db, user_id=UUID(current_user.sub))
+    request = AccessRequestService.get_latest_for_user(
+        db, user_id=UUID(current_user.sub)
+    )
     if request is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No access request found for user")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No access request found for user",
+        )
     return _to_response(request)
 
 
@@ -131,7 +149,9 @@ async def admin_list_access_requests(
         _handle_error(exc)
 
 
-@router.post("/admin/access-requests/{request_id}/approve", response_model=AccessRequestResponse)
+@router.post(
+    "/admin/access-requests/{request_id}/approve", response_model=AccessRequestResponse
+)
 async def admin_approve_access_request(
     request_id: str,
     body: AccessRequestDecisionRequest,
@@ -151,7 +171,9 @@ async def admin_approve_access_request(
         _handle_error(exc)
 
 
-@router.post("/admin/access-requests/{request_id}/reject", response_model=AccessRequestResponse)
+@router.post(
+    "/admin/access-requests/{request_id}/reject", response_model=AccessRequestResponse
+)
 async def admin_reject_access_request(
     request_id: str,
     body: AccessRequestDecisionRequest,

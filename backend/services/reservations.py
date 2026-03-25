@@ -163,7 +163,9 @@ class ReservationService:
         """
         # --- Validate reason ---
         if not reason or not reason.strip():
-            raise ValueError("A reason is required when reserving a custom form number.")
+            raise ValueError(
+                "A reason is required when reserving a custom form number."
+            )
 
         # --- Load prefix (no FOR UPDATE needed — we don't touch the sequence) ---
         prefix = (
@@ -203,12 +205,9 @@ class ReservationService:
         full_form_number = f"{prefix.prefix}{cleaned}"
 
         # --- Uniqueness check (case-insensitive if configured) ---
-        uniqueness_query = (
-            db.query(FormNumberReservation)
-            .filter(
-                FormNumberReservation.deleted_at.is_(None),
-                FormNumberReservation.status.notin_(["released", "expired"]),
-            )
+        uniqueness_query = db.query(FormNumberReservation).filter(
+            FormNumberReservation.deleted_at.is_(None),
+            FormNumberReservation.status.notin_(["released", "expired"]),
         )
         if prefix.is_case_sensitive:  # type: ignore[truthy-bool]
             uniqueness_query = uniqueness_query.filter(
@@ -216,7 +215,8 @@ class ReservationService:
             )
         else:
             uniqueness_query = uniqueness_query.filter(
-                func.upper(FormNumberReservation.full_form_number) == full_form_number.upper(),
+                func.upper(FormNumberReservation.full_form_number)
+                == full_form_number.upper(),
             )
 
         existing = uniqueness_query.first()
@@ -313,8 +313,7 @@ class ReservationService:
 
         total = query.count()
         items = (
-            query
-            .order_by(FormNumberReservation.created_at.desc())
+            query.order_by(FormNumberReservation.created_at.desc())
             .offset(skip)
             .limit(min(limit, 100))
             .all()
@@ -398,11 +397,15 @@ class ReservationService:
         Only the requester may submit their own reservation.
         Creates approver assignments for all users with approver-eligible roles.
         """
-        reservation = ReservationService._get_reservation_or_raise(db, reservation_id, lock=True)
+        reservation = ReservationService._get_reservation_or_raise(
+            db, reservation_id, lock=True
+        )
 
         # Only the requester can submit
         if str(reservation.reserved_by_id) != str(submitted_by_id):
-            raise ValueError("Only the requester can submit their own reservation for approval.")
+            raise ValueError(
+                "Only the requester can submit their own reservation for approval."
+            )
 
         ReservationService._validate_transition(reservation.status, "pending_approval")  # type: ignore[arg-type]
 
@@ -435,21 +438,25 @@ class ReservationService:
                 existing.decision_comments = None  # type: ignore[assignment]
                 existing.decided_at = None  # type: ignore[assignment]
             else:
-                db.add(FormReservationApprover(
-                    reservation_id=reservation_id,
-                    approver_id=user.id,
-                ))
+                db.add(
+                    FormReservationApprover(
+                        reservation_id=reservation_id,
+                        approver_id=user.id,
+                    )
+                )
 
         # Audit log
-        db.add(AuditLog(
-            entity_type="form_number_reservations",
-            entity_id=str(reservation_id),
-            action="SUBMIT_FOR_APPROVAL",
-            user_id=submitted_by_id,
-            old_values={"status": old_status},
-            new_values={"status": "pending_approval"},
-            description=f"Reservation {reservation.full_form_number} submitted for approval.",
-        ))
+        db.add(
+            AuditLog(
+                entity_type="form_number_reservations",
+                entity_id=str(reservation_id),
+                action="SUBMIT_FOR_APPROVAL",
+                user_id=submitted_by_id,
+                old_values={"status": old_status},
+                new_values={"status": "pending_approval"},
+                description=f"Reservation {reservation.full_form_number} submitted for approval.",
+            )
+        )
 
         db.commit()
         db.refresh(reservation)
@@ -462,7 +469,9 @@ class ReservationService:
         approver_id: UUID,
     ) -> FormNumberReservation:
         """Approve a reservation (pending_approval → approved)."""
-        reservation = ReservationService._get_reservation_or_raise(db, reservation_id, lock=True)
+        reservation = ReservationService._get_reservation_or_raise(
+            db, reservation_id, lock=True
+        )
         ReservationService._validate_transition(reservation.status, "approved")  # type: ignore[arg-type]
 
         now = datetime.now(timezone.utc)
@@ -483,22 +492,26 @@ class ReservationService:
             approver_record.decision = "approved"  # type: ignore[assignment]
             approver_record.decided_at = now  # type: ignore[assignment]
         else:
-            db.add(FormReservationApprover(
-                reservation_id=reservation_id,
-                approver_id=approver_id,
-                decision="approved",
-                decided_at=now,
-            ))
+            db.add(
+                FormReservationApprover(
+                    reservation_id=reservation_id,
+                    approver_id=approver_id,
+                    decision="approved",
+                    decided_at=now,
+                )
+            )
 
-        db.add(AuditLog(
-            entity_type="form_number_reservations",
-            entity_id=str(reservation_id),
-            action="APPROVE_RESERVATION",
-            user_id=approver_id,
-            old_values={"status": old_status},
-            new_values={"status": "approved"},
-            description=f"Reservation {reservation.full_form_number} approved.",
-        ))
+        db.add(
+            AuditLog(
+                entity_type="form_number_reservations",
+                entity_id=str(reservation_id),
+                action="APPROVE_RESERVATION",
+                user_id=approver_id,
+                old_values={"status": old_status},
+                new_values={"status": "approved"},
+                description=f"Reservation {reservation.full_form_number} approved.",
+            )
+        )
 
         db.commit()
         db.refresh(reservation)
@@ -519,7 +532,9 @@ class ReservationService:
         if not reason or not reason.strip():
             raise ValueError("A reason is required when rejecting a reservation.")
 
-        reservation = ReservationService._get_reservation_or_raise(db, reservation_id, lock=True)
+        reservation = ReservationService._get_reservation_or_raise(
+            db, reservation_id, lock=True
+        )
         ReservationService._validate_transition(reservation.status, "rejected")  # type: ignore[arg-type]
 
         now = datetime.now(timezone.utc)
@@ -543,23 +558,27 @@ class ReservationService:
             approver_record.decision_reason = reason.strip()  # type: ignore[assignment]
             approver_record.decided_at = now  # type: ignore[assignment]
         else:
-            db.add(FormReservationApprover(
-                reservation_id=reservation_id,
-                approver_id=approver_id,
-                decision="rejected",
-                decision_reason=reason.strip(),
-                decided_at=now,
-            ))
+            db.add(
+                FormReservationApprover(
+                    reservation_id=reservation_id,
+                    approver_id=approver_id,
+                    decision="rejected",
+                    decision_reason=reason.strip(),
+                    decided_at=now,
+                )
+            )
 
-        db.add(AuditLog(
-            entity_type="form_number_reservations",
-            entity_id=str(reservation_id),
-            action="REJECT_RESERVATION",
-            user_id=approver_id,
-            old_values={"status": old_status},
-            new_values={"status": "rejected", "reason": reason.strip()},
-            description=f"Reservation {reservation.full_form_number} rejected: {reason.strip()}",
-        ))
+        db.add(
+            AuditLog(
+                entity_type="form_number_reservations",
+                entity_id=str(reservation_id),
+                action="REJECT_RESERVATION",
+                user_id=approver_id,
+                old_values={"status": old_status},
+                new_values={"status": "rejected", "reason": reason.strip()},
+                description=f"Reservation {reservation.full_form_number} rejected: {reason.strip()}",
+            )
+        )
 
         db.commit()
         db.refresh(reservation)
@@ -576,7 +595,9 @@ class ReservationService:
         if not comments or not comments.strip():
             raise ValueError("Comments are required when requesting changes.")
 
-        reservation = ReservationService._get_reservation_or_raise(db, reservation_id, lock=True)
+        reservation = ReservationService._get_reservation_or_raise(
+            db, reservation_id, lock=True
+        )
         ReservationService._validate_transition(reservation.status, "changes_requested")  # type: ignore[arg-type]
 
         now = datetime.now(timezone.utc)
@@ -598,23 +619,30 @@ class ReservationService:
             approver_record.decision_comments = comments.strip()  # type: ignore[assignment]
             approver_record.decided_at = now  # type: ignore[assignment]
         else:
-            db.add(FormReservationApprover(
-                reservation_id=reservation_id,
-                approver_id=approver_id,
-                decision="changes_requested",
-                decision_comments=comments.strip(),
-                decided_at=now,
-            ))
+            db.add(
+                FormReservationApprover(
+                    reservation_id=reservation_id,
+                    approver_id=approver_id,
+                    decision="changes_requested",
+                    decision_comments=comments.strip(),
+                    decided_at=now,
+                )
+            )
 
-        db.add(AuditLog(
-            entity_type="form_number_reservations",
-            entity_id=str(reservation_id),
-            action="REQUEST_CHANGES",
-            user_id=approver_id,
-            old_values={"status": old_status},
-            new_values={"status": "changes_requested", "comments": comments.strip()},
-            description=f"Changes requested for {reservation.full_form_number}: {comments.strip()}",
-        ))
+        db.add(
+            AuditLog(
+                entity_type="form_number_reservations",
+                entity_id=str(reservation_id),
+                action="REQUEST_CHANGES",
+                user_id=approver_id,
+                old_values={"status": old_status},
+                new_values={
+                    "status": "changes_requested",
+                    "comments": comments.strip(),
+                },
+                description=f"Changes requested for {reservation.full_form_number}: {comments.strip()}",
+            )
+        )
 
         db.commit()
         db.refresh(reservation)
@@ -630,7 +658,9 @@ class ReservationService:
 
         Only the original requester may resubmit.
         """
-        reservation = ReservationService._get_reservation_or_raise(db, reservation_id, lock=True)
+        reservation = ReservationService._get_reservation_or_raise(
+            db, reservation_id, lock=True
+        )
 
         if str(reservation.reserved_by_id) != str(submitted_by_id):
             raise ValueError("Only the requester can resubmit their own reservation.")
@@ -655,15 +685,17 @@ class ReservationService:
             record.decision_comments = None  # type: ignore[assignment]
             record.decided_at = None  # type: ignore[assignment]
 
-        db.add(AuditLog(
-            entity_type="form_number_reservations",
-            entity_id=str(reservation_id),
-            action="SUBMIT_FOR_APPROVAL",
-            user_id=submitted_by_id,
-            old_values={"status": old_status},
-            new_values={"status": "pending_approval"},
-            description=f"Reservation {reservation.full_form_number} resubmitted for approval.",
-        ))
+        db.add(
+            AuditLog(
+                entity_type="form_number_reservations",
+                entity_id=str(reservation_id),
+                action="SUBMIT_FOR_APPROVAL",
+                user_id=submitted_by_id,
+                old_values={"status": old_status},
+                new_values={"status": "pending_approval"},
+                description=f"Reservation {reservation.full_form_number} resubmitted for approval.",
+            )
+        )
 
         db.commit()
         db.refresh(reservation)
@@ -696,8 +728,7 @@ class ReservationService:
 
         total = query.count()
         items = (
-            query
-            .order_by(FormNumberReservation.created_at.asc())
+            query.order_by(FormNumberReservation.created_at.asc())
             .offset(skip)
             .limit(min(limit, 100))
             .all()
@@ -724,7 +755,9 @@ class ReservationService:
 
         Cannot release already-approved reservations.
         """
-        reservation = ReservationService._get_reservation_or_raise(db, reservation_id, lock=True)
+        reservation = ReservationService._get_reservation_or_raise(
+            db, reservation_id, lock=True
+        )
 
         # Cannot release approved reservations
         if reservation.status == "approved":  # type: ignore[comparison-overlap]
@@ -761,15 +794,17 @@ class ReservationService:
         reservation.released_at = now  # type: ignore[assignment]
         reservation.released_by_id = released_by_id  # type: ignore[assignment]
 
-        db.add(AuditLog(
-            entity_type="form_number_reservations",
-            entity_id=str(reservation_id),
-            action="RELEASE_NUMBER",
-            user_id=released_by_id,
-            old_values={"status": old_status},
-            new_values={"status": "released"},
-            description=f"Reservation {reservation.full_form_number} manually released.",
-        ))
+        db.add(
+            AuditLog(
+                entity_type="form_number_reservations",
+                entity_id=str(reservation_id),
+                action="RELEASE_NUMBER",
+                user_id=released_by_id,
+                old_values={"status": old_status},
+                new_values={"status": "released"},
+                description=f"Reservation {reservation.full_form_number} manually released.",
+            )
+        )
 
         db.commit()
         db.refresh(reservation)
@@ -800,15 +835,17 @@ class ReservationService:
         for reservation in stale:
             reservation.status = "expired"  # type: ignore[assignment]
             reservation.released_at = now  # type: ignore[assignment]
-            db.add(AuditLog(
-                entity_type="form_number_reservations",
-                entity_id=str(reservation.id),
-                action="RESERVATION_EXPIRED",
-                user_id=None,
-                old_values={"status": reservation.status},
-                new_values={"status": "expired"},
-                description=f"Reservation {reservation.full_form_number} auto-expired after 14 days.",
-            ))
+            db.add(
+                AuditLog(
+                    entity_type="form_number_reservations",
+                    entity_id=str(reservation.id),
+                    action="RESERVATION_EXPIRED",
+                    user_id=None,
+                    old_values={"status": reservation.status},
+                    new_values={"status": "expired"},
+                    description=f"Reservation {reservation.full_form_number} auto-expired after 14 days.",
+                )
+            )
             count += 1
 
         if count > 0:
@@ -827,7 +864,9 @@ class ReservationService:
         Returns reservations in 'reserved' or 'changes_requested' status that were
         created more than (14 - days_threshold) days ago.
         """
-        approaching_cutoff = datetime.now(timezone.utc) - timedelta(days=14 - days_threshold)
+        approaching_cutoff = datetime.now(timezone.utc) - timedelta(
+            days=14 - days_threshold
+        )
 
         query = db.query(FormNumberReservation).filter(
             FormNumberReservation.status.in_(["reserved", "changes_requested"]),
@@ -837,8 +876,7 @@ class ReservationService:
 
         total = query.count()
         items = (
-            query
-            .order_by(FormNumberReservation.created_at.asc())
+            query.order_by(FormNumberReservation.created_at.asc())
             .offset(skip)
             .limit(min(limit, 100))
             .all()
@@ -878,7 +916,9 @@ class ReservationService:
         if status is not None:
             query = query.filter(FormNumberReservation.status == status)
         if numbering_method is not None:
-            query = query.filter(FormNumberReservation.numbering_method == numbering_method)
+            query = query.filter(
+                FormNumberReservation.numbering_method == numbering_method
+            )
         if reserved_by_id is not None:
             query = query.filter(FormNumberReservation.reserved_by_id == reserved_by_id)
         if date_from is not None:
@@ -899,12 +939,7 @@ class ReservationService:
             query = query.order_by(sort_col.desc())
 
         total = query.count()
-        items = (
-            query
-            .offset(skip)
-            .limit(min(limit, 100))
-            .all()
-        )
+        items = query.offset(skip).limit(min(limit, 100)).all()
         return items, total
 
     @staticmethod
@@ -916,7 +951,9 @@ class ReservationService:
             db.query(FormNumberReservation)
             .options(
                 joinedload(FormNumberReservation.prefix),
-                joinedload(FormNumberReservation.approvers).joinedload(FormReservationApprover.approver),
+                joinedload(FormNumberReservation.approvers).joinedload(
+                    FormReservationApprover.approver
+                ),
                 joinedload(FormNumberReservation.reserved_by),
             )
             .filter(
@@ -941,8 +978,7 @@ class ReservationService:
 
         total = query.count()
         items = (
-            query
-            .order_by(FormNumberReservation.created_at.desc())
+            query.order_by(FormNumberReservation.created_at.desc())
             .offset(skip)
             .limit(min(limit, 100))
             .all()
@@ -954,41 +990,39 @@ class ReservationService:
         db: Session,
     ) -> List[FormNumberReservation]:
         """List all approved, unused reservations across all prefixes.
-        
+
         Returns reservations that:
         - Have status = 'approved'
         - Are not released (released_at IS NULL)
-        - Are not deleted (deleted_at IS NULL)  
+        - Are not deleted (deleted_at IS NULL)
         - Have not expired (expires_at IS NULL OR expires_at > NOW())
         - Are NOT linked to any form (no form has this reservation_id)
-        
+
         Ordered by created_at DESC (newest first).
         """
         now = datetime.now(timezone.utc)
-        
+
         query = db.query(FormNumberReservation).filter(
-            FormNumberReservation.status == 'approved',
+            FormNumberReservation.status == "approved",
             FormNumberReservation.released_at.is_(None),
             FormNumberReservation.deleted_at.is_(None),
             or_(
                 FormNumberReservation.expires_at.is_(None),
-                FormNumberReservation.expires_at > now
+                FormNumberReservation.expires_at > now,
             ),
         )
-        
+
         # Exclude reservations that are already linked to a form
-        used_reservation_ids = db.query(Form.form_number_reservation_id).filter(
-            Form.form_number_reservation_id.isnot(None),
-            Form.deleted_at.is_(None),
-        ).distinct()
-        
-        query = query.filter(
-            ~FormNumberReservation.id.in_(used_reservation_ids)
+        used_reservation_ids = (
+            db.query(Form.form_number_reservation_id)
+            .filter(
+                Form.form_number_reservation_id.isnot(None),
+                Form.deleted_at.is_(None),
+            )
+            .distinct()
         )
-        
-        items = (
-            query
-            .order_by(FormNumberReservation.created_at.desc())
-            .all()
-        )
+
+        query = query.filter(~FormNumberReservation.id.in_(used_reservation_ids))
+
+        items = query.order_by(FormNumberReservation.created_at.desc()).all()
         return items

@@ -31,7 +31,9 @@ class AccessRequestService:
     def _get_user(db: Session, user_id: UUID) -> User:
         user = (
             db.query(User)
-            .filter(User.id == user_id, User.deleted_at.is_(None), User.is_active == True)
+            .filter(
+                User.id == user_id, User.deleted_at.is_(None), User.is_active == True
+            )
             .first()
         )
         if not user:
@@ -59,7 +61,9 @@ class AccessRequestService:
         AccessRequestService._get_user(db, user_id)
 
         if AccessRequestService._has_active_roles(db, user_id):
-            raise AccessRequestValidationError("User already has portal role assignments")
+            raise AccessRequestValidationError(
+                "User already has portal role assignments"
+            )
 
         existing_pending = (
             db.query(AccessRequest)
@@ -71,7 +75,9 @@ class AccessRequestService:
             .first()
         )
         if existing_pending:
-            raise AccessRequestConflictError("An active pending access request already exists for this user")
+            raise AccessRequestConflictError(
+                "An active pending access request already exists for this user"
+            )
 
         request = AccessRequest(
             user_id=user_id,
@@ -98,12 +104,16 @@ class AccessRequestService:
             db.commit()
         except IntegrityError as exc:
             db.rollback()
-            raise AccessRequestConflictError("An active pending access request already exists for this user") from exc
+            raise AccessRequestConflictError(
+                "An active pending access request already exists for this user"
+            ) from exc
 
         db.refresh(request)
         return (
             db.query(AccessRequest)
-            .options(joinedload(AccessRequest.user), joinedload(AccessRequest.processed_by))
+            .options(
+                joinedload(AccessRequest.user), joinedload(AccessRequest.processed_by)
+            )
             .filter(AccessRequest.id == request.id)
             .first()
         )
@@ -113,7 +123,9 @@ class AccessRequestService:
         """Return the newest access request for a specific user."""
         return (
             db.query(AccessRequest)
-            .options(joinedload(AccessRequest.user), joinedload(AccessRequest.processed_by))
+            .options(
+                joinedload(AccessRequest.user), joinedload(AccessRequest.processed_by)
+            )
             .filter(
                 AccessRequest.user_id == user_id,
                 AccessRequest.deleted_at.is_(None),
@@ -133,13 +145,17 @@ class AccessRequestService:
         """List access requests with optional status filter and pagination."""
         query = (
             db.query(AccessRequest)
-            .options(joinedload(AccessRequest.user), joinedload(AccessRequest.processed_by))
+            .options(
+                joinedload(AccessRequest.user), joinedload(AccessRequest.processed_by)
+            )
             .filter(AccessRequest.deleted_at.is_(None))
         )
 
         if status_filter:
             if status_filter not in {"pending", "approved", "rejected"}:
-                raise AccessRequestValidationError("status must be one of: pending, approved, rejected")
+                raise AccessRequestValidationError(
+                    "status must be one of: pending, approved, rejected"
+                )
             query = query.filter(AccessRequest.status == status_filter)
 
         total = query.count()
@@ -187,7 +203,11 @@ class AccessRequestService:
         # Assign the default staff_viewer role if the user doesn't already have it.
         staff_viewer_role = (
             db.query(Role)
-            .filter(Role.name == "staff_viewer", Role.deleted_at.is_(None), Role.is_active == True)
+            .filter(
+                Role.name == "staff_viewer",
+                Role.deleted_at.is_(None),
+                Role.is_active == True,
+            )
             .first()
         )
         if staff_viewer_role:
@@ -222,7 +242,9 @@ class AccessRequestService:
         db.refresh(request)
         return (
             db.query(AccessRequest)
-            .options(joinedload(AccessRequest.user), joinedload(AccessRequest.processed_by))
+            .options(
+                joinedload(AccessRequest.user), joinedload(AccessRequest.processed_by)
+            )
             .filter(AccessRequest.id == request.id)
             .first()
         )
@@ -262,7 +284,9 @@ class AccessRequestService:
         db.refresh(request)
         return (
             db.query(AccessRequest)
-            .options(joinedload(AccessRequest.user), joinedload(AccessRequest.processed_by))
+            .options(
+                joinedload(AccessRequest.user), joinedload(AccessRequest.processed_by)
+            )
             .filter(AccessRequest.id == request.id)
             .first()
         )
