@@ -1,0 +1,66 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.postgres.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.postgres.name }}
+spec:
+  replicas: {{ .Values.postgres.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.postgres.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.postgres.name }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports:
+            - containerPort: {{ .Values.postgres.containerPort }}
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.secretName }}
+                  key: {{ .Values.postgres.passwordSecretKey }}
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.db | quote }}
+            - name: POSTGRES_INITDB_ARGS
+              value: {{ .Values.postgres.initdbArgs | quote }}
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgres.user }}
+                - -d
+                - {{ .Values.postgres.db }}
+            initialDelaySeconds: {{ .Values.postgres.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.postgres.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.postgres.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.postgres.readinessProbe.failureThreshold }}
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgres.user }}
+                - -d
+                - {{ .Values.postgres.db }}
+            initialDelaySeconds: {{ .Values.postgres.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.postgres.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.postgres.livenessProbe.timeoutSeconds }}
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+{{- end }}
