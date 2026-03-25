@@ -31,8 +31,11 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <div class="navbar-nav">
-                    <a class="nav-link" id="manageFormsLink" href="/" onclick="navigateTo(event, '/')">
+                <div class="navbar-nav" id="mainNavLinks">
+                    <a class="nav-link" id="dashboardLink" href="/dashboard" onclick="navigateTo(event, '/dashboard')">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                    <a class="nav-link" id="manageFormsLink" href="/forms" onclick="navigateTo(event, '/forms')">
                         <i class="fas fa-list"></i> Manage Forms
                     </a>
                     <a class="nav-link" id="createFormLink" href="/create" onclick="navigateTo(event, '/create')">
@@ -72,6 +75,44 @@
     
     <!-- Main Content -->
     <div class="container">
+        <!-- Welcome View (TASK-430) -->
+        <div id="welcomeView" style="display:none;">
+            <div class="text-center py-5">
+                <img src="/static/assets/bc-gov-transportation-logo.png" alt="BC Government Logo" style="height:80px; margin-bottom:1.5rem;">
+                <h2 class="mb-3">Transportation Forms Management</h2>
+                <p class="text-muted mb-4">Manage, publish, and track transportation forms for BC Gov staff.</p>
+                <button class="btn btn-bc-primary btn-lg" type="button" onclick="startLogin()">
+                    <i class="fas fa-sign-in-alt"></i> Sign In
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard View (TASK-430) -->
+        <div id="dashboardView" style="display:none;">
+            <h2 class="mb-4"><i class="fas fa-tachometer-alt"></i> Overview</h2>
+            <div id="dashboardStatsError" class="alert alert-danger" style="display:none;"></div>
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <div class="card h-100 text-center p-4">
+                        <div class="display-4 fw-bold" id="stat-published-forms">—</div>
+                        <div class="text-muted mt-2">Published Forms</div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="card h-100 text-center p-4">
+                        <div class="display-4 fw-bold" id="stat-forms-awaiting-approval">—</div>
+                        <div class="text-muted mt-2">Forms Awaiting Approval</div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="card h-100 text-center p-4">
+                        <div class="display-4 fw-bold" id="stat-reservations-awaiting-approval">—</div>
+                        <div class="text-muted mt-2">Reservation Requests Awaiting Approval</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- List View -->
         <div id="listView">
             <div id="requestAccessPanel" class="alert alert-info justify-content-between align-items-center" style="display:none;">
@@ -430,7 +471,7 @@
                         <button type="button" class="btn btn-bc-primary btn-lg px-4" id="submitReservationBtn" onclick="submitReservation()">
                             <i class="fas fa-paper-plane"></i> Submit Request
                         </button>
-                        <button type="button" class="btn btn-outline-secondary btn-lg px-4" onclick="navigateTo(null, '/')">
+                        <button type="button" class="btn btn-outline-secondary btn-lg px-4" onclick="navigateTo(null, '/forms')">
                             <i class="fas fa-arrow-left"></i> Back to List
                         </button>
                     </div>
@@ -474,7 +515,7 @@
                         <button class="btn btn-bc-primary px-4" onclick="resetAndNewReservation()">
                             <i class="fas fa-plus"></i> Reserve Another Number
                         </button>
-                        <button class="btn btn-outline-secondary px-4" onclick="navigateTo(null, '/')">
+                        <button class="btn btn-outline-secondary px-4" onclick="navigateTo(null, '/forms')">
                             <i class="fas fa-arrow-left"></i> Back to List
                         </button>
                     </div>
@@ -886,9 +927,9 @@
             }
 
             if (!isAuthenticated() && path !== '/callback') {
-                currentRoute = 'list';
+                currentRoute = 'welcome';
                 routeParams = {};
-                showListView();
+                showWelcomeView();
                 updateNavbar();
                 return;
             }
@@ -905,6 +946,25 @@
             
             // Parse route
             if (path === '/' || path === '') {
+                if (hasPortalRoles()) {
+                    window.history.replaceState({}, '', '/dashboard');
+                    routeHandler();
+                    return;
+                } else {
+                    currentRoute = 'list';
+                    routeParams = {};
+                    showListView();
+                }
+            } else if (path === '/dashboard') {
+                if (!hasPortalRoles()) {
+                    window.history.replaceState({}, '', '/');
+                    routeHandler();
+                    return;
+                }
+                currentRoute = 'dashboard';
+                routeParams = {};
+                showDashboardView();
+            } else if (path === '/forms') {
                 currentRoute = 'list';
                 routeParams = {};
                 showListView();
@@ -956,8 +1016,12 @@
                 routeParams = { formId };
                 showEditView(formId);
             } else {
-                // Default to list view
-                window.history.replaceState({}, '', '/');
+                // Default route by auth/role state
+                if (hasPortalRoles()) {
+                    window.history.replaceState({}, '', '/dashboard');
+                } else {
+                    window.history.replaceState({}, '', '/');
+                }
                 routeHandler();
             }
             
@@ -984,7 +1048,9 @@
                 link.classList.remove('active');
             });
             
-            if (currentRoute === 'list') {
+            if (currentRoute === 'dashboard') {
+                document.getElementById('dashboardLink').classList.add('active');
+            } else if (currentRoute === 'list') {
                 document.getElementById('manageFormsLink').classList.add('active');
             } else if (currentRoute === 'create' || currentRoute === 'edit') {
                 document.getElementById('createFormLink').classList.add('active');
@@ -1074,19 +1140,21 @@
                 const displayName = currentUser?.name || currentUser?.email || 'Signed in';
                 authUserDisplay.textContent = displayName;
                 authUserDisplay.style.display = 'inline';
-                const showAdminLinks = isAdminUser();
-                adminNavLinks.forEach(link => {
-                    link.style.display = showAdminLinks ? '' : 'none';
-                });
-                navLinks.forEach(link => link.classList.remove('disabled'));
+                if (hasPortalRoles()) {
+                    document.getElementById('mainNavLinks').style.display = '';
+                    const showAdminLinks = isAdminUser();
+                    adminNavLinks.forEach(link => {
+                        link.style.display = showAdminLinks ? '' : 'none';
+                    });
+                    navLinks.forEach(link => link.classList.remove('disabled'));
+                } else {
+                    document.getElementById('mainNavLinks').style.display = 'none';
+                }
             } else {
                 signInBtn.style.display = 'inline-block';
                 signOutBtn.style.display = 'none';
                 authUserDisplay.style.display = 'none';
-                adminNavLinks.forEach(link => {
-                    link.style.display = 'none';
-                });
-                navLinks.forEach(link => link.classList.add('disabled'));
+                document.getElementById('mainNavLinks').style.display = 'none';
             }
         }
 
@@ -1180,7 +1248,8 @@
                 const payload = await response.json();
                 saveAuthSession(payload.access_token, payload.refresh_token, payload.user);
                 showAlert('Signed in successfully.', 'success');
-                window.history.replaceState({}, '', '/');
+                const dest = hasPortalRoles() ? '/dashboard' : '/';
+                window.history.replaceState({}, '', dest);
                 routeHandler();
             } catch (error) {
                 console.error('Auth callback failed:', error);
@@ -1896,7 +1965,7 @@
             } catch (error) {
                 showAlert('Error loading form: ' + error.message, 'danger');
                 // Go back to list if form not found
-                setTimeout(() => navigateTo(null, '/'), 2000);
+                setTimeout(() => navigateTo(null, '/forms'), 2000);
             }
         }
         
@@ -1916,7 +1985,7 @@
                 
                 showAlert('Form deleted successfully', 'success');
                 // Navigate back to list after deletion
-                setTimeout(() => navigateTo(null, '/'), 1000);
+                setTimeout(() => navigateTo(null, '/forms'), 1000);
             } catch (error) {
                 showAlert('Error deleting form: ' + error.message, 'danger');
             }
@@ -2148,7 +2217,7 @@
                 formNumberReservationId = null;
                 
                 // Navigate back to list view after successful save
-                setTimeout(() => navigateTo(null, '/'), 1500);
+                setTimeout(() => navigateTo(null, '/forms'), 1500);
             } catch (error) {
                 // Only show alert if no inline errors were shown
                 const hasInlineErrors = document.getElementById('formErrors').style.display !== 'none' ||
@@ -2190,6 +2259,8 @@
         
         // View toggles
         function hideAllViews() {
+            document.getElementById('welcomeView').style.display = 'none';
+            document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('listView').style.display = 'none';
             document.getElementById('createView').style.display = 'none';
             document.getElementById('reserveView').style.display = 'none';
@@ -2201,6 +2272,36 @@
             document.getElementById('usersView').style.display = 'none';
             document.getElementById('userDetailView').style.display = 'none';
             document.getElementById('accessRequestsView').style.display = 'none';
+        }
+
+        function showWelcomeView() {
+            hideAllViews();
+            document.getElementById('welcomeView').style.display = 'block';
+            document.getElementById('pageTitle').textContent = 'Transportation Forms Management - BC Gov';
+        }
+
+        async function showDashboardView() {
+            hideAllViews();
+            document.getElementById('dashboardView').style.display = 'block';
+            document.getElementById('pageTitle').textContent = 'Dashboard - BC Gov';
+            // Reset to placeholder while loading
+            document.getElementById('stat-published-forms').textContent = '—';
+            document.getElementById('stat-forms-awaiting-approval').textContent = '—';
+            document.getElementById('stat-reservations-awaiting-approval').textContent = '—';
+            document.getElementById('dashboardStatsError').style.display = 'none';
+            try {
+                const response = await fetch(`${API_BASE}/stats/dashboard`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!response.ok) throw new Error('Failed to load dashboard stats');
+                const data = await response.json();
+                document.getElementById('stat-published-forms').textContent = data.published_forms;
+                document.getElementById('stat-forms-awaiting-approval').textContent = data.forms_awaiting_approval;
+                document.getElementById('stat-reservations-awaiting-approval').textContent = data.reservations_awaiting_approval;
+            } catch (err) {
+                document.getElementById('dashboardStatsError').textContent = 'Failed to load dashboard statistics. Please try again.';
+                document.getElementById('dashboardStatsError').style.display = 'block';
+            }
         }
 
         function showListView() {
@@ -3951,7 +4052,7 @@
         
         function resetForm() {
             // When reset button is clicked, go back to list
-            navigateTo(null, '/');
+            navigateTo(null, '/forms');
         }
         
         // Utility functions

@@ -2063,7 +2063,7 @@ Draft (initial) → Pending Review → Approved → Published → Archived
     - `pytest tests/test_admin_users_api.py --cov=backend.routes.admin_users --cov-report=term-missing -q` → **91% coverage** for `backend/routes/admin_users.py`
 
 #### TASK-427: Bug Fix — RBAC Roles Not Returned After Login
-- **Status:** COMPLETED ✅ (March 23, 2026)
+- **Status:** NOT_STARTED
 - **Priority:** P0
 - **Effort:** 1pt
 - **Assigned To:** AI Code Agent
@@ -2137,144 +2137,9 @@ Draft (initial) → Pending Review → Approved → Published → Archived
 #### PR Title
 "fix: reload user relationships after bulk UserRole delete in auth callback; apply soft-delete filter in /auth/me"
 
-- **Implemented:**
-  - **`backend/routes/auth.py` (callback endpoint)** — Replaced `db.refresh(user)` with `user = db.query(User).filter(User.id == user.id).first()` after `db.commit()` so SQLAlchemy loads fresh ORM relationships before deriving `role_names`.
-  - **`backend/routes/auth.py` (/auth/me endpoint)** — Replaced raw `user.roles` iteration with `_active_user_roles(user)` (imported from `backend.routes.admin_users`) to consistently exclude soft-deleted role assignments and roles.
-  - **`tests/test_auth_flow.py`** — Added `assert payload["user"]["roles"] == ["staff_viewer"]` to `test_callback_new_user_success`, closing the coverage gap that allowed Bug 1 to go undetected.
-  - **Validation:** `pytest tests/test_auth_flow.py -v` → **11 passed**.
-
----
-
-#### TASK-428: Bug Fix — Post-TASK-427 Remaining Defects (RBAC Portal)
-- **Status:** COMPLETED ✅ (March 23, 2026)
-- **Priority:** P0
-- **Effort:** 3pt
-- **Assigned To:** AI Code Agent
-- **Description:** Fix five bugs and two test/design gaps identified by code review of TASK-422 through TASK-427 that still prevent the portal from working correctly after TASK-427 was applied. The most visible symptom is that the "Request Access" panel is permanently visible to all users — including admins — and that admin JWT roles become wrong after the first token refresh.
-
----
-
-#### Bug Origins
-
-| # | Bug | Severity | Root File | Description |
-|---|-----|----------|-----------|-------------|
-| 1 | `d-flex !important` makes Request Access panel permanently visible | **Critical** | `frontend/index.html` line 77 | The `requestAccessPanel` element carries Bootstrap's `d-flex` utility class. In Bootstrap 5.3, `d-flex` compiles to `display: flex !important`. The `!important` rule outranks any inline `style="display:none"` or JavaScript `panel.style.display = 'none'`, so `loadRequestAccessState()` can never hide the panel regardless of the user's roles. Every user — including admins — sees "You do not currently have a portal role assignment" on every page load. |
-| 2 | `/auth/refresh` stale roles and missing soft-delete filter (TASK-427 fix not applied to refresh) | **Critical** | `backend/routes/auth.py` refresh endpoint | TASK-427 fixed the stale-relationship issue and soft-delete filter in the `callback` and `/auth/me` endpoints but did not apply the same corrections to the `/auth/refresh` endpoint. After the 30-minute access token expires the frontend silently requests a new one; that new JWT embeds stale/unfiltered role claims. Since `require_admin` checks JWT claims, all admin API calls start returning 403 after the first token expiry even if the initial login worked. |
-| 3 | `local_roles` query in callback includes soft-deleted and inactive roles | **Medium** | `backend/routes/auth.py` callback | The `local_roles = db.query(Role).filter(Role.name.in_(local_role_names)).all()` query does not filter `deleted_at IS NULL` or `is_active = True`. A soft-deleted or deactivated role whose name still maps from Keycloak causes a dangling `UserRole → deleted role` record to be inserted on every login. |
-| 4 | `role_names` in callback not using `_active_user_roles` (inconsistency) | **Low** | `backend/routes/auth.py` callback | After the TASK-427 re-query, the JWT `role_names` list is still built from raw `user.roles` without the `_active_user_roles` filter. Low practical risk today (callback just created fresh rows) but inconsistent with the rest of the codebase and would silently produce wrong JWT claims if a role is deactivated between the bulk-delete and the fresh insert. |
-| 5 | "Request Access" button re-shown after approval | **Medium** | `frontend/index.html` `loadRequestAccessState` | `requestBtn.style.display = request.status === 'pending' ? 'none' : 'inline-block'` also shows the button when `status === 'approved'`, letting users submit additional requests against an already-approved one. |
-
----
-
-#### Design Gap
-
-| # | Gap | Location | Description |
-|---|-----|----------|-------------|
-| G1 | Approving an access request does not assign a role | `backend/services/access_requests.py` `approve_request` | `approve_request` marks status `'approved'` and writes an audit log but does not assign any portal role to the user. After approval the user still has zero roles and continues to see "Request Access" (BUG 1 makes this worse). The two-step process — approve the request, then separately navigate to Users to assign a role — is undocumented, untested, and invisible in the UI. |
-
----
-
-#### Test Coverage Gaps
-
-| # | Gap | Location | Description |
-|---|-----|----------|-------------|
-| T1 | No assertion on JWT role claims after token refresh | `tests/test_auth_flow.py` | TASK-427 added a roles assertion to the callback test to catch stale-role bugs, but no equivalent assertion exists in `test_refresh_success_returns_new_access_token_and_updates_last_login`. The refresh endpoint has the same class of defect (BUG 2) and passes all tests silently. |
-| T2 | Frontend visibility tests cannot detect CSS `!important` override bugs | `tests/test_frontend_admin_visibility.py` | All four tests are static HTML string searches that confirm element IDs and JS function names exist in source. They cannot execute CSS or JavaScript, so the `d-flex !important` bug (BUG 1) passes every test undetected. The tests should additionally assert that the panel is NOT inside a class set that contains `d-flex` (or equivalent). |
-
----
-
-#### Acceptance Criteria
-
-**Fix 1 — Remove `d-flex` from Request Access panel static classes**
-- [x] `requestAccessPanel` does **not** carry the `d-flex` class in its static HTML. The element's static class list must not contain any Bootstrap display utility (`d-flex`, `d-block`, `d-inline`, etc.) that carries `!important`.
-- [x] `loadRequestAccessState()` controls visibility exclusively via `panel.style.display` (e.g., `'flex'` or `'none'`). When setting the panel visible, set `panel.style.display = 'flex'` explicitly; when hiding, set `panel.style.display = 'none'`.
-- [x] Admin users (with portal roles) do **not** see the Request Access panel after sign-in.
-- [x] Unauthenticated users do **not** see the panel.
-- [x] Users with no portal roles **do** see the panel.
-
-**Fix 2 — Apply TASK-427 stale-role corrections to `/auth/refresh`**
-- [x] In `backend/routes/auth.py`, the `/auth/refresh` endpoint replaces `db.refresh(user)` with a fresh query:
-  ```python
-  db.commit()
-  user = db.query(User).filter(User.id == user_id).first()
-  ```
-- [x] `role_names` in the refresh endpoint is derived via `_active_user_roles(user)` (imported from `backend.routes.admin_users`), identical to the `/auth/me` fix from TASK-427.
-- [x] The access token returned by `/auth/refresh` embeds the same roles that `/auth/me` would return for the same user at the same point in time.
-
-**Fix 3 — Filter soft-deleted/inactive roles in callback `local_roles` query**
-- [x] `local_roles = db.query(Role).filter(Role.name.in_(local_role_names)).all()` is updated to also filter `Role.deleted_at.is_(None)` and `Role.is_active == True`.
-
-**Fix 4 — Use `_active_user_roles` for `role_names` in callback**
-- [x] After the re-query in the callback, `role_names` is derived via `_active_user_roles(user)` instead of raw `user.roles`.
-
-**Fix 5 — Suppress "Request Access" button after approval**
-- [x] In `loadRequestAccessState()`, the button is hidden when `request.status` is `'pending'` **or** `'approved'`. It is only shown again when the latest request is `'rejected'` (so the user can re-apply) or when no request exists yet (404 from `/access-requests/me`).
-  ```javascript
-  requestBtn.style.display =
-      (request.status === 'pending' || request.status === 'approved') ? 'none' : 'inline-block';
-  ```
-
-**Design Gap G1 — Auto-assign `staff_viewer` role on access request approval**
-- [x] `approve_request` in `backend/services/access_requests.py` assigns the `staff_viewer` role to the user if not already assigned, eliminating the two-step approval + manual role assignment workflow. Role assignment is skipped gracefully if `staff_viewer` role doesn't exist.
-
-**Test Coverage T1 — Assert JWT role claims in refresh test**
-- [x] In `tests/test_auth_flow.py`, `test_refresh_success_returns_new_access_token_and_updates_last_login` decodes the returned `access_token` and asserts that its `roles` claim contains `["staff_viewer"]` (matching the role seeded in the fixture).
-
-**Test Coverage T2 — Assert panel does not carry display-forcing Bootstrap classes**
-- [x] In `tests/test_frontend_admin_visibility.py`, new test `test_request_access_panel_has_no_d_flex_static_class` asserts that the `requestAccessPanel` element's static HTML does not contain `d-flex`.
-
-**Regression**
-- [x] `pytest tests/test_auth_flow.py tests/test_frontend_admin_visibility.py tests/test_access_requests_api.py -v` → **24 passed**.
-- [x] `pytest tests/test_auth_flow.py tests/test_auth_audit.py tests/test_frontend_admin_visibility.py tests/test_access_requests_api.py tests/test_admin_roles_api.py tests/test_admin_users_api.py -v` → **38 passed**, no regressions in TASK-428 scope files.
-- [ ] Admin user signs in and does **not** see "Request Access" panel.
-- [ ] Admin user sees Roles, Users, and Access Requests nav links.
-- [ ] Admin user's nav links and admin API access remain functional after the 30-minute token refresh cycle.
-
----
-
-#### Scope
-| Layer | File(s) |
-|---|---|
-| Frontend | `frontend/index.html` (Fix 1, Fix 5, Gap G1 hint) |
-| Backend — auth routes | `backend/routes/auth.py` (Fix 2, Fix 3, Fix 4) |
-| Tests — auth flow | `tests/test_auth_flow.py` (T1) |
-| Tests — frontend visibility | `tests/test_frontend_admin_visibility.py` (T2) |
-
-Do **not** change `backend/services/access_requests.py`, `backend/routes/admin_users.py`, or any migration.
-
----
-
----
-
-#### Implemented
-
-- **`frontend/index.html` (Fix 1)** — Removed `d-flex` from `requestAccessPanel` static class list so Bootstrap's `!important` no longer overrides `style="display:none"`. `loadRequestAccessState()` already sets `panel.style.display = 'flex'` / `'none'` to control visibility.
-- **`frontend/index.html` (Fix 5)** — `requestBtn` is now hidden when `request.status` is `'pending'` **or** `'approved'`, preventing users from submitting duplicate requests after their access has been granted.
-- **`backend/routes/auth.py` (Fix 2)** — `/auth/refresh` endpoint replaced `db.refresh(user)` with `user = db.query(User).filter(User.id == user_id).first()` and now derives `role_names` via `_active_user_roles(user)`, matching the fix applied to callback and `/auth/me` in TASK-427.
-- **`backend/routes/auth.py` (Fix 3)** — `local_roles` query in the callback now filters `Role.deleted_at.is_(None)` and `Role.is_active == True` to prevent dangling `UserRole` records pointing to soft-deleted or deactivated roles.
-- **`backend/routes/auth.py` (Fix 4)** — After the TASK-427 re-query in the callback, `role_names` is now derived via `_active_user_roles(user)` for consistency with the rest of the codebase.
-- **`backend/services/access_requests.py` (G1)** — `approve_request` now assigns the `staff_viewer` role to the requesting user (if not already assigned and if the role exists), eliminating the invisible two-step approval + manual role-assignment workflow.
-- **`tests/test_auth_flow.py` (T1)** — `test_refresh_success_returns_new_access_token_and_updates_last_login` decodes the refreshed access token and asserts `"staff_viewer" in token_data.roles`, catching any future stale-roles regression in the refresh path.
-- **`tests/test_frontend_admin_visibility.py` (T2)** — New test `test_request_access_panel_has_no_d_flex_static_class` parses the `requestAccessPanel` element tag and asserts it does not contain `d-flex`, preventing silent recurrence of BUG 1.
-- **Validation:** `pytest tests/test_auth_flow.py tests/test_auth_audit.py tests/test_frontend_admin_visibility.py tests/test_access_requests_api.py tests/test_admin_roles_api.py tests/test_admin_users_api.py` → **38 passed**.
-
----
-
-#### Dependencies
-- TASK-422 (roles API)
-- TASK-423 (access request workflow)
-- TASK-424 (admin nav)
-- TASK-425 (admin pages, `_active_user_roles`)
-- TASK-426 (test coverage)
-- TASK-427 (partial fix — this task completes it)
-
-#### PR Title
-"fix: d-flex panel visibility, refresh token stale roles, callback role filter, request-access UX, and test coverage gaps"
-
 
 #### TASK-429: Fix Auth Callback — Stop Importing Roles from Keycloak; Use DB-Driven RBAC Exclusively
 
-- **Status:** COMPLETED ✅ (March 23, 2026)
 - **Priority:** P0
 - **Effort:** 2pt
 - **Assigned To:** AI Code Agent
@@ -2347,53 +2212,20 @@ if existing_role_count == 0:
         db.add(UserRole(user_id=user.id, role_id=default_role.id))
 
 # ... audit log, db.commit(), re-query user, derive role_names via _active_user_roles(user) ...
-```
 
----
+#### TASK-431: Fix — Manage Forms List Inaccessible After TASK-430 Routing Change
 
-#### Dependencies
-- TASK-421 (auth callback — contains the code to change)
-- TASK-427 / TASK-428 (prior fixes — `_active_user_roles` usage and re-query pattern must be preserved)
-
-#### PR Title
-"fix: decouple portal authorization from Keycloak; preserve DB-assigned roles on login"
-
----
-
-#### Implemented
-
-- **`backend/routes/auth.py` (auth_callback)** — Removed the `keycloak_service.decode_token` / `extract_roles` / `map_keycloak_roles_to_local` calls and the bulk `UserRole` delete-and-reinsert block. Replaced with a new-user-only bootstrap: if the user already has at least one active `UserRole` record (not soft-deleted), their portal roles are left untouched; if the user has zero active portal roles (brand-new or all roles removed), the `staff_viewer` default role is assigned so they can use the Access Request flow.
-- **`tests/test_auth_flow.py`** — Added `test_callback_preserves_existing_portal_roles`: pre-creates a user with an admin UserRole in the DB, calls the callback, and asserts the response still contains `admin` and does not contain `staff_viewer`.
-- **Validation:** `pytest tests/test_auth_flow.py -v` → **12 passed**; full TASK-428 regression suite → **39 passed**.
-
----
-
-#### TASK-430: Welcome Page, Post-Login Dashboard & Stats Endpoint
-
-- **Status:** NOT_STARTED
+- **Status:** COMPLETED ✅ (March 25, 2026)
 - **Priority:** P0
-- **Effort:** 5pt
+- **Effort:** 1pt
 - **Assigned To:** AI Code Agent
-- **Description:** Unauthenticated users currently land on the Forms List page. This task gates the portal behind authentication and adds a proper welcome page for unauthenticated visitors and a post-login dashboard with 3 live stat cards. A new backend stats endpoint supplies all counts in a single API call.
+- **Description:** TASK-430 introduced a routing rule that permanently redirects authenticated users with portal roles from `/` to `/dashboard`. Because the "Manage Forms" navbar link still points to `/`, clicking it triggers the redirect loop and the list view is never shown. The fix is to move the list view to its own stable route `/forms` and update all affected routing and navigation references.
 
 ---
 
-### Context & Decisions
+### Root Cause
 
-- **Auth model:** Keycloak for identity; JWT contains DB-assigned portal roles (synced at login/refresh via `_active_user_roles`).
-- **Post-login redirect:** `/dashboard` (not `/`).
-- **`/` branching logic:**
-  - `!isAuthenticated()` → welcome view (no navbar)
-  - `isAuthenticated() && !hasPortalRoles()` → request-access view (navbar links hidden, brand + sign-out only)
-  - `isAuthenticated() && hasPortalRoles()` → redirect to `/dashboard`
-- **Dashboard stats — 3 cards only:**
-  | Card | DB filter |
-  |---|---|
-  | Published Forms | `forms.status = 'published' AND deleted_at IS NULL` |
-  | Forms Awaiting Approval | `forms.status = 'pending_review' AND deleted_at IS NULL` |
-  | Reservation Requests Awaiting Approval | `form_number_reservations.status = 'pending_approval'` |
-- **Layout:** Single flat row of 3 equal Bootstrap cards (`col-12 col-md-4`); big bold number + small muted label per card.
-- No graphs, no role-specific filtering, no auto-refresh (loads on page open only).
+`routeHandler()` now intercepts every visit to `/` for authenticated+role users and calls `window.history.replaceState({}, '', '/dashboard')` before re-entering the handler — making `/` permanently unreachable as a view. The "Manage Forms" link has no dedicated route to land on.
 
 ---
 
@@ -2401,87 +2233,52 @@ if existing_role_count == 0:
 
 | Layer | File(s) |
 |---|---|
-| Backend — routes | `backend/routes/stats.py` (new) |
-| Backend — app | `backend/main.py` (register router) |
-| Frontend | `frontend/index.html` (welcome view, dashboard view, routing, auth wiring, nav link) |
-| Tests | `tests/test_dashboard_stats_api.py` (new) |
+| Frontend | `frontend/index.html` |
+
+---
+
+### Routing Rules (Must Be Preserved from TASK-430)
+
+| Path | Auth State | Behaviour |
+|---|---|---|
+| `/` | Unauthenticated | Show `#welcomeView` |
+| `/` | Authenticated, no roles | Show request-access view (`#requestAccessPanel`) |
+| `/` | Authenticated, has roles | Redirect to `/dashboard` |
+| `/dashboard` | Authenticated, has roles | Show dashboard with stat cards |
+| `/dashboard` | Authenticated, no roles | Redirect to `/` (request-access — **not `/forms`**) |
+| `/dashboard` | Unauthenticated | Redirect to `/` (welcome) |
+| `/forms` | Authenticated (any) | Show Manage Forms list view |
 
 ---
 
 ### Acceptance Criteria
 
-#### Backend — Stats Endpoint
-
-- [ ] `GET /api/v1/stats/dashboard` endpoint exists in `backend/routes/stats.py`.
-- [ ] Endpoint requires a valid JWT (uses `get_current_user` dependency); returns HTTP 401 for unauthenticated requests.
-- [ ] Any authenticated role (staff_viewer, reviewer, staff_manager, admin) can call the endpoint — no role restriction beyond valid JWT.
-- [ ] Response is a flat JSON object with exactly three integer fields:
-  ```json
-  { "published_forms": 0, "forms_awaiting_approval": 0, "reservations_awaiting_approval": 0 }
-  ```
-- [ ] `published_forms` counts `forms` rows where `status = 'published'` and `deleted_at IS NULL`.
-- [ ] `forms_awaiting_approval` counts `forms` rows where `status = 'pending_review'` and `deleted_at IS NULL`.
-- [ ] `reservations_awaiting_approval` counts `form_number_reservations` rows where `status = 'pending_approval'`.
-- [ ] Router registered in `backend/main.py` under `/api/v1` prefix.
-
-#### Frontend — Welcome View
-
-- [ ] Unauthenticated users visiting any route (including `/`) see `#welcomeView` and nothing else — no navbar links, no forms list.
-- [ ] `#welcomeView` contains: BC Gov header logo, app title, a short description sentence, and a `btn-bc-primary` Sign In button that calls `startLogin()`.
-- [ ] Navbar nav links (`#navbarNav`) are hidden while the welcome view is active.
-- [ ] The sign-in button in the welcome view triggers the same Keycloak login flow as the existing `#signInBtn`.
-
-#### Frontend — Dashboard View
-
-- [ ] After successful login (auth callback), users with at least one portal role are redirected to `/dashboard`.
-- [ ] `#dashboardView` contains an "Overview" heading and 3 Bootstrap stat cards in a responsive row (`col-12 col-md-4`).
-- [ ] Card 1: label "Published Forms", live count in `#stat-published-forms`.
-- [ ] Card 2: label "Forms Awaiting Approval", live count in `#stat-forms-awaiting-approval`.
-- [ ] Card 3: label "Reservation Requests Awaiting Approval", live count in `#stat-reservations-awaiting-approval`.
-- [ ] Each stat span shows `—` as placeholder while the API call is in-flight.
-- [ ] On API error, an inline error message is shown inside the dashboard instead of leaving `—` permanently.
-- [ ] Dashboard stat cards reload each time the user navigates to `/dashboard`.
-- [ ] A `#dashboardLink` nav item ("Dashboard") is present in the navbar and is marked active when `currentRoute === 'dashboard'`; it is the first nav link (inserted before Manage Forms).
-
-#### Frontend — No-Role Authenticated View
-
-- [ ] A user who is authenticated but has zero portal roles (empty `currentUser.roles`) is redirected to `/` after login.
-- [ ] At `/`, such a user sees the request-access content (existing `#requestAccessPanel` behaviour is preserved).
-- [ ] Navbar nav links (`#navbarNav`) are hidden for no-role users; only the brand header and sign-out button are shown.
-- [ ] The welcome view (with Sign In button) is NOT shown to authenticated users regardless of role count.
-
-#### Frontend — Routing
-
-- [ ] `/` route branches on auth state: unauthenticated → welcome; no roles → request-access; has roles → redirect to `/dashboard`.
-- [ ] `/dashboard` route calls `showDashboardView()`; if user has no roles, redirects to `/`.
-- [ ] Browser back/forward navigation through `/dashboard` works correctly (popstate handled).
-- [ ] Navigating to `/dashboard` from any other route hides all other views and shows the dashboard.
+- [x] The "Manage Forms" navbar link uses `href="/forms"` and `navigateTo(event, '/forms')`.
+- [x] The router handles `path === '/forms'` by setting `currentRoute = 'list'` and calling `showListView()`.
+- [x] The `/` route branching logic from TASK-430 is unchanged: unauthenticated → welcome view; authenticated no-roles → request-access view; authenticated has-roles → redirect to `/dashboard`.
+- [x] `/dashboard` with no portal roles redirects to `/` (showing request-access), **not** to `/forms`.
+- [x] Unauthenticated users are always shown the welcome view at `/` regardless of the path they attempted.
+- [x] The catch-all default route (unrecognised paths) redirects authenticated+role users to `/dashboard`, all others to `/`.
+- [x] Navigating to `/forms` correctly renders the forms list with search, filters, and pagination.
+- [x] All other existing routes (`/create`, `/reserve`, `/my-reservations`, `/approvals`, `/roles`, `/users`, `/access-requests`, `/dashboard`) are unaffected.
 
 ---
 
-### Test Cases — `tests/test_dashboard_stats_api.py`
+#### Implemented
 
-- [ ] **Unauthenticated returns 401:** `GET /api/v1/stats/dashboard` with no token returns HTTP 401.
-- [ ] **Authenticated returns 200 with zero counts:** Authenticated user (staff_viewer role) on empty DB gets `{"published_forms": 0, "forms_awaiting_approval": 0, "reservations_awaiting_approval": 0}`.
-- [ ] **Published forms count is correct:** Seed 3 published forms + 2 draft forms; assert `published_forms == 3`.
-- [ ] **Forms awaiting approval count is correct:** Seed 4 forms with `status='pending_review'`; assert `forms_awaiting_approval == 4`.
-- [ ] **Soft-deleted forms excluded:** Seed 2 published forms, soft-delete one (`deleted_at` set); assert `published_forms == 1`.
-- [ ] **Reservation requests awaiting approval count is correct:** Seed 5 reservations with `status='pending_approval'`; assert `reservations_awaiting_approval == 5`.
-- [ ] **All three counts return independently correct values:** Seed mixed data (2 published, 3 pending_review forms, 1 pending_approval reservation); assert all three fields return the correct independent values in a single response.
-- [ ] **Any portal role can access the endpoint:** Repeat the 200-check for reviewer, staff_manager, and admin roles to confirm no role restriction beyond valid JWT.
+- **`frontend/index.html` — Navbar**: Changed `#manageFormsLink` target from `/` to `/forms` (`href` and `navigateTo(...)`).
+- **`frontend/index.html` — Router**: Added explicit `path === '/forms'` branch to set `currentRoute = 'list'` and call `showListView()`.
+- **`frontend/index.html` — Catch-all routing**: Replaced unconditional fallback to `/` with role-aware fallback (`hasPortalRoles() ? '/dashboard' : '/'`) to preserve TASK-430 semantics.
+- **`frontend/index.html` — List-intent redirects**: Updated Back-to-List and post-save/delete/edit-failure/reset redirects to `/forms` so authenticated role users are not bounced to dashboard.
+- **Preserved (no change)**: TASK-430 auth flow redirects remain intact (`/` and `/dashboard` branching, callback/signout redirects to `/`).
 
 ---
 
 ### Dependencies
-- TASK-421 (auth callback, JWT, sessionStorage) — `startLogin()`, `saveAuthSession()`, `isAuthenticated()`, `hasPortalRoles()` must exist
-- TASK-427 / TASK-428 / TASK-429 (RBAC fixes) — `_active_user_roles`, no stale roles on callback
-- TASK-110 (forms table with `status` column)
-- TASK-413 (form_number_reservations table with `status` column)
+- TASK-430 (introduced the regression)
 
 ### PR Title
-"feat: welcome page, post-login dashboard with stats, and auth-gated routing"
-
----
+`"fix: restore Manage Forms list view at /forms route (TASK-430 regression)"`
 
 ### 2.6 Testing - Phase 1
 
