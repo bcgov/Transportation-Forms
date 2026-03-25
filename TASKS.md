@@ -427,19 +427,19 @@ No backend, service, or test changes are required.
 - **Effort:** 5pt
 - **Assigned To:** AI DevOps Agent
 - **Completed:** February 17, 2026
-- **Description:** Configure GitHub Actions for continuous integration and build verification
+- **Description:** Configure GitHub Actions for continuous integration (CI) and container build verification. OpenShift CD deployment is tracked separately.
 - **Artifacts Created:**
   - ✅ `.github/workflows/ci.yml` - Complete CI/CD pipeline with 5 parallel jobs
 - **CI/CD Pipeline Jobs (Parallel Execution):**
   1. **Lint & Format Check** (Black, Flake8, mypy) - MUST PASS
   2. **Unit Tests** (pytest with PostgreSQL service) - 80%+ coverage REQUIRED - MUST PASS
   3. **Security Scan** (Bandit, Safety) - MUST PASS
-  4. **Build Container Image** - Builds and pushes to ghcr.io (main only)
+  4. **Build Container Image** - Builds and pushes to ghcr.io (configured for `master` in current workflow)
   5. **Quality Gate** - Final check (all jobs must pass)
 - **Implementation Details:**
   - ✅ Workflow file: `.github/workflows/ci.yml`
-  - ✅ Triggers:
-    - On push to main/develop branches
+  - ✅ Triggers (current workflow configuration):
+    - On push to master/develop branches
     - On all pull requests
     - Manual trigger via `workflow_dispatch`
   - ✅ Job 1: Lint & Format
@@ -460,8 +460,8 @@ No backend, service, or test changes are required.
     - Reports uploaded as artifacts (JSON format)
   - ✅ Job 4: Build Container Image
     - Buildx for multi-platform builds
-    - Automatic tags: branch, SHA, semver, latest (main branch only)
-    - Pushes to `ghcr.io/bcgov/transportation-forms` on main only (PR builds only)
+    - Automatic tags: branch, SHA, semver, latest (latest on default branch)
+    - Push condition is currently hardcoded to `refs/heads/master` (PR builds only)
     - Uses GitHub Actions cache for faster builds
   - ✅ Job 5: Quality Gate
     - Ensures ALL jobs passed before allowing merge
@@ -496,6 +496,8 @@ No backend, service, or test changes are required.
   - Quality gates enforced by CI/CD (cannot merge without passing)
   - Coverage threshold (80%) is HARD requirement per CONSTITUTION.md
   - Security failures block merge (no exceptions)
+  - ✅ CI workflow branch configuration is aligned to `master/develop`.
+  - ℹ️ OpenShift DEV CD automation is tracked as TASK-432 (separate from this historical CI baseline task).
   - Ready for first tests once database schema created in TASK-104
 
 ### 2.2 Database Layer
@@ -2279,6 +2281,131 @@ if existing_role_count == 0:
 
 ### PR Title
 `"fix: restore Manage Forms list view at /forms route (TASK-430 regression)"`
+
+#### TASK-432: GitHub Actions CD — DEV-Only OpenShift Deployment (Helm + Internal Registry)
+
+- **Status:** COMPLETED ✅ (March 25, 2026)
+- **Priority:** P0
+- **Effort:** 8pt
+- **Assigned To:** AI DevOps Agent
+- **Description:** Implement a production-grade GitHub Actions CD pipeline that deploys this repository to the **DEV** OpenShift project only. The solution must build from `master`, push/pull image artifacts via the OpenShift internal registry, and deploy using a new Helm chart with DEV-specific values.
+
+---
+
+### Context
+
+- Existing CI workflow: `.github/workflows/ci.yml` (quality checks/build already present)
+- Existing deployment assets: `k8s/app.yaml`, `k8s/frontend.yaml`
+- Existing local deploy script: `build-deploy.ps1`
+- OpenShift environments exist for dev/test/prod, but **this task is DEV-only**
+- Default branch is `master`
+
+---
+
+### Chosen Design (Locked)
+
+- Trigger deploy on push to `master` (manual dispatch may be included)
+- Use OpenShift internal registry for image push/pull
+- Use Helm with DEV values
+
+---
+
+### Scope
+
+| Layer | File(s) |
+|---|---|
+| GitHub Actions | `.github/workflows/deploy-dev-openshift.yml` (new) |
+| Helm Chart | `helm/transportation-forms/Chart.yaml` (new), `helm/transportation-forms/values.yaml` (new), `helm/transportation-forms/values-dev.yaml` (new), `helm/transportation-forms/templates/*` (new) |
+| Documentation | `README.md` and/or deployment docs (minimal update) |
+
+---
+
+### Requirements
+
+#### 1) New DEV CD workflow
+
+- [x] Create `.github/workflows/deploy-dev-openshift.yml`
+- [x] Trigger on push to `master` (optionally include `workflow_dispatch`)
+- [x] Include optional CI gate behavior (check existing CI result or rerun needed checks)
+- [x] Build container image with deterministic tag (short SHA + timestamp or SHA-only)
+- [x] Authenticate to OpenShift using GitHub Secrets
+- [x] Login to OpenShift internal registry
+- [x] Push image to DEV project image stream/repository path
+- [x] Deploy via `helm upgrade --install` to DEV namespace/project only
+- [x] Wait for successful rollout of both app and frontend
+- [x] Print concise deployment summary in job output
+
+#### 2) Introduce Helm chart (new)
+
+- [x] Create `helm/transportation-forms/Chart.yaml`
+- [x] Create `helm/transportation-forms/values.yaml` (base)
+- [x] Create `helm/transportation-forms/values-dev.yaml` (DEV overrides)
+- [x] Create templates for:
+  - [x] app Deployment + Service
+  - [x] frontend Deployment + Service
+- [x] Preserve key env vars, startup commands, ports, and probes from existing `k8s/app.yaml` and `k8s/frontend.yaml`
+- [x] Keep namespace configurable; set to DEV through `values-dev.yaml`
+
+#### 3) Secrets and variables
+
+- [x] Use GitHub Secrets:
+  - [x] `OPENSHIFT_SERVER`
+  - [x] `OPENSHIFT_TOKEN`
+  - [x] `OPENSHIFT_DEV_NAMESPACE`
+- [x] Add additional non-secret workflow env vars as needed (registry path, release name, chart path)
+- [x] Do not commit credentials or tokens
+
+#### 4) Scope constraints (must enforce)
+
+- [x] DEV only (no TEST/PROD jobs or promotion stages)
+- [x] Do not redesign runtime architecture
+- [x] Reuse current backend/frontend startup commands and ports
+- [x] Keep changes minimal and compatible with current repo behavior
+
+#### 5) Validation & failure handling
+
+- [x] Validate successful OpenShift login
+- [x] Validate successful image push
+- [x] Validate successful Helm deploy/upgrade
+- [x] Validate rollout status for app and frontend
+- [x] On failure, print concise troubleshooting info (failed step, relevant command output)
+
+#### 6) Documentation
+
+- [x] Update README/deployment docs with:
+  - [x] Required GitHub Secrets
+  - [x] How DEV deploy trigger works
+  - [x] How to run manual dispatch (if enabled)
+  - [x] How to verify deployment in OpenShift
+
+---
+
+### Deliverables
+
+- [x] New workflow file: `.github/workflows/deploy-dev-openshift.yml`
+- [x] New Helm chart files under `helm/transportation-forms/`
+- [x] Minimal documentation updates
+- [x] Brief implementation summary and operator runbook notes
+
+---
+
+#### Implemented
+
+- **`.github/workflows/deploy-dev-openshift.yml`** — Added DEV-only CD pipeline (push to `master` + `workflow_dispatch`) with CI gate wait, deterministic image tagging, OpenShift login, internal registry push, Helm deploy (`upgrade --install`), rollout checks, and success/failure workflow summaries.
+- **`helm/transportation-forms/Chart.yaml`** — Added Helm chart metadata.
+- **`helm/transportation-forms/values.yaml`** — Added base chart configuration matching existing app/frontend runtime commands, ports, probes, and key environment variable wiring.
+- **`helm/transportation-forms/values-dev.yaml`** — Added DEV overrides for namespace/image defaults.
+- **`helm/transportation-forms/templates/app-deployment.yaml`** and **`helm/transportation-forms/templates/app-service.yaml`** — Added backend Deployment/Service templates, including DB wait init container and secret-backed environment variables.
+- **`helm/transportation-forms/templates/frontend-deployment.yaml`** and **`helm/transportation-forms/templates/frontend-service.yaml`** — Added frontend Deployment/Service templates preserving existing command, probe, and backend URL behavior.
+- **`README.md`** — Added DEV deployment operator runbook (required secrets, trigger behavior, manual dispatch usage, and post-deploy verification commands).
+
+- **Validation Results:** `helm lint helm/transportation-forms` → 1 chart linted, 0 failed.
+
+### Dependencies
+- TASK-103 (existing CI foundation)
+
+### PR Title
+`"ci(cd): add DEV-only OpenShift GitHub Actions pipeline with Helm deployment"`
 
 ### 2.6 Testing - Phase 1
 

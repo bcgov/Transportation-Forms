@@ -1,0 +1,79 @@
+namespace: transportation-forms
+
+image:
+  repository: transportation-forms-app
+  tag: latest
+  pullPolicy: IfNotPresent
+
+app:
+  name: app
+  labels:
+    app: transportation-forms-app
+  replicaCount: 1
+  containerPort: 8000
+  service:
+    name: transportation-forms-app
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+  initContainer:
+    enabled: true
+    image: postgres:16-alpine
+    dbHost: transportation-forms-db
+    dbUser: transportation
+    dbName: transportation_forms
+  command:
+    - sh
+    - /app/entrypoint.sh
+  secretName: transportation-forms-secrets
+  environment: development
+  sqlalchemyEcho: "false"
+  logLevel: INFO
+  corsOrigins: http://localhost:30300,http://localhost:30800,http://127.0.0.1:30300,http://127.0.0.1:30800
+  minioEndpoint: http://transportation-forms-minio:9000
+  minioBucket: form-attachments
+  minioPublicUrl: http://localhost:30900
+  readinessProbe:
+    path: /health
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+  livenessProbe:
+    path: /health
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 5
+
+frontend:
+  name: frontend
+  labels:
+    app: transportation-forms-frontend
+  replicaCount: 1
+  containerPort: 3000
+  service:
+    name: transportation-forms-frontend
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+  command:
+    - python
+    - -m
+    - uvicorn
+    - frontend.app:app
+    - --host
+    - "0.0.0.0"
+    - --port
+    - "3000"
+  backendUrl: http://transportation-forms-app:8000
+  readinessProbe:
+    path: /
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+  livenessProbe:
+    path: /
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5

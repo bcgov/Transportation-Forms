@@ -1,0 +1,12 @@
+namespace: transportation-forms-dev
+
+image:
+  repository: image-registry.openshift-image-registry.svc:5000/transportation-forms-dev/transportation-forms-app
+  tag: dev-latest
+  pullPolicy: IfNotPresent
+
+app:
+  environment: development
+
+frontend:
+  backendUrl: http://transportation-forms-app:8000
