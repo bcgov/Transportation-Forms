@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = (
-        "postgresql://postgres:password@localhost:5432/transportation_forms"
+        "postgresql://transportation:password@localhost:5432/transportation_forms"
     )
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20

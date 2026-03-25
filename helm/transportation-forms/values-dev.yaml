@@ -8,5 +8,11 @@ image:
 app:
   environment: development
 
+# Enable bundled PostgreSQL in DEV namespace.
+# Production uses an external managed database (postgres.enabled: false).
+postgres:
+  enabled: true
+  secretName: transportation-forms-secrets
+
 frontend:
   backendUrl: http://transportation-forms-app:8000

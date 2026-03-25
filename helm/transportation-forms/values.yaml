@@ -45,6 +45,33 @@ app:
     periodSeconds: 30
     timeoutSeconds: 5
 
+# PostgreSQL — enabled only where the chart manages the database instance (e.g. DEV).
+# Set postgres.enabled: false when using an external/managed database.
+postgres:
+  enabled: false
+  image: postgres:16-alpine
+  name: postgres
+  replicaCount: 1
+  containerPort: 5432
+  user: transportation
+  db: transportation_forms
+  initdbArgs: "--encoding=UTF8 --locale=C -c password_encryption=md5"
+  storage: 2Gi
+  passwordSecretKey: postgres-password
+  secretName: transportation-forms-secrets
+  service:
+    name: transportation-forms-db
+    port: 5432
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+
 frontend:
   name: frontend
   labels:
