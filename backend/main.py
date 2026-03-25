@@ -86,6 +86,7 @@ from backend.routes import auth, forms, business_areas, workflow, roles, access_
 from backend.routes.prefixes import public_router as prefixes_public_router
 from backend.routes.prefixes import admin_router as prefixes_admin_router
 from backend.routes.reservations import router as reservations_router
+from backend.routes.stats import router as stats_router
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(forms.router, prefix="/api/v1")
@@ -97,6 +98,7 @@ app.include_router(admin_users.router, prefix="/api/v1")
 app.include_router(prefixes_public_router, prefix="/api/v1")
 app.include_router(prefixes_admin_router, prefix="/api/v1")
 app.include_router(reservations_router, prefix="/api/v1")
+app.include_router(stats_router, prefix="/api/v1")
 
 
 @app.get("/{path:path}")
