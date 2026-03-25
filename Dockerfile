@@ -1,6 +1,6 @@
 # BC Transportation Forms - FastAPI Backend
 # Python 3.12 LTS on slim Alpine base
-FROM python:3.12-slim as base
+FROM python:3.12-slim AS base
 
 # Set working directory
 WORKDIR /app

@@ -31,8 +31,11 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <div class="navbar-nav">
-                    <a class="nav-link" id="manageFormsLink" href="/" onclick="navigateTo(event, '/')">
+                <div class="navbar-nav" id="mainNavLinks">
+                    <a class="nav-link" id="dashboardLink" href="/dashboard" onclick="navigateTo(event, '/dashboard')">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                    <a class="nav-link" id="manageFormsLink" href="/forms" onclick="navigateTo(event, '/forms')">
                         <i class="fas fa-list"></i> Manage Forms
                     </a>
                     <a class="nav-link" id="createFormLink" href="/create" onclick="navigateTo(event, '/create')">
@@ -46,6 +49,15 @@
                     </a>
                     <a class="nav-link" id="approvalsLink" href="/approvals" onclick="navigateTo(event, '/approvals')">
                         <i class="fas fa-check-double"></i> Approvals
+                    </a>
+                    <a class="nav-link" id="rolesLink" href="/roles" onclick="navigateTo(event, '/roles')" style="display:none;">
+                        <i class="fas fa-user-shield"></i> Roles
+                    </a>
+                    <a class="nav-link" id="usersLink" href="/users" onclick="navigateTo(event, '/users')" style="display:none;">
+                        <i class="fas fa-users"></i> Users
+                    </a>
+                    <a class="nav-link" id="accessRequestsLink" href="/access-requests" onclick="navigateTo(event, '/access-requests')" style="display:none;">
+                        <i class="fas fa-user-clock"></i> Access Requests
                     </a>
                 </div>
                 <div class="d-flex align-items-center ms-auto gap-2 mt-2 mt-lg-0">
@@ -63,8 +75,56 @@
     
     <!-- Main Content -->
     <div class="container">
+        <!-- Welcome View (TASK-430) -->
+        <div id="welcomeView" style="display:none;">
+            <div class="text-center py-5">
+                <img src="/static/assets/bc-gov-transportation-logo.png" alt="BC Government Logo" style="height:80px; margin-bottom:1.5rem;">
+                <h2 class="mb-3">Transportation Forms Management</h2>
+                <p class="text-muted mb-4">Manage, publish, and track transportation forms for BC Gov staff.</p>
+                <button class="btn btn-bc-primary btn-lg" type="button" onclick="startLogin()">
+                    <i class="fas fa-sign-in-alt"></i> Sign In
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard View (TASK-430) -->
+        <div id="dashboardView" style="display:none;">
+            <h2 class="mb-4"><i class="fas fa-tachometer-alt"></i> Overview</h2>
+            <div id="dashboardStatsError" class="alert alert-danger" style="display:none;"></div>
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <div class="card h-100 text-center p-4">
+                        <div class="display-4 fw-bold" id="stat-published-forms">—</div>
+                        <div class="text-muted mt-2">Published Forms</div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="card h-100 text-center p-4">
+                        <div class="display-4 fw-bold" id="stat-forms-awaiting-approval">—</div>
+                        <div class="text-muted mt-2">Forms Awaiting Approval</div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="card h-100 text-center p-4">
+                        <div class="display-4 fw-bold" id="stat-reservations-awaiting-approval">—</div>
+                        <div class="text-muted mt-2">Reservation Requests Awaiting Approval</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- List View -->
         <div id="listView">
+            <div id="requestAccessPanel" class="alert alert-info justify-content-between align-items-center" style="display:none;">
+                <div>
+                    <strong>Request Access</strong>
+                    <div id="requestAccessStatusText" class="small mb-0">You do not currently have a portal role assignment.</div>
+                </div>
+                <button id="requestAccessBtn" class="btn btn-sm btn-bc-primary" type="button" onclick="submitAccessRequest()">
+                    <i class="fas fa-paper-plane"></i> Request Access
+                </button>
+            </div>
+
             <div class="row g-3 mb-3">
                 <div class="col-md-6">
                     <label for="searchInput" class="form-label">Search</label>
@@ -411,7 +471,7 @@
                         <button type="button" class="btn btn-bc-primary btn-lg px-4" id="submitReservationBtn" onclick="submitReservation()">
                             <i class="fas fa-paper-plane"></i> Submit Request
                         </button>
-                        <button type="button" class="btn btn-outline-secondary btn-lg px-4" onclick="navigateTo(null, '/')">
+                        <button type="button" class="btn btn-outline-secondary btn-lg px-4" onclick="navigateTo(null, '/forms')">
                             <i class="fas fa-arrow-left"></i> Back to List
                         </button>
                     </div>
@@ -455,7 +515,7 @@
                         <button class="btn btn-bc-primary px-4" onclick="resetAndNewReservation()">
                             <i class="fas fa-plus"></i> Reserve Another Number
                         </button>
-                        <button class="btn btn-outline-secondary px-4" onclick="navigateTo(null, '/')">
+                        <button class="btn btn-outline-secondary px-4" onclick="navigateTo(null, '/forms')">
                             <i class="fas fa-arrow-left"></i> Back to List
                         </button>
                     </div>
@@ -539,6 +599,122 @@
                         <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Roles View (TASK-425) -->
+        <div id="rolesView" style="display:none;">
+            <div class="form-container" style="max-width: 1100px;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="mb-0"><i class="fas fa-user-shield"></i> Roles</h2>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadRolesPage()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-8">
+                        <input id="rolesSearchInput" class="form-control" type="text" placeholder="Search roles..." onkeydown="if(event.key === 'Enter') loadRolesPage();">
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <button class="btn btn-bc-primary" type="button" onclick="toggleCreateRoleForm()">
+                            <i class="fas fa-plus"></i> New Role
+                        </button>
+                    </div>
+                </div>
+
+                <div id="createRoleForm" class="card mb-3" style="display:none;">
+                    <div class="card-body">
+                        <h5 class="card-title">Create Role</h5>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <input id="newRoleName" class="form-control" type="text" placeholder="Role name">
+                            </div>
+                            <div class="col-md-4">
+                                <input id="newRoleDescription" class="form-control" type="text" placeholder="Description (optional)">
+                            </div>
+                            <div class="col-md-4">
+                                <input id="newRolePermissions" class="form-control" type="text" placeholder="Permissions (comma-separated)">
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-bc-primary" type="button" onclick="createRole()">Create</button>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" onclick="toggleCreateRoleForm(false)">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="rolesList"></div>
+            </div>
+        </div>
+
+        <!-- Role Detail View (TASK-425) -->
+        <div id="roleDetailView" style="display:none;">
+            <div class="form-container" style="max-width: 1100px;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="mb-0"><i class="fas fa-id-badge"></i> Role Detail</h2>
+                    <button class="btn btn-outline-secondary" type="button" onclick="navigateTo(null, '/roles')">
+                        <i class="fas fa-arrow-left"></i> Back to Roles
+                    </button>
+                </div>
+                <div id="roleDetailContent"></div>
+            </div>
+        </div>
+
+        <!-- Users View (TASK-425) -->
+        <div id="usersView" style="display:none;">
+            <div class="form-container" style="max-width: 1100px;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="mb-0"><i class="fas fa-users"></i> Users</h2>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadUsersPage()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-8">
+                        <input id="usersSearchInput" class="form-control" type="text" placeholder="Search by first name, last name, or email..." onkeydown="if(event.key === 'Enter') loadUsersPage();">
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <button class="btn btn-bc-primary" type="button" onclick="loadUsersPage()"><i class="fas fa-search"></i> Search</button>
+                    </div>
+                </div>
+                <div id="usersList"></div>
+            </div>
+        </div>
+
+        <!-- User Detail View (TASK-425) -->
+        <div id="userDetailView" style="display:none;">
+            <div class="form-container" style="max-width: 1100px;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="mb-0"><i class="fas fa-user"></i> User Detail</h2>
+                    <button class="btn btn-outline-secondary" type="button" onclick="navigateTo(null, '/users')">
+                        <i class="fas fa-arrow-left"></i> Back to Users
+                    </button>
+                </div>
+                <div id="userDetailContent"></div>
+            </div>
+        </div>
+
+        <!-- Admin Access Requests View (TASK-425) -->
+        <div id="accessRequestsView" style="display:none;">
+            <div class="form-container" style="max-width: 1100px;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="mb-0"><i class="fas fa-user-clock"></i> Access Requests</h2>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadAdminAccessRequests()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <select id="accessRequestStatusFilter" class="form-select" onchange="loadAdminAccessRequests()">
+                            <option value="">All statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="accessRequestsList"></div>
             </div>
         </div>
     </div>
@@ -696,6 +872,14 @@
         let currentRoute = null;
         let routeParams = {};
 
+        // TASK-425: Admin page state
+        let rolesPageSkip = 0;
+        let usersPageSkip = 0;
+        const adminPageLimit = 20;
+        let allRolesCache = [];
+        let currentRoleDetail = null;
+        let currentUserDetail = null;
+
         // TASK-419: Business area combobox options cache
         let businessAreaOptions = [];
         let selectedBusinessAreaFilters = [];
@@ -743,6 +927,16 @@
             }
 
             if (!isAuthenticated() && path !== '/callback') {
+                currentRoute = 'welcome';
+                routeParams = {};
+                showWelcomeView();
+                updateNavbar();
+                return;
+            }
+
+            if (isAuthenticated() && isAdminRoute(path) && !isAdminUser()) {
+                showAlert('You do not have permission to access that page.', 'warning');
+                window.history.replaceState({}, '', '/');
                 currentRoute = 'list';
                 routeParams = {};
                 showListView();
@@ -752,6 +946,25 @@
             
             // Parse route
             if (path === '/' || path === '') {
+                if (hasPortalRoles()) {
+                    window.history.replaceState({}, '', '/dashboard');
+                    routeHandler();
+                    return;
+                } else {
+                    currentRoute = 'list';
+                    routeParams = {};
+                    showListView();
+                }
+            } else if (path === '/dashboard') {
+                if (!hasPortalRoles()) {
+                    window.history.replaceState({}, '', '/');
+                    routeHandler();
+                    return;
+                }
+                currentRoute = 'dashboard';
+                routeParams = {};
+                showDashboardView();
+            } else if (path === '/forms') {
                 currentRoute = 'list';
                 routeParams = {};
                 showListView();
@@ -775,14 +988,40 @@
                 currentRoute = 'approvals';
                 routeParams = {};
                 showApprovalsView();
+            } else if (path === '/roles') {
+                currentRoute = 'roles';
+                routeParams = {};
+                showRolesView();
+            } else if (path.startsWith('/roles/')) {
+                const roleId = path.replace('/roles/', '');
+                currentRoute = 'role-detail';
+                routeParams = { roleId };
+                showRoleDetailView(roleId);
+            } else if (path === '/users') {
+                currentRoute = 'users';
+                routeParams = {};
+                showUsersView();
+            } else if (path.startsWith('/users/')) {
+                const userId = path.replace('/users/', '');
+                currentRoute = 'user-detail';
+                routeParams = { userId };
+                showUserDetailView(userId);
+            } else if (path === '/access-requests' || path.startsWith('/access-requests/')) {
+                currentRoute = 'access-requests';
+                routeParams = {};
+                showAccessRequestsView();
             } else if (path.startsWith('/edit/')) {
                 const formId = path.replace('/edit/', '');
                 currentRoute = 'edit';
                 routeParams = { formId };
                 showEditView(formId);
             } else {
-                // Default to list view
-                window.history.replaceState({}, '', '/');
+                // Default route by auth/role state
+                if (hasPortalRoles()) {
+                    window.history.replaceState({}, '', '/dashboard');
+                } else {
+                    window.history.replaceState({}, '', '/');
+                }
                 routeHandler();
             }
             
@@ -809,7 +1048,9 @@
                 link.classList.remove('active');
             });
             
-            if (currentRoute === 'list') {
+            if (currentRoute === 'dashboard') {
+                document.getElementById('dashboardLink').classList.add('active');
+            } else if (currentRoute === 'list') {
                 document.getElementById('manageFormsLink').classList.add('active');
             } else if (currentRoute === 'create' || currentRoute === 'edit') {
                 document.getElementById('createFormLink').classList.add('active');
@@ -819,6 +1060,12 @@
                 document.getElementById('myReservationsLink').classList.add('active');
             } else if (currentRoute === 'approvals') {
                 document.getElementById('approvalsLink').classList.add('active');
+            } else if (currentRoute === 'roles' || currentRoute === 'role-detail') {
+                document.getElementById('rolesLink').classList.add('active');
+            } else if (currentRoute === 'users' || currentRoute === 'user-detail') {
+                document.getElementById('usersLink').classList.add('active');
+            } else if (currentRoute === 'access-requests') {
+                document.getElementById('accessRequestsLink').classList.add('active');
             }
         }
 
@@ -832,6 +1079,25 @@
 
         function isAuthenticated() {
             return Boolean(getAuthToken());
+        }
+
+        function isAdminUser() {
+            const roles = Array.isArray(currentUser?.roles) ? currentUser.roles : [];
+            return roles.some(role => String(role || '').toLowerCase() === 'admin');
+        }
+
+        function isAdminRoute(path) {
+            return path === '/roles' ||
+                path.startsWith('/roles/') ||
+                path === '/users' ||
+                path.startsWith('/users/') ||
+                path === '/access-requests' ||
+                path.startsWith('/access-requests/');
+        }
+
+        function hasPortalRoles() {
+            const roles = Array.isArray(currentUser?.roles) ? currentUser.roles : [];
+            return roles.length > 0;
         }
 
         function saveAuthSession(accessToken, refreshToken, user) {
@@ -854,12 +1120,18 @@
             const signInBtn = document.getElementById('signInBtn');
             const signOutBtn = document.getElementById('signOutBtn');
             const authUserDisplay = document.getElementById('authUserDisplay');
+            const adminNavLinks = [
+                document.getElementById('rolesLink'),
+                document.getElementById('usersLink'),
+                document.getElementById('accessRequestsLink')
+            ];
             const navLinks = [
                 document.getElementById('manageFormsLink'),
                 document.getElementById('createFormLink'),
                 document.getElementById('reserveNumberLink'),
                 document.getElementById('myReservationsLink'),
-                document.getElementById('approvalsLink')
+                document.getElementById('approvalsLink'),
+                ...adminNavLinks
             ];
 
             if (isAuthenticated()) {
@@ -868,12 +1140,21 @@
                 const displayName = currentUser?.name || currentUser?.email || 'Signed in';
                 authUserDisplay.textContent = displayName;
                 authUserDisplay.style.display = 'inline';
-                navLinks.forEach(link => link.classList.remove('disabled'));
+                if (hasPortalRoles()) {
+                    document.getElementById('mainNavLinks').style.display = '';
+                    const showAdminLinks = isAdminUser();
+                    adminNavLinks.forEach(link => {
+                        link.style.display = showAdminLinks ? '' : 'none';
+                    });
+                    navLinks.forEach(link => link.classList.remove('disabled'));
+                } else {
+                    document.getElementById('mainNavLinks').style.display = 'none';
+                }
             } else {
                 signInBtn.style.display = 'inline-block';
                 signOutBtn.style.display = 'none';
                 authUserDisplay.style.display = 'none';
-                navLinks.forEach(link => link.classList.add('disabled'));
+                document.getElementById('mainNavLinks').style.display = 'none';
             }
         }
 
@@ -967,7 +1248,8 @@
                 const payload = await response.json();
                 saveAuthSession(payload.access_token, payload.refresh_token, payload.user);
                 showAlert('Signed in successfully.', 'success');
-                window.history.replaceState({}, '', '/');
+                const dest = hasPortalRoles() ? '/dashboard' : '/';
+                window.history.replaceState({}, '', dest);
                 routeHandler();
             } catch (error) {
                 console.error('Auth callback failed:', error);
@@ -1683,7 +1965,7 @@
             } catch (error) {
                 showAlert('Error loading form: ' + error.message, 'danger');
                 // Go back to list if form not found
-                setTimeout(() => navigateTo(null, '/'), 2000);
+                setTimeout(() => navigateTo(null, '/forms'), 2000);
             }
         }
         
@@ -1703,7 +1985,7 @@
                 
                 showAlert('Form deleted successfully', 'success');
                 // Navigate back to list after deletion
-                setTimeout(() => navigateTo(null, '/'), 1000);
+                setTimeout(() => navigateTo(null, '/forms'), 1000);
             } catch (error) {
                 showAlert('Error deleting form: ' + error.message, 'danger');
             }
@@ -1935,7 +2217,7 @@
                 formNumberReservationId = null;
                 
                 // Navigate back to list view after successful save
-                setTimeout(() => navigateTo(null, '/'), 1500);
+                setTimeout(() => navigateTo(null, '/forms'), 1500);
             } catch (error) {
                 // Only show alert if no inline errors were shown
                 const hasInlineErrors = document.getElementById('formErrors').style.display !== 'none' ||
@@ -1977,18 +2259,56 @@
         
         // View toggles
         function hideAllViews() {
+            document.getElementById('welcomeView').style.display = 'none';
+            document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('listView').style.display = 'none';
             document.getElementById('createView').style.display = 'none';
             document.getElementById('reserveView').style.display = 'none';
             document.getElementById('myReservationsView').style.display = 'none';
             document.getElementById('approvalsView').style.display = 'none';
             document.getElementById('reservationDetailView').style.display = 'none';
+            document.getElementById('rolesView').style.display = 'none';
+            document.getElementById('roleDetailView').style.display = 'none';
+            document.getElementById('usersView').style.display = 'none';
+            document.getElementById('userDetailView').style.display = 'none';
+            document.getElementById('accessRequestsView').style.display = 'none';
+        }
+
+        function showWelcomeView() {
+            hideAllViews();
+            document.getElementById('welcomeView').style.display = 'block';
+            document.getElementById('pageTitle').textContent = 'Transportation Forms Management - BC Gov';
+        }
+
+        async function showDashboardView() {
+            hideAllViews();
+            document.getElementById('dashboardView').style.display = 'block';
+            document.getElementById('pageTitle').textContent = 'Dashboard - BC Gov';
+            // Reset to placeholder while loading
+            document.getElementById('stat-published-forms').textContent = '—';
+            document.getElementById('stat-forms-awaiting-approval').textContent = '—';
+            document.getElementById('stat-reservations-awaiting-approval').textContent = '—';
+            document.getElementById('dashboardStatsError').style.display = 'none';
+            try {
+                const response = await fetch(`${API_BASE}/stats/dashboard`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!response.ok) throw new Error('Failed to load dashboard stats');
+                const data = await response.json();
+                document.getElementById('stat-published-forms').textContent = data.published_forms;
+                document.getElementById('stat-forms-awaiting-approval').textContent = data.forms_awaiting_approval;
+                document.getElementById('stat-reservations-awaiting-approval').textContent = data.reservations_awaiting_approval;
+            } catch (err) {
+                document.getElementById('dashboardStatsError').textContent = 'Failed to load dashboard statistics. Please try again.';
+                document.getElementById('dashboardStatsError').style.display = 'block';
+            }
         }
 
         function showListView() {
             hideAllViews();
             document.getElementById('listView').style.display = 'block';
             document.getElementById('pageTitle').textContent = 'Manage Forms - BC Gov';
+            loadRequestAccessState();
             loadBusinessAreas();
             loadForms();
         }
@@ -2027,6 +2347,616 @@
             hideAllViews();
             document.getElementById('createView').style.display = 'block';
             editForm(formId);
+        }
+
+        function showRolesView() {
+            hideAllViews();
+            document.getElementById('rolesView').style.display = 'block';
+            document.getElementById('pageTitle').textContent = 'Roles - BC Gov';
+            loadRolesPage();
+        }
+
+        function showRoleDetailView(roleId) {
+            hideAllViews();
+            document.getElementById('roleDetailView').style.display = 'block';
+            document.getElementById('pageTitle').textContent = 'Role Detail - BC Gov';
+            loadRoleDetail(roleId);
+        }
+
+        function showUsersView() {
+            hideAllViews();
+            document.getElementById('usersView').style.display = 'block';
+            document.getElementById('pageTitle').textContent = 'Users - BC Gov';
+            loadUsersPage();
+        }
+
+        function showUserDetailView(userId) {
+            hideAllViews();
+            document.getElementById('userDetailView').style.display = 'block';
+            document.getElementById('pageTitle').textContent = 'User Detail - BC Gov';
+            loadUserDetail(userId);
+        }
+
+        function showAccessRequestsView() {
+            hideAllViews();
+            document.getElementById('accessRequestsView').style.display = 'block';
+            document.getElementById('pageTitle').textContent = 'Access Requests - BC Gov';
+            loadAdminAccessRequests();
+        }
+
+        // =====================================================================
+        // Admin & Access Request Views (TASK-425)
+        // =====================================================================
+
+        function formatDateTime(value) {
+            if (!value) return '-';
+            const dt = new Date(value);
+            return Number.isNaN(dt.getTime()) ? '-' : dt.toLocaleString();
+        }
+
+        async function getErrorDetail(response, fallbackMessage) {
+            try {
+                const payload = await response.json();
+                if (typeof payload?.detail === 'string') {
+                    return payload.detail;
+                }
+            } catch (_error) {
+            }
+            return fallbackMessage;
+        }
+
+        function parsePermissions(value) {
+            return value
+                .split(',')
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+        }
+
+        async function loadRequestAccessState() {
+            const panel = document.getElementById('requestAccessPanel');
+            const statusText = document.getElementById('requestAccessStatusText');
+            const requestBtn = document.getElementById('requestAccessBtn');
+
+            if (!isAuthenticated() || hasPortalRoles()) {
+                panel.style.display = 'none';
+                return;
+            }
+
+            panel.style.display = 'flex';
+            requestBtn.disabled = false;
+            statusText.textContent = 'You do not currently have a portal role assignment.';
+
+            try {
+                const response = await fetch(`${API_BASE}/access-requests/me`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+
+                if (response.status === 404) {
+                    statusText.textContent = 'You do not currently have a portal role assignment.';
+                    requestBtn.style.display = 'inline-block';
+                    return;
+                }
+
+                if (!response.ok) {
+                    statusText.textContent = 'Unable to load access request status.';
+                    requestBtn.style.display = 'inline-block';
+                    return;
+                }
+
+                const request = await response.json();
+                requestBtn.style.display = (request.status === 'pending' || request.status === 'approved') ? 'none' : 'inline-block';
+                if (request.status === 'pending') {
+                    statusText.textContent = `Access request is pending review (submitted ${formatDateTime(request.created_at)}).`;
+                } else if (request.status === 'approved') {
+                    statusText.textContent = `Access request approved ${formatDateTime(request.processed_at)}.`;
+                } else if (request.status === 'rejected') {
+                    statusText.textContent = `Access request rejected ${formatDateTime(request.processed_at)}.`;
+                } else {
+                    statusText.textContent = `Latest request status: ${request.status}`;
+                }
+            } catch (_error) {
+                statusText.textContent = 'Unable to load access request status.';
+            }
+        }
+
+        async function submitAccessRequest() {
+            const requestBtn = document.getElementById('requestAccessBtn');
+            requestBtn.disabled = true;
+            try {
+                const response = await fetch(`${API_BASE}/access-requests`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+
+                if (!response.ok) {
+                    const detail = await getErrorDetail(response, 'Failed to submit access request.');
+                    throw new Error(detail);
+                }
+
+                showAlert('Access request submitted.', 'success');
+                await loadRequestAccessState();
+            } catch (error) {
+                showAlert(escapeHtml(error.message), 'danger');
+            } finally {
+                requestBtn.disabled = false;
+            }
+        }
+
+        function toggleCreateRoleForm(show) {
+            const form = document.getElementById('createRoleForm');
+            const shouldShow = typeof show === 'boolean' ? show : form.style.display === 'none';
+            form.style.display = shouldShow ? 'block' : 'none';
+            if (!shouldShow) {
+                document.getElementById('newRoleName').value = '';
+                document.getElementById('newRoleDescription').value = '';
+                document.getElementById('newRolePermissions').value = '';
+            }
+        }
+
+        async function loadRolesPage() {
+            const list = document.getElementById('rolesList');
+            const search = (document.getElementById('rolesSearchInput').value || '').trim();
+            list.innerHTML = '<div class="spinner-container"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+            try {
+                const query = new URLSearchParams({
+                    skip: String(rolesPageSkip),
+                    limit: String(adminPageLimit)
+                });
+                if (search) query.set('q', search);
+
+                const response = await fetch(`${API_BASE}/admin/roles?${query.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!response.ok) {
+                    throw new Error(await getErrorDetail(response, 'Failed to load roles.'));
+                }
+                const payload = await response.json();
+                const items = payload.items || [];
+
+                if (!items.length) {
+                    list.innerHTML = '<div class="alert alert-light border">No roles found.</div>';
+                    return;
+                }
+
+                list.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Description</th>
+                                    <th>Users</th>
+                                    <th>Permissions</th>
+                                    <th>Type</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${items.map(role => `
+                                    <tr>
+                                        <td><strong>${escapeHtml(role.name)}</strong></td>
+                                        <td>${escapeHtml(role.description || '-')}</td>
+                                        <td>${role.user_count || 0}</td>
+                                        <td>${(role.permissions || []).map(p => `<span class="badge bg-light text-dark me-1">${escapeHtml(p)}</span>`).join('')}</td>
+                                        <td>${role.is_system ? '<span class="badge bg-secondary">System</span>' : '<span class="badge bg-primary">Custom</span>'}</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="navigateTo(null, '/roles/${role.id}')">View</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (error) {
+                list.innerHTML = `<div class="alert alert-danger">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function createRole() {
+            const name = document.getElementById('newRoleName').value.trim();
+            const description = document.getElementById('newRoleDescription').value.trim();
+            const permissions = parsePermissions(document.getElementById('newRolePermissions').value);
+
+            if (!name) {
+                showAlert('Role name is required.', 'warning');
+                return;
+            }
+            if (!permissions.length) {
+                showAlert('At least one permission is required.', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/roles`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, description: description || null, permissions })
+                });
+                if (!response.ok) {
+                    throw new Error(await getErrorDetail(response, 'Failed to create role.'));
+                }
+                showAlert('Role created successfully.', 'success');
+                toggleCreateRoleForm(false);
+                loadRolesPage();
+            } catch (error) {
+                showAlert(escapeHtml(error.message), 'danger');
+            }
+        }
+
+        async function loadRoleDetail(roleId) {
+            const container = document.getElementById('roleDetailContent');
+            container.innerHTML = '<div class="spinner-container"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/roles/${roleId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!response.ok) {
+                    throw new Error(await getErrorDetail(response, 'Failed to load role detail.'));
+                }
+                const role = await response.json();
+                currentRoleDetail = role;
+
+                container.innerHTML = `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <label class="form-label">Role Name</label>
+                                    <input id="editRoleName" class="form-control" value="${escapeHtml(role.name)}" ${role.is_system ? 'disabled' : ''}>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">Description</label>
+                                    <input id="editRoleDescription" class="form-control" value="${escapeHtml(role.description || '')}">
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <label class="form-label">Permissions (comma-separated)</label>
+                                <textarea id="editRolePermissions" class="form-control" rows="3">${escapeHtml((role.permissions || []).join(', '))}</textarea>
+                            </div>
+                            <div class="mt-3 d-flex gap-2">
+                                <button class="btn btn-bc-primary" type="button" onclick="saveRoleDetail()">Save</button>
+                                ${role.is_system ? '' : `<button class="btn btn-outline-danger" type="button" onclick="deleteRole('${role.id}')">Delete Role</button>`}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Assigned Users</h5>
+                            ${role.users?.length ? `
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead>
+                                            <tr><th>Name</th><th>Email</th><th>Assigned At</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            ${role.users.map(user => `
+                                                <tr>
+                                                    <td>${escapeHtml(`${user.first_name || ''} ${user.last_name || ''}`.trim() || '-')}</td>
+                                                    <td>${escapeHtml(user.email || '-')}</td>
+                                                    <td>${formatDateTime(user.assigned_at)}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ` : '<p class="text-muted mb-0">No users are currently assigned to this role.</p>'}
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-danger">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function saveRoleDetail() {
+            if (!currentRoleDetail?.id) return;
+
+            const name = document.getElementById('editRoleName').value.trim() || currentRoleDetail.name;
+            const description = document.getElementById('editRoleDescription').value.trim();
+            const permissions = parsePermissions(document.getElementById('editRolePermissions').value);
+
+            if (!permissions.length) {
+                showAlert('At least one permission is required.', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/roles/${currentRoleDetail.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, description: description || null, permissions })
+                });
+
+                if (!response.ok) {
+                    throw new Error(await getErrorDetail(response, 'Failed to update role.'));
+                }
+                showAlert('Role updated successfully.', 'success');
+                loadRoleDetail(currentRoleDetail.id);
+            } catch (error) {
+                showAlert(escapeHtml(error.message), 'danger');
+            }
+        }
+
+        async function deleteRole(roleId) {
+            if (!confirm('Delete this role?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/roles/${roleId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!response.ok) {
+                    throw new Error(await getErrorDetail(response, 'Failed to delete role.'));
+                }
+                showAlert('Role deleted.', 'success');
+                navigateTo(null, '/roles');
+            } catch (error) {
+                showAlert(escapeHtml(error.message), 'danger');
+            }
+        }
+
+        async function loadUsersPage() {
+            const container = document.getElementById('usersList');
+            const search = (document.getElementById('usersSearchInput').value || '').trim();
+            container.innerHTML = '<div class="spinner-container"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+            try {
+                const query = new URLSearchParams({
+                    skip: String(usersPageSkip),
+                    limit: String(adminPageLimit)
+                });
+                if (search) query.set('q', search);
+
+                const response = await fetch(`${API_BASE}/admin/users?${query.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!response.ok) {
+                    throw new Error(await getErrorDetail(response, 'Failed to load users.'));
+                }
+
+                const payload = await response.json();
+                const users = payload.items || [];
+
+                if (!users.length) {
+                    container.innerHTML = '<div class="alert alert-light border">No users found.</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>First Sign-In</th>
+                                    <th>Roles</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${users.map(user => `
+                                    <tr>
+                                        <td>${escapeHtml(`${user.first_name || ''} ${user.last_name || ''}`.trim() || '-')}</td>
+                                        <td>${escapeHtml(user.email)}</td>
+                                        <td>${formatDateTime(user.first_sign_in_at)}</td>
+                                        <td>${(user.roles || []).map(role => `<span class="badge bg-light text-dark me-1">${escapeHtml(role.name)}</span>`).join('') || '<span class="text-muted">None</span>'}</td>
+                                        <td class="text-end"><button class="btn btn-sm btn-outline-primary" onclick="navigateTo(null, '/users/${user.id}')">View</button></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-danger">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function loadUserDetail(userId) {
+            const container = document.getElementById('userDetailContent');
+            container.innerHTML = '<div class="spinner-container"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+            try {
+                const [userResponse, rolesResponse] = await Promise.all([
+                    fetch(`${API_BASE}/admin/users/${userId}`, {
+                        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    }),
+                    fetch(`${API_BASE}/admin/roles?skip=0&limit=100`, {
+                        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    })
+                ]);
+
+                if (!userResponse.ok) {
+                    throw new Error(await getErrorDetail(userResponse, 'Failed to load user detail.'));
+                }
+                if (!rolesResponse.ok) {
+                    throw new Error(await getErrorDetail(rolesResponse, 'Failed to load roles.'));
+                }
+
+                const user = await userResponse.json();
+                const rolesPayload = await rolesResponse.json();
+                allRolesCache = rolesPayload.items || [];
+                currentUserDetail = user;
+
+                const assignedRoleIds = new Set((user.roles || []).map(role => role.id));
+
+                container.innerHTML = `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <dl class="row mb-0">
+                                        <dt class="col-sm-5">First Name</dt><dd class="col-sm-7">${escapeHtml(user.first_name || '-')}</dd>
+                                        <dt class="col-sm-5">Last Name</dt><dd class="col-sm-7">${escapeHtml(user.last_name || '-')}</dd>
+                                        <dt class="col-sm-5">Email</dt><dd class="col-sm-7">${escapeHtml(user.email)}</dd>
+                                        <dt class="col-sm-5">First Sign-In</dt><dd class="col-sm-7">${formatDateTime(user.first_sign_in_at)}</dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Assigned Roles</h5>
+                            <div class="row row-cols-1 row-cols-md-2 g-2">
+                                ${allRolesCache.map(role => `
+                                    <div class="col">
+                                        <label class="form-check">
+                                            <input class="form-check-input user-role-checkbox" type="checkbox" value="${role.id}" ${assignedRoleIds.has(role.id) ? 'checked' : ''}>
+                                            <span class="form-check-label">
+                                                <strong>${escapeHtml(role.name)}</strong>
+                                                ${role.description ? `<small class="text-muted d-block">${escapeHtml(role.description)}</small>` : ''}
+                                            </span>
+                                        </label>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="mt-3">
+                                <button class="btn btn-bc-primary" type="button" onclick="saveUserRoles()">Save Role Assignments</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-danger">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function saveUserRoles() {
+            if (!currentUserDetail?.id) return;
+            const selectedRoleIds = Array.from(document.querySelectorAll('.user-role-checkbox:checked')).map(el => el.value);
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/users/${currentUserDetail.id}/roles`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ role_ids: selectedRoleIds })
+                });
+                if (!response.ok) {
+                    throw new Error(await getErrorDetail(response, 'Failed to update user roles.'));
+                }
+                showAlert('User role assignments updated.', 'success');
+                loadUserDetail(currentUserDetail.id);
+            } catch (error) {
+                showAlert(escapeHtml(error.message), 'danger');
+            }
+        }
+
+        async function loadAdminAccessRequests() {
+            const container = document.getElementById('accessRequestsList');
+            const status = document.getElementById('accessRequestStatusFilter').value;
+            container.innerHTML = '<div class="spinner-container"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+            try {
+                const query = new URLSearchParams({ skip: '0', limit: '100' });
+                if (status) query.set('status', status);
+
+                const response = await fetch(`${API_BASE}/admin/access-requests?${query.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!response.ok) {
+                    throw new Error(await getErrorDetail(response, 'Failed to load access requests.'));
+                }
+
+                const payload = await response.json();
+                const items = payload.items || [];
+                if (!items.length) {
+                    container.innerHTML = '<div class="alert alert-light border">No access requests found.</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Status</th>
+                                    <th>Submitted</th>
+                                    <th>Processed</th>
+                                    <th>Notes</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${items.map(item => `
+                                    <tr>
+                                        <td>${escapeHtml(item.user_email || item.user_id)}</td>
+                                        <td><span class="badge ${item.status === 'pending' ? 'bg-warning text-dark' : item.status === 'approved' ? 'bg-success' : 'bg-danger'}">${escapeHtml(item.status)}</span></td>
+                                        <td>${formatDateTime(item.created_at)}</td>
+                                        <td>${formatDateTime(item.processed_at)}</td>
+                                        <td>${escapeHtml(item.review_notes || '-')}</td>
+                                        <td class="text-end">
+                                            ${item.status === 'pending' ? `
+                                                <button class="btn btn-sm btn-success" onclick="approveAccessRequest('${item.id}')">Approve</button>
+                                                <button class="btn btn-sm btn-outline-danger ms-1" onclick="rejectAccessRequest('${item.id}')">Reject</button>
+                                            ` : '<span class="text-muted">-</span>'}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-danger">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function approveAccessRequest(requestId) {
+            const reviewNotes = window.prompt('Optional review notes:', '') || null;
+            try {
+                const response = await fetch(`${API_BASE}/admin/access-requests/${requestId}/approve`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ review_notes: reviewNotes })
+                });
+                if (!response.ok) {
+                    throw new Error(await getErrorDetail(response, 'Failed to approve request.'));
+                }
+                showAlert('Access request approved.', 'success');
+                loadAdminAccessRequests();
+            } catch (error) {
+                showAlert(escapeHtml(error.message), 'danger');
+            }
+        }
+
+        async function rejectAccessRequest(requestId) {
+            const reviewNotes = window.prompt('Optional rejection notes:', '') || null;
+            try {
+                const response = await fetch(`${API_BASE}/admin/access-requests/${requestId}/reject`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ review_notes: reviewNotes })
+                });
+                if (!response.ok) {
+                    throw new Error(await getErrorDetail(response, 'Failed to reject request.'));
+                }
+                showAlert('Access request rejected.', 'success');
+                loadAdminAccessRequests();
+            } catch (error) {
+                showAlert(escapeHtml(error.message), 'danger');
+            }
         }
 
         // =====================================================================
@@ -3122,7 +4052,7 @@
         
         function resetForm() {
             // When reset button is clicked, go back to list
-            navigateTo(null, '/');
+            navigateTo(null, '/forms');
         }
         
         // Utility functions
