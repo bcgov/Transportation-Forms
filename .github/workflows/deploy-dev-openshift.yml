@@ -1,0 +1,192 @@
+name: Deploy DEV OpenShift
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Optional image tag override (defaults to shortsha-timestamp)
+        required: false
+        type: string
+
+env:
+  IMAGE_NAME: transportation-forms-app
+  RELEASE_NAME: transportation-forms-dev
+  CHART_PATH: helm/transportation-forms
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deploy-dev:
+    name: Build and Deploy to DEV OpenShift
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: dev
+    env:
+      OPENSHIFT_SERVER: ${{ secrets.OPENSHIFT_SERVER }}
+      OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+      OPENSHIFT_DEV_NAMESPACE: ${{ secrets.OPENSHIFT_DEV_NAMESPACE }}
+
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${OPENSHIFT_SERVER}" || (echo "Missing secret: OPENSHIFT_SERVER" && exit 1)
+          test -n "${OPENSHIFT_TOKEN}" || (echo "Missing secret: OPENSHIFT_TOKEN" && exit 1)
+          test -n "${OPENSHIFT_DEV_NAMESPACE}" || (echo "Missing secret: OPENSHIFT_DEV_NAMESPACE" && exit 1)
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Optional CI gate (wait for CI workflow success on this commit)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const sha = context.sha;
+            const workflowName = 'CI/CD Pipeline';
+            const maxAttempts = 40;
+            const sleepMs = 30000;
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              const runs = await github.rest.actions.listWorkflowRunsForRepo({
+                owner,
+                repo,
+                head_sha: sha,
+                per_page: 50,
+              });
+
+              const ciRun = runs.data.workflow_runs.find((r) => r.name === workflowName);
+              if (ciRun && ciRun.status === 'completed') {
+                if (ciRun.conclusion === 'success') {
+                  core.info(`CI gate passed for run ${ciRun.id}`);
+                  return;
+                }
+                core.setFailed(`CI gate failed: run ${ciRun.id} concluded with '${ciRun.conclusion}'`);
+                return;
+              }
+
+              core.info(`CI run for ${sha} not completed yet (attempt ${attempt}/${maxAttempts}); waiting ${sleepMs / 1000}s...`);
+              await new Promise((resolve) => setTimeout(resolve, sleepMs));
+            }
+
+            core.setFailed('CI gate timeout: did not find a completed successful CI/CD Pipeline run for this commit.');
+
+      - name: Compute deployment image tag
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+          TS="$(date -u +%Y%m%d%H%M%S)"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.image_tag }}" ]; then
+            IMAGE_TAG="${{ inputs.image_tag }}"
+          else
+            IMAGE_TAG="${SHORT_SHA}-${TS}"
+          fi
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Install OpenShift CLI
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: latest
+
+      - name: Login to OpenShift cluster
+        uses: redhat-actions/oc-login@v1
+        with:
+          openshift_server_url: ${{ env.OPENSHIFT_SERVER }}
+          openshift_token: ${{ env.OPENSHIFT_TOKEN }}
+          insecure_skip_tls_verify: false
+
+      - name: Select DEV namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          oc project "${OPENSHIFT_DEV_NAMESPACE}"
+
+      - name: Resolve OpenShift internal registry route
+        id: registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          REGISTRY_HOST="$(oc get route default-route -n openshift-image-registry -o jsonpath='{.spec.host}' 2>/dev/null || true)"
+          if [ -z "${REGISTRY_HOST}" ]; then
+            echo "Unable to resolve internal registry route 'default-route' in namespace openshift-image-registry."
+            echo "Enable the default registry route or update this step for your cluster-specific registry hostname."
+            exit 1
+          fi
+          echo "registry_host=${REGISTRY_HOST}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker login to OpenShift internal registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "${OPENSHIFT_TOKEN}" | docker login "${{ steps.registry.outputs.registry_host }}" -u "$(oc whoami)" --password-stdin
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image to internal registry (DEV project)
+        id: build_push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.registry.outputs.registry_host }}/${{ env.OPENSHIFT_DEV_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.image_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Helm upgrade/install to DEV namespace
+        shell: bash
+        env:
+          IMAGE_REPOSITORY: ${{ steps.registry.outputs.registry_host }}/${{ env.OPENSHIFT_DEV_NAMESPACE }}/${{ env.IMAGE_NAME }}
+          IMAGE_TAG: ${{ steps.vars.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          helm upgrade --install "${RELEASE_NAME}" "${CHART_PATH}" \
+            --namespace "${OPENSHIFT_DEV_NAMESPACE}" \
+            --create-namespace \
+            -f "${CHART_PATH}/values.yaml" \
+            -f "${CHART_PATH}/values-dev.yaml" \
+            --set namespace="${OPENSHIFT_DEV_NAMESPACE}" \
+            --set image.repository="${IMAGE_REPOSITORY}" \
+            --set image.tag="${IMAGE_TAG}"
+
+      - name: Wait for app and frontend rollout
+        shell: bash
+        run: |
+          set -euo pipefail
+          oc rollout status deployment/app -n "${OPENSHIFT_DEV_NAMESPACE}" --timeout=300s
+          oc rollout status deployment/frontend -n "${OPENSHIFT_DEV_NAMESPACE}" --timeout=300s
+
+      - name: Deployment summary
+        if: success()
+        shell: bash
+        run: |
+          echo "## DEV Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Namespace: ${OPENSHIFT_DEV_NAMESPACE}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: ${{ steps.registry.outputs.registry_host }}/${OPENSHIFT_DEV_NAMESPACE}/${IMAGE_NAME}:${{ steps.vars.outputs.image_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Helm Release: ${RELEASE_NAME}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Rollout: app/frontend successful" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          echo "## Deployment Failure Diagnostics" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Failed workflow: deploy-dev-openshift" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Namespace: ${OPENSHIFT_DEV_NAMESPACE}" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Recent pods" >> "$GITHUB_STEP_SUMMARY"
+          oc get pods -n "${OPENSHIFT_DEV_NAMESPACE}" -o wide >> "$GITHUB_STEP_SUMMARY" || true
+          echo "### Recent events" >> "$GITHUB_STEP_SUMMARY"
+          oc get events -n "${OPENSHIFT_DEV_NAMESPACE}" --sort-by=.metadata.creationTimestamp | tail -n 30 >> "$GITHUB_STEP_SUMMARY" || true

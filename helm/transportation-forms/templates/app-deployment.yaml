@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.app.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+{{ toYaml .Values.app.labels | indent 4 }}
+spec:
+  replicas: {{ .Values.app.replicaCount }}
+  selector:
+    matchLabels:
+{{ toYaml .Values.app.labels | indent 6 }}
+  template:
+    metadata:
+      labels:
+{{ toYaml .Values.app.labels | indent 8 }}
+    spec:
+{{- if .Values.app.initContainer.enabled }}
+      initContainers:
+        - name: wait-for-db
+          image: {{ .Values.app.initContainer.image }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ .Values.app.initContainer.dbHost }} -U {{ .Values.app.initContainer.dbUser }} -d {{ .Values.app.initContainer.dbName }}; do
+                echo "Waiting for PostgreSQL..."; sleep 3;
+              done
+{{- end }}
+      containers:
+        - name: app
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.app.containerPort }}
+          env:
+            - name: ENVIRONMENT
+              value: {{ .Values.app.environment | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.secretName }}
+                  key: database-url
+            - name: SQLALCHEMY_ECHO
+              value: {{ .Values.app.sqlalchemyEcho | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.app.logLevel | quote }}
+            - name: CORS_ORIGINS
+              value: {{ .Values.app.corsOrigins | quote }}
+            - name: MINIO_ENDPOINT
+              value: {{ .Values.app.minioEndpoint | quote }}
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.secretName }}
+                  key: minio-root-user
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.secretName }}
+                  key: minio-root-password
+            - name: MINIO_BUCKET
+              value: {{ .Values.app.minioBucket | quote }}
+            - name: MINIO_PUBLIC_URL
+              value: {{ .Values.app.minioPublicUrl | quote }}
+            - name: KEYCLOAK_SERVER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.secretName }}
+                  key: keycloak-server-url
+            - name: KEYCLOAK_REALM
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.secretName }}
+                  key: keycloak-realm
+            - name: KEYCLOAK_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.secretName }}
+                  key: keycloak-client-id
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.secretName }}
+                  key: keycloak-client-secret
+            - name: KEYCLOAK_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.secretName }}
+                  key: keycloak-redirect-uri
+          command:
+{{ toYaml .Values.app.command | indent 12 }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.app.readinessProbe.path }}
+              port: {{ .Values.app.containerPort }}
+            initialDelaySeconds: {{ .Values.app.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.app.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.app.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.app.readinessProbe.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.app.livenessProbe.path }}
+              port: {{ .Values.app.containerPort }}
+            initialDelaySeconds: {{ .Values.app.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.app.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.app.livenessProbe.timeoutSeconds }}
