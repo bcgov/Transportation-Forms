@@ -116,10 +116,10 @@ jobs:
         run: |
           COVERAGE=$(grep -oP '(?<=<coverage line-rate=")[^"]+' coverage.xml | head -1)
           if (( $(echo "$COVERAGE < 0.80" | bc -l) )); then
-            echo "❌ Coverage $COVERAGE is below 80% threshold"
+            echo "Coverage $COVERAGE is below 80% threshold"
             exit 1
           else
-            echo "✅ Coverage $COVERAGE meets 80% threshold"
+            echo "Coverage $COVERAGE meets 80% threshold"
           fi
 
       - name: Upload coverage reports
@@ -146,14 +146,14 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: test-results.xml
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: htmlcov/
@@ -171,7 +171,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `📊 **Test Coverage**: ${rate}% (requirement: 80%+)\n\nDetails: [View Coverage Report](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
+              body: `**Test Coverage**: ${rate}% (requirement: 80%+)\n\nDetails: [View Coverage Report](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
             });
 
   # Job 3: Security Scanning
@@ -205,7 +205,7 @@ jobs:
 
       - name: Upload security reports
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
@@ -269,23 +269,23 @@ jobs:
       - name: Check all jobs passed
         run: |
           if [ "${{ needs.lint.result }}" != "success" ]; then
-            echo "❌ Lint job failed"
+            echo "lint job failed"
             exit 1
           fi
           if [ "${{ needs.test.result }}" != "success" ]; then
-            echo "❌ Test job failed (coverage threshold may not be met)"
+            echo "test job failed (coverage threshold may not be met)"
             exit 1
           fi
           if [ "${{ needs.security.result }}" != "success" ]; then
-            echo "❌ Security scan found critical issues"
+            echo "security scan found critical issues"
             exit 1
           fi
           if [ "${{ needs.build.result }}" != "success" ]; then
-            echo "❌ Docker build failed"
+            echo "docker build failed"
             exit 1
           fi
-          echo "✅ All quality gates passed!"
+          echo "all quality gates passed!"
 
       - name: Post success message
         if: success()
-        run: echo "🎉 CI/CD Pipeline completed successfully - ready for merge"
+        run: echo "CI/CD Pipeline completed successfully - ready for merge"
