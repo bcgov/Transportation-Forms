@@ -41,6 +41,11 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.app.secretName }}
                   key: database-url
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.secretName }}
+                  key: secret-key
             - name: SQLALCHEMY_ECHO
               value: {{ .Values.app.sqlalchemyEcho | quote }}
             - name: LOG_LEVEL

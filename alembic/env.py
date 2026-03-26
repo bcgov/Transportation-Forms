@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 logger = logging.getLogger('alembic.env')
 
 # Set SQLAlchemy URL from environment
-sqlalchemy_url = os.getenv('DATABASE_URL', 'postgresql://transportation:password@localhost:5432/transportation_forms')
+sqlalchemy_url = os.getenv('DATABASE_URL')
 config.set_main_option('sqlalchemy.url', sqlalchemy_url)
 
 # Import models for target_metadata
