@@ -42,7 +42,7 @@ jobs:
           test -n "${OPENSHIFT_DEV_NAMESPACE}" || (echo "Missing secret: OPENSHIFT_DEV_NAMESPACE" && exit 1)
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         
       - name: Compute deployment image tag
         id: vars
@@ -109,7 +109,7 @@ jobs:
 #          cache-to: type=gha,mode=max
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
 
       - name: Helm upgrade/install to DEV namespace
         shell: bash
