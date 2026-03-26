@@ -88,17 +88,3 @@ spec:
     - port: 5432
       targetPort: 5432
   type: ClusterIP
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: db-nodeport
-  namespace: transportation-forms
-spec:
-  selector:
-    app: postgres
-  type: NodePort
-  ports:
-    - port: 5432
-      targetPort: 5432
-      nodePort: 30432
