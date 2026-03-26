@@ -120,9 +120,9 @@ jobs:
           set -euo pipefail
           helm upgrade --install "${RELEASE_NAME}" "${CHART_PATH}" \
             --namespace "${OPENSHIFT_DEV_NAMESPACE}" \
-            --create-namespace \
-            -f "${CHART_PATH}/values.yaml" \
-            -f "${CHART_PATH}/values-dev.yaml" \
+#            --create-namespace \
+#            -f "${CHART_PATH}/values.yaml" \
+#            -f "${CHART_PATH}/values-dev.yaml" \
             --set namespace="${OPENSHIFT_DEV_NAMESPACE}" \
             --set image.repository="${IMAGE_REPOSITORY}" \
             --set image.tag="${IMAGE_TAG}"
