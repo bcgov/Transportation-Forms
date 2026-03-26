@@ -103,6 +103,7 @@ jobs:
       - name: Run unit tests with coverage
         env:
           DATABASE_URL: postgresql://transportation:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/transportation_forms
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           pytest tests/ \
             --cov=backend \

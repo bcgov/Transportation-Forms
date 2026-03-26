@@ -4,7 +4,7 @@ Provides RESTful endpoints for form CRUD operations with proper validation,
 error handling, and authorization checks.
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends, Query, UploadFile, File
@@ -16,7 +16,6 @@ from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
 from backend.services.forms import FormService
 from backend.services import minio_service
-from backend.models import Form
 
 # ============================================================================
 # Pydantic Models (Request/Response)
@@ -329,7 +328,7 @@ async def create_form(
 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
+    except Exception:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

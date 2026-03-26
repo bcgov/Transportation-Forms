@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from backend.models import Role
-from backend.auth.permissions import DEFAULT_ROLES, Permission
+from backend.auth.permissions import DEFAULT_ROLES
 
 
 def seed_default_roles(db: Session) -> dict:
@@ -130,7 +130,7 @@ def get_role_by_name(db: Session, role_name: str) -> Role:
     return (
         db.query(Role)
         .filter(
-            Role.name == role_name, Role.is_active == True, Role.deleted_at.is_(None)
+            Role.name == role_name, Role.is_active.is_(True), Role.deleted_at.is_(None)
         )
         .first()
     )
@@ -149,7 +149,9 @@ def get_all_system_roles(db: Session) -> list[Role]:
     return (
         db.query(Role)
         .filter(
-            Role.is_system == True, Role.is_active == True, Role.deleted_at.is_(None)
+            Role.is_system.is_(True),
+            Role.is_active.is_(True),
+            Role.deleted_at.is_(None),
         )
         .all()
     )

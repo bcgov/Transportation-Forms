@@ -7,11 +7,10 @@ Uses boto3 (already in requirements.txt) with an endpoint_url override so the
 same code works with both MinIO and real AWS S3.
 """
 
-import io
 import json
 import uuid
 import logging
-from typing import Tuple, Optional
+from typing import Tuple
 
 import boto3
 from botocore.exceptions import ClientError

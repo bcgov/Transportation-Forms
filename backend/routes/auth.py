@@ -288,7 +288,7 @@ async def auth_callback(
                 .filter(
                     Role.name == "staff_viewer",
                     Role.deleted_at.is_(None),
-                    Role.is_active == True,
+                    Role.is_active.is_(True),
                 )
                 .first()
             )
@@ -339,8 +339,8 @@ async def auth_callback(
 
     except HTTPException:
         raise
-    except ValueError as e:
-        logger.error(f"KeyCloak error during callback: {str(e)}")
+    except ValueError:
+        logger.error("KeyCloak error during callback")
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -404,7 +404,7 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
 
     except HTTPException:
         raise
-    except ValueError as e:
+    except ValueError:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

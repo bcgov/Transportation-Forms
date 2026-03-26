@@ -8,15 +8,6 @@ from fastapi.security.http import HTTPAuthorizationCredentials
 
 from backend.auth.jwt_handler import jwt_handler, TokenData
 from backend.config import settings
-from backend.auth.authorization import (
-    require_permission,
-    require_any_permission,
-    require_all_permissions,
-    has_permission,
-    has_any_permission,
-    has_all_permissions,
-    is_admin,
-)
 
 security = HTTPBearer(description="JWT Bearer token", auto_error=True)
 

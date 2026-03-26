@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api/v1"
     SECRET_KEY: str
     CORS_ORIGINS: str = (
-        "http://localhost:3000,http://localhost:8000,http://localhost:8080,http://localhost:30300,http://localhost:30800,http://127.0.0.1:3000,http://127.0.0.1:8000,http://127.0.0.1:30300,http://127.0.0.1:30800"
+        "http://localhost:3000,http://localhost:8000,http://localhost:8080,"
+        "http://localhost:30300,http://localhost:30800,http://127.0.0.1:3000,"
+        "http://127.0.0.1:8000,http://127.0.0.1:30300,http://127.0.0.1:30800"
     )
 
     # KeyCloak

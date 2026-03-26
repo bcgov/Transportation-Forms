@@ -8,9 +8,7 @@ This module provides:
 4. Audit logging for permission checks
 """
 
-from typing import Optional, List, Set, Callable, Any
-from functools import wraps
-from datetime import datetime
+from typing import Optional, List, Set
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -19,12 +17,10 @@ from backend.database import get_db
 from backend.auth.jwt_handler import TokenData
 from backend.auth.permissions import (
     Permission,
-    DEFAULT_ROLES,
     get_inherited_permissions,
     get_permission_for_resource_action,
-    RESOURCE_ACTION_PERMISSIONS,
 )
-from backend.models import User, Role, UserRole, AuditLog
+from backend.models import User, UserRole, AuditLog
 
 
 # Lazy import to avoid circular dependency
@@ -32,7 +28,7 @@ def _get_current_user():
     """Lazy load get_current_user to avoid circular imports."""
     from backend.auth.dependencies import get_current_user
 
-    return get_current_user  # ============================================================================
+    return get_current_user
 
 
 # PERMISSION CHECKING FUNCTIONS
