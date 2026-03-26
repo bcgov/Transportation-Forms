@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import BusinessArea
 
-
 # ============================================================================
 # Pydantic Models
 # ============================================================================

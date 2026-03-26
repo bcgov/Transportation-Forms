@@ -7,7 +7,6 @@ from jwt import PyJWTError
 
 from backend.auth.keys import PRIVATE_KEY, PUBLIC_KEY
 
-
 # Token configuration (in seconds)
 ACCESS_TOKEN_EXPIRY = 30 * 60  # 30 minutes
 REFRESH_TOKEN_EXPIRY = 7 * 24 * 60 * 60  # 7 days

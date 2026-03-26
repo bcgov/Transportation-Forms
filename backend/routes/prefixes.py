@@ -16,7 +16,6 @@ from backend.auth.dependencies import get_current_user, require_admin
 from backend.auth.jwt_handler import TokenData
 from backend.services.prefixes import PrefixService
 
-
 # ============================================================================
 # Pydantic Schemas
 # ============================================================================

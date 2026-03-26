@@ -4,7 +4,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from backend.models import BusinessArea
 
-
 # Predefined business area UUIDs (stable across runs)
 BUSINESS_AREAS = [
     {

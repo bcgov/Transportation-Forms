@@ -29,7 +29,6 @@ from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
 from backend.services.reservations import ReservationService
 
-
 # ============================================================================
 # Pydantic Schemas
 # ============================================================================
