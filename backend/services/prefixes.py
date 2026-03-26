@@ -33,7 +33,7 @@ class PrefixService:
         return (
             db.query(FormNumberPrefix)
             .filter(
-                FormNumberPrefix.is_active == True,
+                FormNumberPrefix.is_active.is_(True),
                 FormNumberPrefix.deleted_at.is_(None),
             )
             .order_by(FormNumberPrefix.prefix)

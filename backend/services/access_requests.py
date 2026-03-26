@@ -32,7 +32,7 @@ class AccessRequestService:
         user = (
             db.query(User)
             .filter(
-                User.id == user_id, User.deleted_at.is_(None), User.is_active == True
+                User.id == user_id, User.deleted_at.is_(None), User.is_active.is_(True)
             )
             .first()
         )
@@ -49,7 +49,7 @@ class AccessRequestService:
                 UserRole.user_id == user_id,
                 UserRole.deleted_at.is_(None),
                 Role.deleted_at.is_(None),
-                Role.is_active == True,
+                Role.is_active.is_(True),
             )
             .first()
         )
@@ -206,7 +206,7 @@ class AccessRequestService:
             .filter(
                 Role.name == "staff_viewer",
                 Role.deleted_at.is_(None),
-                Role.is_active == True,
+                Role.is_active.is_(True),
             )
             .first()
         )

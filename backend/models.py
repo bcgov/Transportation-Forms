@@ -10,7 +10,6 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
-    Table,
     Integer,
     Index,
     UniqueConstraint,
@@ -23,7 +22,6 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.types import TypeDecorator
 import uuid
-from datetime import datetime
 from backend.database import Base
 
 
@@ -579,7 +577,8 @@ class FormNumberReservation(Base):
             name="ck_fnr_numbering_method",
         ),
         CheckConstraint(
-            "status IN ('reserved', 'pending_approval', 'approved', 'rejected', 'changes_requested', 'released', 'expired')",
+            "status IN ('reserved', 'pending_approval', 'approved', 'rejected', "
+            "'changes_requested', 'released', 'expired')",
             name="ck_fnr_status",
         ),
     )

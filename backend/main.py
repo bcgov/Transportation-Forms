@@ -11,6 +11,19 @@ import structlog
 import os
 
 from backend.config import settings
+from backend.routes import (
+    auth,
+    forms,
+    business_areas,
+    workflow,
+    roles,
+    access_requests,
+    admin_users,
+)
+from backend.routes.prefixes import public_router as prefixes_public_router
+from backend.routes.prefixes import admin_router as prefixes_admin_router
+from backend.routes.reservations import router as reservations_router
+from backend.routes.stats import router as stats_router
 
 # Configure logging
 logger = structlog.get_logger()
@@ -85,20 +98,7 @@ async def startup_event():
         logger.warning("MinIO bucket initialisation skipped", error=str(exc))
 
 
-# Include API routes FIRST (before catch-all)
-from backend.routes import (
-    auth,
-    forms,
-    business_areas,
-    workflow,
-    roles,
-    access_requests,
-    admin_users,
-)
-from backend.routes.prefixes import public_router as prefixes_public_router
-from backend.routes.prefixes import admin_router as prefixes_admin_router
-from backend.routes.reservations import router as reservations_router
-from backend.routes.stats import router as stats_router
+# Include API routes
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(forms.router, prefix="/api/v1")

@@ -7,7 +7,7 @@ Provides:
 
 from typing import Optional, List
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 

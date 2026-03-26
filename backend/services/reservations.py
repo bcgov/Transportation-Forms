@@ -1,21 +1,21 @@
-"""Form Number Reservation service — business logic for TASK-404, TASK-405, TASK-406, TASK-407, TASK-408.
+"""Form Number Reservation service — TASK-404 through TASK-408 business logic.
 
 Provides:
   - Auto-generated sequential number reservation (Story 1)
   - Custom form number reservation (Story 2)
-  - Approval workflow: submit, approve, reject, request changes, resubmit (Story 3)
+  - Approval workflow (Story 3)
   - Release & auto-expiry
   - Enhanced listing with filters, sorting, and pagination
 
-Uses row-level locking (`SELECT ... FOR UPDATE`) on the prefix row to
-guarantee atomic sequence increments under concurrent access.
+Uses row-level locking on the prefix row to guarantee atomic sequence
+increments under concurrent access.
 """
 
 from typing import Optional, List, Tuple
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func, or_
 
 from backend.models import (
     FormNumberPrefix,
@@ -346,7 +346,7 @@ class ReservationService:
         if target_status not in allowed:
             raise ValueError(
                 f"Cannot transition from '{current_status}' to '{target_status}'. "
-                f"Allowed transitions from '{current_status}': {allowed or 'none (terminal state)'}."
+                f"Allowed transitions: {allowed or 'none (terminal state)'}."
             )
 
     @staticmethod
@@ -407,7 +407,9 @@ class ReservationService:
                 "Only the requester can submit their own reservation for approval."
             )
 
-        ReservationService._validate_transition(reservation.status, "pending_approval")  # type: ignore[arg-type]
+        ReservationService._validate_transition(
+            reservation.status, "pending_approval"
+        )  # type: ignore[arg-type]
 
         old_status = reservation.status
         reservation.status = "pending_approval"  # type: ignore[assignment]
@@ -472,7 +474,9 @@ class ReservationService:
         reservation = ReservationService._get_reservation_or_raise(
             db, reservation_id, lock=True
         )
-        ReservationService._validate_transition(reservation.status, "approved")  # type: ignore[arg-type]
+        ReservationService._validate_transition(
+            reservation.status, "approved"
+        )  # type: ignore[arg-type]
 
         now = datetime.now(timezone.utc)
         old_status = reservation.status
@@ -535,7 +539,9 @@ class ReservationService:
         reservation = ReservationService._get_reservation_or_raise(
             db, reservation_id, lock=True
         )
-        ReservationService._validate_transition(reservation.status, "rejected")  # type: ignore[arg-type]
+        ReservationService._validate_transition(
+            reservation.status, "rejected"
+        )  # type: ignore[arg-type]
 
         now = datetime.now(timezone.utc)
         old_status = reservation.status
@@ -576,7 +582,8 @@ class ReservationService:
                 user_id=approver_id,
                 old_values={"status": old_status},
                 new_values={"status": "rejected", "reason": reason.strip()},
-                description=f"Reservation {reservation.full_form_number} rejected: {reason.strip()}",
+                description=f"Reservation {reservation.full_form_number} "
+                f"rejected: {reason.strip()}",
             )
         )
 
@@ -591,14 +598,16 @@ class ReservationService:
         approver_id: UUID,
         comments: str,
     ) -> FormNumberReservation:
-        """Request changes on a reservation (pending_approval → changes_requested). Comments mandatory."""
+        """Request changes on a reservation (changes_requested). Comments required."""
         if not comments or not comments.strip():
             raise ValueError("Comments are required when requesting changes.")
 
         reservation = ReservationService._get_reservation_or_raise(
             db, reservation_id, lock=True
         )
-        ReservationService._validate_transition(reservation.status, "changes_requested")  # type: ignore[arg-type]
+        ReservationService._validate_transition(
+            reservation.status, "changes_requested"
+        )  # type: ignore[arg-type]
 
         now = datetime.now(timezone.utc)
         old_status = reservation.status
@@ -640,7 +649,8 @@ class ReservationService:
                     "status": "changes_requested",
                     "comments": comments.strip(),
                 },
-                description=f"Changes requested for {reservation.full_form_number}: {comments.strip()}",
+                description=f"Changes requested for "
+                f"{reservation.full_form_number}: {comments.strip()}",
             )
         )
 
@@ -665,7 +675,9 @@ class ReservationService:
         if str(reservation.reserved_by_id) != str(submitted_by_id):
             raise ValueError("Only the requester can resubmit their own reservation.")
 
-        ReservationService._validate_transition(reservation.status, "pending_approval")  # type: ignore[arg-type]
+        ReservationService._validate_transition(
+            reservation.status, "pending_approval"
+        )  # type: ignore[arg-type]
 
         old_status = reservation.status
         reservation.status = "pending_approval"  # type: ignore[assignment]
@@ -843,7 +855,8 @@ class ReservationService:
                     user_id=None,
                     old_values={"status": reservation.status},
                     new_values={"status": "expired"},
-                    description=f"Reservation {reservation.full_form_number} auto-expired after 14 days.",
+                    description=f"Reservation "
+                    f"{reservation.full_form_number} auto-expired after 14 days.",
                 )
             )
             count += 1

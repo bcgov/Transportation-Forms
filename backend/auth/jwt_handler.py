@@ -1,7 +1,7 @@
 """JWT token generation, validation, and refresh logic."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
+from typing import Optional
 import jwt
 from jwt import PyJWTError
 

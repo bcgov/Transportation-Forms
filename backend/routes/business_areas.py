@@ -55,7 +55,7 @@ async def list_business_areas(
     areas = (
         db.query(BusinessArea)
         .filter(
-            BusinessArea.is_active == True,
+            BusinessArea.is_active.is_(True),
             BusinessArea.deleted_at.is_(None),
         )
         .order_by(BusinessArea.sort_order, BusinessArea.name)

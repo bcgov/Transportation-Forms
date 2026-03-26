@@ -8,16 +8,14 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc, text
+from sqlalchemy import and_, desc, asc, text
 from sqlalchemy.exc import OperationalError
 
 from backend.models import (
     Form,
     FormBusinessArea,
-    FormVersion,
     FormWorkflow,
     BusinessArea,
-    User,
     AuditLog,
     FormNumberReservation,
 )
@@ -84,15 +82,15 @@ class FormService:
             form_source: 'URL' or 'DOWNLOAD' (or None)
             form_source_url: Source URL when form_source == 'URL'
             form_attachment_url: MinIO object URL when form_source == 'DOWNLOAD'
-            form_attachment_filename: Original filename of the uploaded attachment
-            form_number_reservation_id: (Optional) UUID of approved reservation to link (TASK-413)
-            collects_personal_info: 'Yes' or 'No' - whether this form collects personal information
+            form_attachment_filename: Original filename of uploaded attachment
+            form_number_reservation_id: UUID of approved reservation (TASK-413)
+            collects_personal_info: Whether form collects personal information
 
         Returns:
             Created Form object
 
         Raises:
-            ValueError: If business areas don't exist, form_source validation fails, or reservation is invalid
+            ValueError: If validation fails or reservation is invalid
         """
         # Validate description is provided (required per TASK-110C)
         if not description or not description.strip():
@@ -128,7 +126,7 @@ class FormService:
             )
 
             if existing_form:
-                raise ValueError(f"Reservation is already used by another form")
+                raise ValueError("Reservation is already used by another form")
 
         # Create the form
         form = Form(
@@ -251,13 +249,18 @@ class FormService:
             query = query.filter(text("""
                     COALESCE(
                         forms.search_vector,
-                        setweight(to_tsvector('english', coalesce(forms.title, '')), 'A') ||
-                        setweight(to_tsvector('english', coalesce(forms.description, '')), 'B') ||
-                        setweight(to_tsvector('english', coalesce(forms.keywords::text, '')), 'C') ||
-                        setweight(to_tsvector('english', coalesce(forms.form_source, '')), 'D') ||
-                        setweight(to_tsvector('english', coalesce(forms.form_source_url, '')), 'D')
+                        setweight(to_tsvector('english',
+                            coalesce(forms.title, '')), 'A') ||
+                        setweight(to_tsvector('english',
+                            coalesce(forms.description, '')), 'B') ||
+                        setweight(to_tsvector('english',
+                            coalesce(forms.keywords::text, '')), 'C') ||
+                        setweight(to_tsvector('english',
+                            coalesce(forms.form_source, '')), 'D') ||
+                        setweight(to_tsvector('english',
+                            coalesce(forms.form_source_url, '')), 'D')
                     ) @@ plainto_tsquery('english', :search_query)
-                    """)).params(search_query=q.strip())
+                    """)).params(search_query=q.strip())  # noqa: E501
 
         # Apply filters
         if status:
@@ -317,14 +320,17 @@ class FormService:
 
                 UNION
 
-                SELECT DISTINCT jsonb_array_elements_text(COALESCE(f.keywords::jsonb, '[]'::jsonb)) AS suggestion
+                SELECT DISTINCT
+                    jsonb_array_elements_text(
+                        COALESCE(f.keywords::jsonb, '[]'::jsonb)
+                    ) AS suggestion
                 FROM forms f
                 WHERE f.deleted_at IS NULL
             ) s
             WHERE s.suggestion ILIKE :pattern
             ORDER BY s.suggestion ASC
             LIMIT :max_suggestions
-            """)
+            """)  # noqa: E501
 
         rows = db.execute(
             sql,

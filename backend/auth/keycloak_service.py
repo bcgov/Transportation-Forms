@@ -7,9 +7,7 @@ from urllib.parse import urlencode
 from keycloak import (
     KeycloakOpenID,
     KeycloakAuthenticationError,
-    KeycloakConnectionError,
 )
-from keycloak.exceptions import KeycloakGetError
 
 from backend.config import settings
 from backend.auth.jwt_handler import jwt_handler
