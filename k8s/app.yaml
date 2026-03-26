@@ -41,6 +41,11 @@ spec:
                 secretKeyRef:
                   name: transportation-forms-secrets
                   key: database-url
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: secret-key
             - name: SQLALCHEMY_ECHO
               value: "false"
             - name: LOG_LEVEL

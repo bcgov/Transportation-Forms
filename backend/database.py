@@ -12,10 +12,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://transportation:password@localhost:5432/transportation_forms",
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Connection pool settings
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))

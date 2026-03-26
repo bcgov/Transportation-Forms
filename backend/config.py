@@ -11,9 +11,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # Database
-    DATABASE_URL: str = (
-        "postgresql://transportation:password@localhost:5432/transportation_forms"
-    )
+    DATABASE_URL: str
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_TIMEOUT: int = 30
@@ -21,7 +19,7 @@ class Settings(BaseSettings):
 
     # API
     API_PREFIX: str = "/api/v1"
-    SECRET_KEY: str = "dev-secret-key-change-in-production"
+    SECRET_KEY: str
     CORS_ORIGINS: str = (
         "http://localhost:3000,http://localhost:8000,http://localhost:8080,http://localhost:30300,http://localhost:30800,http://127.0.0.1:3000,http://127.0.0.1:8000,http://127.0.0.1:30300,http://127.0.0.1:30800"
     )
@@ -44,6 +42,8 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-west-2"
 
     # MinIO (local development file storage, S3-compatible)
+    # Defaults are the well-known MinIO container defaults; overridden in
+    # OpenShift via secretKeyRef (see helm/templates/app-deployment.yaml).
     MINIO_ENDPOINT: str = "http://minio:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
@@ -56,6 +56,28 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
+
+    @model_validator(mode="after")
+    def validate_required_secrets(self):
+        """Require critical secrets in non-development environments."""
+        if self.ENVIRONMENT.lower() == "development":
+            return self
+
+        required = {
+            "DATABASE_URL": self.DATABASE_URL,
+            "SECRET_KEY": self.SECRET_KEY,
+            "MINIO_ACCESS_KEY": self.MINIO_ACCESS_KEY,
+            "MINIO_SECRET_KEY": self.MINIO_SECRET_KEY,
+        }
+
+        missing = [key for key, value in required.items() if not value]
+        if missing:
+            raise ValueError(
+                "Missing required secrets (set via environment or .env): "
+                + ", ".join(missing)
+            )
+
+        return self
 
     @model_validator(mode="after")
     def validate_keycloak_config(self):

@@ -55,7 +55,7 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: transportation
-          POSTGRES_PASSWORD: password
+          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
           POSTGRES_DB: transportation_forms
         options: >-
           --health-cmd pg_isready
@@ -84,25 +84,25 @@ jobs:
           python -c "import psycopg2; psycopg2.connect(
             host='localhost',
             user='transportation',
-            password='password',
+            password='${{ secrets.CI_POSTGRES_PASSWORD }}',
             database='transportation_forms',
             port=5432
           )" || sleep 5 && python -c "import psycopg2; psycopg2.connect(
             host='localhost',
             user='transportation',
-            password='password',
+            password='${{ secrets.CI_POSTGRES_PASSWORD }}',
             database='transportation_forms',
             port=5432
           )"
 
       - name: Run database migrations
         env:
-          DATABASE_URL: postgresql://transportation:password@localhost:5432/transportation_forms
+          DATABASE_URL: postgresql://transportation:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/transportation_forms
         run: alembic upgrade head || true  # Fail gracefully if migrations not yet created
 
       - name: Run unit tests with coverage
         env:
-          DATABASE_URL: postgresql://transportation:password@localhost:5432/transportation_forms
+          DATABASE_URL: postgresql://transportation:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/transportation_forms
         run: |
           pytest tests/ \
             --cov=backend \
