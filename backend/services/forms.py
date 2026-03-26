@@ -248,9 +248,7 @@ class FormService:
         query = db.query(Form).filter(Form.deleted_at.is_(None))
 
         if q and q.strip():
-            query = query.filter(
-                text(
-                    """
+            query = query.filter(text("""
                     COALESCE(
                         forms.search_vector,
                         setweight(to_tsvector('english', coalesce(forms.title, '')), 'A') ||
@@ -259,9 +257,7 @@ class FormService:
                         setweight(to_tsvector('english', coalesce(forms.form_source, '')), 'D') ||
                         setweight(to_tsvector('english', coalesce(forms.form_source_url, '')), 'D')
                     ) @@ plainto_tsquery('english', :search_query)
-                    """
-                )
-            ).params(search_query=q.strip())
+                    """)).params(search_query=q.strip())
 
         # Apply filters
         if status:
@@ -311,8 +307,7 @@ class FormService:
         if len(normalized_query) < 2:
             return []
 
-        sql = text(
-            """
+        sql = text("""
             SELECT suggestion
             FROM (
                 SELECT DISTINCT f.title AS suggestion
@@ -329,8 +324,7 @@ class FormService:
             WHERE s.suggestion ILIKE :pattern
             ORDER BY s.suggestion ASC
             LIMIT :max_suggestions
-            """
-        )
+            """)
 
         rows = db.execute(
             sql,

@@ -4,7 +4,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from backend.models import FormNumberPrefix
 
-
 # Predefined prefix UUIDs (stable across runs)
 FORM_NUMBER_PREFIXES = [
     {

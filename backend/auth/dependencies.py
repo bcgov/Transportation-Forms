@@ -18,7 +18,6 @@ from backend.auth.authorization import (
     is_admin,
 )
 
-
 security = HTTPBearer(description="JWT Bearer token", auto_error=True)
 
 # Development mode - bypass authentication

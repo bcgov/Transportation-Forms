@@ -10,7 +10,6 @@ This module defines:
 from enum import Enum
 from typing import List, Dict, Set
 
-
 # ============================================================================
 # PERMISSION DEFINITIONS
 # ============================================================================
