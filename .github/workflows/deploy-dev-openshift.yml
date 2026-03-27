@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     name: Build & Push Image
-    environment: uat
+    environment: dev
 
     steps:
       - name: Checkout Code
@@ -38,7 +38,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build and push to both registries
+      - name: Build and push to imagestream
         uses: docker/build-push-action@v7
         with:
           context: .
