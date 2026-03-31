@@ -21,7 +21,7 @@ pylint>=3.0.3
 
 # Security
 bandit>=1.7.5
-safety>=2.3.5
+# safety removed — replaced by Trivy + CodeQL (Decision 6D)
 
 # Pre-commit Hooks
 pre-commit>=3.5.0

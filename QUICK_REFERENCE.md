@@ -1,30 +1,34 @@
 # 🚀 Quick Reference - Transportation Forms CRUD
 
 ## URLs
-- **Frontend:** http://localhost:8000
-- **API:** http://localhost:8000/api/v1  
-- **API Docs:** http://localhost:8000/docs
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:8000/api/v1
+- **API Docs:** http://localhost:8000/api/v1/docs
 - **Database:** localhost:6432
+- **MinIO Console:** http://localhost:9001
 
-## Container Commands (Rancher Desktop)
+## Container Commands
 ```bash
 # View all containers
-docker-compose ps
+docker compose ps
 
-# Start all services
-docker-compose up -d
+# Start all services (migrations → backend → frontend)
+docker compose up -d
 
 # Stop all services
-docker-compose down
+docker compose down
 
-# View app logs
-docker logs transportation-forms-app
+# View backend logs
+docker compose logs -f app
+
+# View frontend (Caddy) logs
+docker compose logs -f frontend
 
 # View database logs
-docker logs transportation-forms-db
+docker compose logs -f db
 
 # Access database
-docker exec -it transportation-forms-db psql -U transportation -d transportation_forms
+docker compose exec db psql -U transportation -d transportation_forms
 ```
 
 ## API Endpoints
@@ -89,24 +93,26 @@ SELECT * FROM forms WHERE category = 'permits' AND deleted_at IS NULL;
 ## Test Commands
 ```bash
 # Run all tests
-docker exec -e DATABASE_URL='postgresql://transportation:password@localhost:6432/transportation_forms' \
-  -e PYTHONPATH=/app transportation-forms-app \
-  python -m pytest tests/test_forms.py -v
+docker compose exec \
+  -e DATABASE_URL='postgresql://transportation:password@db:5432/transportation_forms' \
+  app python -m pytest tests/ -v
 
 # Run specific test
-docker exec -e DATABASE_URL='postgresql://transportation:password@localhost:6432/transportation_forms' \
-  -e PYTHONPATH=/app transportation-forms-app \
-  python -m pytest tests/test_forms.py::TestFormServiceCRUD::test_create_form_persists_to_database -v
+docker compose exec \
+  -e DATABASE_URL='postgresql://transportation:password@db:5432/transportation_forms' \
+  app python -m pytest tests/test_forms.py -v
 ```
 
 ## File Locations
 - **Backend Service:** `backend/services/forms.py`
 - **API Routes:** `backend/routes/forms.py`
 - **Frontend UI:** `frontend/index.html`
-- **Tests:** `tests/test_forms.py`
+- **Frontend Caddy Config:** `frontend/Caddyfile`
+- **WAF Config:** `frontend/coraza.conf`
+- **Tests:** `tests/`
 - **Container Config:** `docker-compose.yml`
-- **Testing Guide:** `CRUD_TESTING_GUIDE.md`
-- **Summary:** `TASK-110-COMPLETION-SUMMARY.md`
+- **Helm Chart:** `charts/app/`
+- **CI/CD Workflows:** `.github/workflows/`
 
 ## Status
 ✅ All CRUD operations working

@@ -1,40 +1,95 @@
 # Transportation Forms
 
-## DEV CD Deployment (OpenShift + Helm)
+BC Transportation Forms — FastAPI backend, Caddy + Coraza WAF frontend, Crunchy PostgreSQL HA.
 
-This repository includes a DEV-only GitHub Actions deployment workflow at `.github/workflows/deploy-dev-openshift.yml`.
-On each push to `master`, it builds a container image, pushes it to the OpenShift internal registry, then deploys with Helm using `helm/transportation-forms`.
+## Architecture
 
-### Required GitHub Secrets
+| Component | Technology |
+|---|---|
+| **Backend** | Python 3.12 / FastAPI / Uvicorn / SQLAlchemy / Alembic |
+| **Frontend** | Caddy 2 + Coraza WAF serving static HTML/CSS/JS |
+| **Database** | Crunchy PostgreSQL HA (TEST/PROD) · plain `postgres:16-alpine` (local dev) |
+| **Migrations** | Alembic via Kubernetes init container |
+| **Registry** | ghcr.io — separate images: `backend`, `frontend`, `migrations` |
 
-Set these repository secrets before enabling deployment:
+## CI/CD Workflows
 
-- `OPENSHIFT_SERVER` - OpenShift API URL (for example: `https://api.<cluster-domain>:6443`)
-- `OPENSHIFT_TOKEN` - Service account or user token with deploy permissions in DEV namespace
-- `OPENSHIFT_DEV_NAMESPACE` - Target DEV project/namespace name
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `analysis.yml` | PR + push to `master` + weekly | Lint, pytest (80% coverage), Bandit, Trivy, CodeQL, SonarCloud |
+| `pr-validate.yml` | PR open / edit | Enforce conventional commit format in PR titles |
+| `pr-open.yml` | PR opened / updated | Build images, deploy PR env to DEV, integration tests |
+| `pr-close.yml` | PR closed | Clean up PR env, promote images to `latest` on merge |
+| `merge.yml` | Push to `master` | Deploy TEST → integration tests → Deploy PROD (manual approval) |
+| `scheduled.yml` | Weekly (Saturday 03:00 UTC) | Stale PR purge, SchemaSpy, OWASP ZAP scans |
+| `demo.yml` | PR label `demo` | Assign long-lived demo route to a PR |
 
-### Deploy Trigger Behavior
+## Required GitHub Configuration
 
-- Automatic deploy: push to `master`
-- Manual deploy: Actions -> **Deploy DEV OpenShift** -> **Run workflow**
-	- Optional input: `image_tag` (if omitted, workflow uses `shortsha-timestamp`)
+### Repository-Level
 
-The workflow includes an optional CI gate that waits for the existing `CI/CD Pipeline` workflow to complete successfully for the same commit before deploying.
+| Type | Name | Description |
+|---|---|---|
+| Variable | `OC_SERVER` | OpenShift API URL |
+| Variable | `OC_NAMESPACE` | DEV namespace |
+| Variable | `TARGET_ENV_DOMAIN` | Route domain (e.g. `apps.silver.devops.gov.bc.ca`) |
+| Secret | `OC_TOKEN` | DEV service account token |
+| Secret | `DATABASE_URL` | DEV PostgreSQL connection string |
+| Secret | `SECRET_KEY` | JWT signing secret |
+| Secret | `MINIO_ROOT_USER` | MinIO / S3 access key |
+| Secret | `MINIO_ROOT_PASSWORD` | MinIO / S3 secret key |
+| Secret | `KEYCLOAK_SERVER_URL` | Keycloak base URL |
+| Secret | `KEYCLOAK_REALM` | Keycloak realm |
+| Secret | `KEYCLOAK_CLIENT_ID` | Keycloak client ID |
+| Secret | `KEYCLOAK_CLIENT_SECRET` | Keycloak client secret |
+| Secret | `KEYCLOAK_REDIRECT_URI` | OAuth2 redirect URI |
 
-### Manual Dispatch Notes
+### GitHub Environments
 
-When running manually, leave `image_tag` empty to auto-generate one, or provide a deterministic tag to redeploy a known image name/version.
+- **`test`** — `OC_TOKEN_TEST`, `OC_NAMESPACE` (test), all application secrets suffixed `_TEST`
+- **`prod`** — same as test but suffixed `_PROD`, with required reviewers for manual approval
 
-### Verify Deployment in OpenShift
-
-After a successful run, verify rollout in DEV:
+## Local Development
 
 ```bash
-oc project <OPENSHIFT_DEV_NAMESPACE>
-oc get pods
-oc rollout status deployment/app
-oc rollout status deployment/frontend
-helm list -n <OPENSHIFT_DEV_NAMESPACE>
+# Start all services (migrations → backend → frontend + db + minio)
+docker compose up -d
+
+# Backend logs
+docker compose logs -f app
+
+# Frontend logs (Caddy)
+docker compose logs -f frontend
+
+# Stop everything
+docker compose down
 ```
 
-The workflow summary also prints namespace, image, Helm release, and rollout status.
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:8000
+- **API docs:** http://localhost:8000/api/v1/docs
+- **MinIO console:** http://localhost:9001
+
+## Helm Chart
+
+```bash
+# Lint
+helm lint charts/app
+
+# Dry-run render (DEV defaults)
+helm template transportation-forms charts/app
+
+# Render with TEST values
+helm template transportation-forms charts/app -f charts/app/values.yaml -f charts/app/values-test.yaml
+
+# Deploy (CI/CD does this automatically)
+helm upgrade --install transportation-forms-dev charts/app --namespace <ns>
+```
+
+## Verify Deployment in OpenShift
+
+```bash
+oc project <namespace>
+oc get pods
+helm list -n <namespace>
+```

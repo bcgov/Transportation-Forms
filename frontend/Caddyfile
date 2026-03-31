@@ -1,0 +1,52 @@
+{
+	# Disable the Caddy admin API – not required in containers.
+	admin off
+
+	# OpenShift handles TLS termination at the route level; Caddy runs plain HTTP.
+	auto_https off
+
+	# Ensure coraza_waf runs before other handlers
+	order coraza_waf first
+}
+
+# ── Primary port: static files + WAF + API reverse proxy ─────────────────────
+:3000 {
+	# Coraza WAF – OWASP Core Rule Set
+	coraza_waf {
+		load_owasp_crs
+		directives `
+			Include /etc/caddy/coraza.conf
+		`
+	}
+
+	# Liveness / readiness probe handled by dedicated health port (no WAF overhead)
+
+	# Reverse-proxy all /api/* and /auth/* requests to the backend
+	handle /api/* {
+		reverse_proxy {$BACKEND_URL:http://app:8000}
+	}
+
+	handle /auth/* {
+		reverse_proxy {$BACKEND_URL:http://app:8000}
+	}
+
+	# Serve static files; fall back to index.html for client-side navigation
+	handle {
+		root * /srv
+		file_server
+		try_files {path} /index.html
+	}
+
+	# Caddy access logs
+	log {
+		output stdout
+		format json
+	}
+}
+
+# ── Health port: used by Kubernetes probes only (no WAF) ─────────────────────
+:3001 {
+	handle /healthz {
+		respond "OK" 200
+	}
+}

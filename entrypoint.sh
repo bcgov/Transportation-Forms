@@ -1,27 +1,16 @@
 #!/bin/sh
-# Entrypoint script for FastAPI application
-# Runs database migrations and starts the application
+# Entrypoint script for the FastAPI backend container.
+#
+# Migrations are no longer run here — they are executed by the migrations
+# init container (see charts/app/templates/backend/deployment.yaml) before
+# this container starts.  Seeding is a one-time administrative task and
+# must be run manually or via a separate Job in non-production environments.
 
 set -e
 
 echo "Starting BC Transportation Forms backend..."
 
-# Run database migrations
-echo "Running database migrations..."
-alembic upgrade head
+# Start FastAPI server (production: no --reload)
+echo "Starting Uvicorn server on port 8000..."
+exec uvicorn backend.main:app --host 0.0.0.0 --port 8000
 
-# Seed default data
-echo "Seeding default data..."
-python -c "
-from backend.database import SessionLocal
-from backend.seeds import seed_all_defaults
-db = SessionLocal()
-try:
-    seed_all_defaults(db)
-finally:
-    db.close()
-"
-
-# Start FastAPI server
-echo "Starting Uvicorn server..."
-exec uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload

@@ -41,13 +41,13 @@ from backend.auth.jwt_handler import TokenData
 # Connection to the *admin* database used to CREATE/DROP the test database.
 _PG_ADMIN_URL = os.getenv(
     "PG_ADMIN_URL",
-    "postgresql://transportation:password@localhost:30432/postgres",
+    "postgresql://transportation:password@localhost:6432/postgres",
 )
 
 # Connection to the dedicated *test* database.
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql://transportation:password@localhost:30432/transportation_forms_test",
+    "postgresql://transportation:password@localhost:6432/transportation_forms_test",
 )
 
 _TEST_DB_NAME = TEST_DATABASE_URL.rsplit("/", 1)[-1]

@@ -1,0 +1,55 @@
+{{- if .Values.routes.enabled }}
+# ── OpenShift Route: Frontend ─────────────────────────────────────────────────
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "app.fullname" . }}-frontend
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+  annotations:
+    # HAProxy rate limiting (requests per second per source IP)
+    haproxy.router.openshift.io/rate-limit-connections: "true"
+    haproxy.router.openshift.io/rate-limit-connections.rate-http: "100"
+    haproxy.router.openshift.io/rate-limit-connections.rate-tcp: "100"
+    # Disable cookie-based session affinity (Caddy is stateless)
+    haproxy.router.openshift.io/disable_cookies: "true"
+spec:
+  host: frontend-{{ .Release.Name }}.{{ .Values.domain }}
+  to:
+    kind: Service
+    name: {{ include "app.fullname" . }}-frontend
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+---
+# ── OpenShift Route: Backend API ──────────────────────────────────────────────
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "app.fullname" . }}-backend
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  annotations:
+    haproxy.router.openshift.io/rate-limit-connections: "true"
+    haproxy.router.openshift.io/rate-limit-connections.rate-http: "200"
+    haproxy.router.openshift.io/rate-limit-connections.rate-tcp: "200"
+    haproxy.router.openshift.io/disable_cookies: "true"
+spec:
+  host: backend-{{ .Release.Name }}.{{ .Values.domain }}
+  to:
+    kind: Service
+    name: {{ include "app.fullname" . }}-backend
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+{{- end }}

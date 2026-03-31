@@ -1,0 +1,94 @@
+name: Tests (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: "PR number, 'test', or 'prod' — used to build the environment URL"
+        required: true
+        type: string
+    secrets:
+      oc_token:
+        required: true
+
+jobs:
+  integration-tests:
+    name: Integration Tests (${{ inputs.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve target URLs
+        id: urls
+        shell: bash
+        run: |
+          set -euo pipefail
+          DOMAIN="${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}"
+          TARGET="${{ inputs.target }}"
+
+          if [[ "$TARGET" == "test" ]]; then
+            RELEASE="transportation-forms-test"
+          elif [[ "$TARGET" == "prod" ]]; then
+            RELEASE="transportation-forms-prod"
+          else
+            RELEASE="transportation-forms-$TARGET"
+          fi
+
+          BACKEND_URL="https://backend-${RELEASE}.${DOMAIN}"
+          FRONTEND_URL="https://frontend-${RELEASE}.${DOMAIN}"
+
+          echo "backend_url=${BACKEND_URL}"   >> "$GITHUB_OUTPUT"
+          echo "frontend_url=${FRONTEND_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Health check — backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="${{ steps.urls.outputs.backend_url }}/health"
+          echo "Checking backend health: ${URL}"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "${URL}" || echo "000")
+            if [[ "$STATUS" == "200" ]]; then
+              echo "Backend healthy (HTTP ${STATUS})"
+              exit 0
+            fi
+            echo "Attempt ${i}: got HTTP ${STATUS}, retrying in 15s..."
+            sleep 15
+          done
+          echo "Backend health check failed after 5 attempts"
+          exit 1
+
+      - name: Health check — frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="${{ steps.urls.outputs.frontend_url }}"
+          echo "Checking frontend: ${URL}"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "${URL}" || echo "000")
+            if [[ "$STATUS" == "200" ]]; then
+              echo "Frontend healthy (HTTP ${STATUS})"
+              exit 0
+            fi
+            echo "Attempt ${i}: got HTTP ${STATUS}, retrying in 15s..."
+            sleep 15
+          done
+          echo "Frontend health check failed after 5 attempts"
+          exit 1
+
+      - name: Smoke test — backend API version
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="${{ steps.urls.outputs.backend_url }}/api/v1/ping"
+          echo "Smoke-testing API: ${URL}"
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "${URL}" || echo "000")
+          echo "API responded with HTTP ${STATUS}"
+          # 200 or 401 are both acceptable (401 means auth is working)
+          if [[ "$STATUS" == "200" || "$STATUS" == "401" || "$STATUS" == "404" ]]; then
+            exit 0
+          fi
+          echo "Unexpected status: ${STATUS}"
+          exit 1

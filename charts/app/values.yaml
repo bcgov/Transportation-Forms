@@ -1,0 +1,168 @@
+# ── Global image settings (overridden per environment / PR) ───────────────────
+global:
+  registry: ghcr.io
+  repository: bcgov/transportation-forms
+  tag: latest
+  secrets:
+    # false  → Helm will delete secrets when the release is removed (safe for PR envs)
+    # true   → Helm will not delete secrets on release removal (safe for long-lived envs)
+    persist: false
+
+# ── OpenShift domain (used to build route hostnames) ─────────────────────────
+domain: apps.silver.devops.gov.bc.ca
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Backend ───────────────────────────────────────────────────────────────────
+backend:
+  replicaCount: 1
+
+  containerPort: 8000
+  servicePort: 8000
+
+  deploymentStrategy:
+    type: Recreate
+
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "100m"
+      memory: "256Mi"
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+  pdb:
+    enabled: false
+    minAvailable: 1
+
+  # Startup probe allows up to 60 s (30 × 2 s) for cold start + migrations
+  startupProbe:
+    failureThreshold: 30
+    periodSeconds: 2
+
+  readinessProbe:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+
+  livenessProbe:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  secretName: transportation-forms-secrets
+
+  env:
+    environment: development
+    sqlalchemyEcho: "false"
+    logLevel: INFO
+    corsOrigins: ""
+    minioEndpoint: ""
+    minioBucket: form-attachments
+    minioPublicUrl: ""
+
+  # Pod anti-affinity encourages spreading replicas across nodes
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: backend
+
+# ── Frontend (Caddy + Coraza WAF) ─────────────────────────────────────────────
+frontend:
+  replicaCount: 1
+
+  containerPort: 3000
+  healthPort: 3001
+  servicePort: 3000
+
+  deploymentStrategy:
+    type: Recreate
+
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "256Mi"
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+  pdb:
+    enabled: false
+    minAvailable: 1
+
+  startupProbe:
+    failureThreshold: 15
+    periodSeconds: 2
+
+  readinessProbe:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+
+  livenessProbe:
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # The frontend deployment constructs BACKEND_URL as:
+  #   http://<release-name>-app-backend:<backendPort>
+  # backendServiceName is resolved via the app.fullname template helper.
+  backendPort: 8000
+
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: frontend
+
+# ── OpenShift Routes (disable for local k8s / Rancher Desktop) ────────────────
+routes:
+  enabled: true
+
+# ── Network Policies ──────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: true
+
+# ── Secret values (supply at deploy time via --set or CI/CD env vars) ─────────
+# These are empty defaults so `helm template` works without real credentials.
+secrets:
+  databaseUrl: ""
+  secretKey: ""
+  minioRootUser: ""
+  minioRootPassword: ""
+  keycloakServerUrl: ""
+  keycloakRealm: ""
+  keycloakClientId: ""
+  keycloakClientSecret: ""
+  keycloakRedirectUri: ""
+  initialAdminEmail: ""

@@ -1,0 +1,48 @@
+name: Demo Route Assignment
+
+# Assign a long-lived "demo" route to a specific PR by labelling it with `demo`.
+# The route hostname is stable across PR updates, making it shareable with stakeholders.
+
+on:
+  pull_request:
+    types: [labeled, unlabeled, closed]
+
+jobs:
+  demo-assign:
+    name: Assign demo route to PR-${{ github.event.number }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: |
+      (github.event.action == 'labeled'   && github.event.label.name == 'demo') ||
+      (github.event.action == 'unlabeled' && github.event.label.name == 'demo') ||
+      (github.event.action == 'closed')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update demo route in OpenShift
+        uses: bcgov/action-oc-runner@v1
+        with:
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_token: ${{ secrets.OC_TOKEN }}
+          oc_server: ${{ vars.OC_SERVER }}
+          commands: |
+            set -euo pipefail
+            DOMAIN="${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}"
+            RELEASE="transportation-forms-${{ github.event.number }}"
+
+            if [[ "${{ github.event.action }}" == "labeled" && "${{ github.event.label.name }}" == "demo" ]]; then
+              echo "Patching demo route to point to PR-${{ github.event.number }} frontend..."
+              oc patch route transportation-forms-demo \
+                --namespace "${{ vars.OC_NAMESPACE }}" \
+                --type merge \
+                -p "{\"spec\":{\"to\":{\"name\":\"${RELEASE}-app-frontend\"}}}" \
+                || oc expose svc "${RELEASE}-app-frontend" \
+                   --name=transportation-forms-demo \
+                   --hostname="demo-transportation-forms.${DOMAIN}" \
+                   --namespace "${{ vars.OC_NAMESPACE }}"
+              echo "Demo route now pointing to PR-${{ github.event.number }}"
+            else
+              echo "Label removed or PR closed — demo route left unchanged."
+              echo "To reassign, label another PR with 'demo'."
+            fi

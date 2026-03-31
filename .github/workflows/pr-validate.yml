@@ -1,0 +1,18 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate PR Title (Conventional Commits)
+    uses: bcgov/quickstart-openshift-helpers/.github/workflows/.pr-validate.yml@v0
+    with:
+      markdown_links: |
+        [Frontend](https://frontend-${{ github.event.number }}-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }})
+        [Backend API](https://backend-${{ github.event.number }}-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}/health)

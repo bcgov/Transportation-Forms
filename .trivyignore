@@ -1,0 +1,8 @@
+# Trivy ignore file — known false positives
+# Format: CVE-ID  [expiry-date]  [reason]
+#
+# Add entries here after triaging false positives or accepted risks.
+# See https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
+
+# Example format:
+# CVE-2023-12345 2025-01-01 (false positive in base image — not reachable)

@@ -1,0 +1,94 @@
+name: Scheduled Tasks
+
+on:
+  schedule:
+    # Every Saturday at 03:00 UTC (Saturday 7 PM PST / Sunday 11 PM UTC)
+    - cron: "0 3 * * 6"
+  workflow_dispatch:
+
+jobs:
+  # ── 1. Purge stale PR Helm releases (older than 1 week) ──────────────────
+  pr-purge:
+    name: Purge Stale PR Environments
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remove stale PR releases
+        uses: bcgov/action-oc-runner@v1
+        with:
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_token: ${{ secrets.OC_TOKEN }}
+          oc_server: ${{ vars.OC_SERVER }}
+          commands: |
+            set -euo pipefail
+
+            echo "Looking for stale transportation-forms PR releases..."
+            CUTOFF=$(date -u -d "7 days ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
+                     || date -u -v-7d +%Y-%m-%dT%H:%M:%SZ)
+
+            helm list --namespace "${{ vars.OC_NAMESPACE }}" \
+              --filter "^transportation-forms-[0-9]+" \
+              --output json | \
+              jq -r --arg cutoff "$CUTOFF" \
+                '.[] | select(.updated < $cutoff) | .name' | \
+            while read -r release; do
+              echo "Removing stale release: ${release}"
+              helm uninstall "${release}" --namespace "${{ vars.OC_NAMESPACE }}" || true
+            done
+            echo "Stale PR purge complete."
+
+  # ── 2. SchemaSpy — generate database documentation ───────────────────────
+  schemaspy:
+    name: SchemaSpy DB Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Only run when the TEST database is available and reachable
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate SchemaSpy docs
+        uses: bcgov/action-oc-runner@v1
+        with:
+          oc_namespace: ${{ vars.OC_NAMESPACE_TEST }}
+          oc_token: ${{ secrets.OC_TOKEN_TEST }}
+          oc_server: ${{ vars.OC_SERVER }}
+          commands: |
+            set -euo pipefail
+            # Port-forward to the Crunchy PgBouncer service and run SchemaSpy
+            # (Requires SchemaSpy image to be available in the cluster or via docker run)
+            echo "SchemaSpy run skipped — configure DB connection details when TEST env is ready."
+
+  # ── 3. OWASP ZAP full scans against TEST environment ────────────────────
+  zap-scan:
+    name: OWASP ZAP Full Scan (TEST)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: ZAP Full Scan — Frontend
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: https://frontend-transportation-forms-test.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
+          rules_file_name: .github/zap-rules.tsv
+          cmd_options: "-a"
+          fail_action: false   # Upload report but do not fail the run
+          artifact_name: zap-frontend-report
+
+      - name: ZAP Full Scan — Backend API
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: https://backend-transportation-forms-test.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}/openapi.json
+          rules_file_name: .github/zap-rules.tsv
+          cmd_options: "-a"
+          fail_action: false
+          artifact_name: zap-backend-report

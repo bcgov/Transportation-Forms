@@ -1,0 +1,50 @@
+# Crunchy PostgreSQL HA — base / DEV configuration
+# Deployed via bcgov/action-crunchy in the deployer workflow.
+#
+# Documentation: https://access.crunchydata.com/documentation/postgres-operator/latest/
+# BCGov action: https://github.com/bcgov/action-crunchy
+
+crunchyPostgresHa:
+  enabled: true
+
+  postgresVersion: 16
+
+  # ── Primary + replica instances ──────────────────────────────────────────────
+  instances:
+    - name: ha
+      replicas: 1
+      dataVolumeClaimSpec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+
+  # ── Application users ────────────────────────────────────────────────────────
+  users:
+    - name: app
+      databases:
+        - transportation_forms
+    - name: pgbouncer
+
+  # ── PgBouncer connection pooler ───────────────────────────────────────────────
+  proxy:
+    pgBouncer:
+      replicas: 1
+      image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbouncer:ubi8-1.21-0
+
+  # ── Backups (volume-based for DEV — no S3 required) ──────────────────────────
+  backups:
+    pgbackrest:
+      repos:
+        - name: repo1
+          schedules:
+            full: "0 8 * * 0"   # Weekly full backup on Sunday 08:00 UTC
+            differential: "0 2 * * 1-6"  # Daily differential Mon–Sat
+          volume:
+            volumeClaimSpec:
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 2Gi

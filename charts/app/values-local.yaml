@@ -1,0 +1,64 @@
+# ── Local / Rancher Desktop overrides ─────────────────────────────────────────
+# Layer on top of values.yaml to run the Helm chart on k3s (Rancher Desktop)
+# instead of OpenShift.
+#
+# Usage:
+#   helm install transportation-forms-local charts/app \
+#     -f charts/app/values.yaml \
+#     -f charts/app/values-local.yaml \
+#     --set global.tag=local \
+#     --set secrets.databaseUrl="..." \
+#     --set secrets.secretKey="..."
+
+# ── Pull from local image cache (no ghcr.io pull) ────────────────────────────
+global:
+  registry: ghcr.io
+  repository: bcgov/transportation-forms
+  tag: local
+
+# ── Disable OpenShift Routes (not available on k3s) ──────────────────────────
+routes:
+  enabled: false
+
+# ── Disable network policies (not needed on single-node dev cluster) ──────────
+networkPolicy:
+  enabled: false
+
+# ── Ingress (nginx-ingress on k3s replaces OpenShift Routes) ─────────────────
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: transportation-forms.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+          port: 3000
+        - path: /api
+          pathType: Prefix
+          service: backend
+          port: 8000
+        - path: /auth
+          pathType: Prefix
+          service: backend
+          port: 8000
+
+# ── Lighter resource limits for local dev ─────────────────────────────────────
+backend:
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "64Mi"
+    limits:
+      cpu: "250m"
+      memory: "512Mi"
+
+frontend:
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"

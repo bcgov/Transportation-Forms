@@ -1,60 +1,79 @@
 services:
-  # FastAPI Application
+  # ── Migrations (runs once then exits, backend waits for it) ─────────────────
+  migrations:
+    build:
+      context: .
+      dockerfile: migrations/Dockerfile
+    container_name: transportation-forms-migrations
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: no
+
+  # ── FastAPI Backend ──────────────────────────────────────────────────────────
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: backend/Dockerfile
     container_name: transportation-forms-app
     ports:
       - "8000:8000"
     environment:
-      - ENVIRONMENT=development
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-transportation}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-transportation_forms}
-      - SQLALCHEMY_ECHO=true
-      - LOG_LEVEL=INFO
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - SECRET_KEY=${SECRET_KEY}
+      #- AUTH_DEMO_MODE=${AUTH_DEMO_MODE:-true}
+      - SQLALCHEMY_ECHO=${SQLALCHEMY_ECHO:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # CORS - comma-separated list of allowed origins
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:8000,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8000
+      - CORS_ORIGINS=${CORS_ORIGINS}
       # MinIO (local file storage)
       - MINIO_ENDPOINT=http://minio:9000
-      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
-      - MINIO_BUCKET=form-attachments
-      - MINIO_PUBLIC_URL=http://localhost:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET:-form-attachments}
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-http://localhost:9000}
+      # Keycloak OIDC
+      - KEYCLOAK_SERVER_URL=${KEYCLOAK_SERVER_URL}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+      - KEYCLOAK_REDIRECT_URI=${KEYCLOAK_REDIRECT_URI}
     volumes:
       - ./backend:/app/backend
-      - ./alembic:/app/alembic
-      - ./alembic.ini:/app/alembic.ini
     depends_on:
-      db:
-        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
       minio:
         condition: service_healthy
     restart: unless-stopped
-    command: sh /app/entrypoint.sh
 
-  # Frontend Application
+  # ── Frontend (Caddy + Coraza WAF) ────────────────────────────────────────────
   frontend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: frontend/Dockerfile
     container_name: transportation-forms-frontend
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app/frontend
+      - "3001:3001"
+    environment:
+      - BACKEND_URL=http://app:8000
     depends_on:
       - app
     restart: unless-stopped
-    command: python -m uvicorn frontend.app:app --host 0.0.0.0 --port 3000
 
   # PostgreSQL Database
   db:
     image: postgres:16-alpine
     container_name: transportation-forms-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-transportation}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-transportation_forms}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C -c password_encryption=md5"
     ports:
       - "6432:5432"
@@ -62,7 +81,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       # Removed problematic pg_hba.conf mount - PostgreSQL will use defaults
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U transportation -d transportation_forms"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -76,8 +95,8 @@ services:
       - "9000:9000"   # S3 API
       - "9001:9001"   # MinIO Console (admin UI)
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
