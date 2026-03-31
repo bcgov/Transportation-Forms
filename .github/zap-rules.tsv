@@ -1,0 +1,7 @@
+# OWASP ZAP scan rules override file
+# Format: <ruleId>\t<action>\t<comment>
+# Actions: IGNORE, WARN, FAIL
+#
+# Add overrides here to tune scan results for this application.
+# Example:
+# 10016	IGNORE	Web browser XSS protection — not applicable for API responses

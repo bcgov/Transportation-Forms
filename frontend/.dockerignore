@@ -1,0 +1,30 @@
+# Python files (not needed in frontend image)
+*.py
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Backend / test artefacts
+backend/
+tests/
+alembic/
+alembic.ini
+requirements*.txt
+
+# Logs
+*.log

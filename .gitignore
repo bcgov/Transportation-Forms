@@ -50,7 +50,6 @@ venv.bak/
 .env.local
 .env.*.local
 .env.prod
-build-deploy.ps1
 # Test output / coverage reports (generated, not source)
 coverage_results.txt
 test_results.txt
@@ -60,7 +59,7 @@ test_results_full.txt
 TASK-*-*.md
 
 # K8s secrets file (contains actual credentials — use secrets.example.yaml as template)
-k8s/secrets.yaml
+archived/k8s/secrets.yaml
 
 # Local deployment script (machine-specific, not for shared repo)
 deploy-clean.ps1

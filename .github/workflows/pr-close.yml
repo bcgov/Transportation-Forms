@@ -1,0 +1,64 @@
+name: PR Close
+
+on:
+  pull_request:
+    types: [closed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Clean up PR Helm release and OpenShift resources ─────────────────────
+  cleanup:
+    name: Remove PR-${{ github.event.number }} deployment
+    uses: bcgov/quickstart-openshift-helpers/.github/workflows/.pr-close.yml@v0
+    with:
+      oc_namespace: ${{ vars.OC_NAMESPACE }}
+      oc_server: ${{ vars.OC_SERVER }}
+      release_name: transportation-forms-${{ github.event.number }}
+    secrets:
+      oc_token: ${{ secrets.OC_TOKEN }}
+
+  # ── Clean up Crunchy PR database user ────────────────────────────────────
+  cleanup-db:
+    name: Remove Crunchy PR-${{ github.event.number }} user
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event.pull_request.merged == true || github.event.action == 'closed'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remove Crunchy PR user
+        uses: bcgov/action-crunchy@v1
+        with:
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_token: ${{ secrets.OC_TOKEN }}
+          oc_server: ${{ vars.OC_SERVER }}
+          command: delete-user
+          db_user: app-${{ github.event.number }}
+        continue-on-error: true   # PR user may not exist if deploy was skipped
+
+  # ── On merge: promote PR images to 'latest' ───────────────────────────────
+  promote:
+    name: Promote images to latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event.pull_request.merged == true
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        component: [backend, frontend, migrations]
+    steps:
+      - name: Retag ${{ matrix.component }} PR image as latest
+        uses: bcgov/action-builder-ghcr@v3
+        with:
+          package: ${{ matrix.component }}
+          tag: ${{ github.event.number }}
+          tag_fallback: latest
+          promote: latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

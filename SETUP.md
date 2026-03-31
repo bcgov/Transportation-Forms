@@ -67,43 +67,32 @@ KEYCLOAK_REDIRECT_URI=http://localhost:30300/callback
 - The frontend automatically sends its own `window.location.origin + '/callback'` as the redirect URI when calling `/api/v1/auth/login`, so the backend will use that value (validated against `CORS_ORIGINS`) instead of the static env-var wherever possible.
 - Keep `AUTH_DEMO_MODE=false` by default; set `AUTH_DEMO_MODE=true` only for explicit local development bypass with `demo-token`.
 
-## Step 3: Build Container Image
+## Step 3: Start Services with Docker Compose
+
+The project uses separate container images for the backend, frontend (Caddy + Coraza WAF), and database migrations.
 
 ```bash
-# Build the FastAPI container (Rancher Desktop provides docker CLI)
-docker build -t transportation-forms .
+# Build and start all services (migrations → backend → frontend + db + minio)
+docker compose up -d
 
-# Verify build succeeded
-docker images | grep transportation-forms
+# Verify all containers are running
+docker compose ps
 ```
 
-## Step 4: Run Database Migrations
+This will:
+1. Start PostgreSQL and MinIO
+2. Run Alembic database migrations (migrations service)
+3. Start the FastAPI backend on port 8000
+4. Start the Caddy frontend on port 3000 (with Coraza WAF)
+
+## Step 4: Load Sample Data
 
 ```bash
-# Option A: Using docker-compose (includes optional PostgreSQL)
-docker-compose up -d
+# Option A: If using docker compose
+docker compose exec app python backend/sample_data.py
 
-# Option B: Using container (connect to local PostgreSQL)
-docker run -p 8000:8000 \
-  --env-file .env \
-  --network host \
-  transportation-forms
-
-# Option C: Manual migration (Python environment)
+# Option B: Python environment (local)
 alembic upgrade head
-python backend/sample_data.py
-```
-
-## Step 5: Load Sample Data
-
-```bash
-# Option A: If using docker-compose
-docker-compose exec app python backend/sample_data.py
-
-# Option B: If running container directly
-docker exec <container-id> python backend/sample_data.py
-
-# Option C: Python environment
 python backend/sample_data.py
 ```
 
@@ -112,19 +101,23 @@ Sample data includes:
 - 6 Business Areas
 - 4 Test Users (one per role)
 
-## Step 6: Verify Installation
+## Step 5: Verify Installation
 
 ```bash
-# Health check endpoint
+# Health check endpoint (backend)
 curl http://localhost:8000/health
 # Expected response: {"status": "healthy", "service": "BC Transportation Forms API"}
+
+# Frontend (Caddy + Coraza WAF)
+curl http://localhost:3000
+# Expected: HTML page
 
 # API documentation
 # Swagger UI: http://localhost:8000/api/v1/docs
 # ReDoc: http://localhost:8000/api/v1/redoc
 ```
 
-## Step 7: Test Sample Users
+## Step 6: Test Sample Users
 
 Use these credentials to test different roles:
 
@@ -202,9 +195,8 @@ alembic history --oneline
 - Verify PostgreSQL is listening on localhost:5432
 
 ### Container Build Fails
-- Clear build cache: `docker build --no-cache -t transportation-forms .`
-- Check Python version: `docker run transportation-forms python --version`
-- View build logs: `docker build -t transportation-forms . 2>&1 | tee build.log`
+- Rebuild from scratch: `docker compose build --no-cache`
+- View build logs: `docker compose build 2>&1 | tee build.log`
 - Ensure Rancher Desktop is running with the dockerd (moby) container engine
 
 ### Migration Fails
@@ -220,20 +212,20 @@ alembic history --oneline
 ## Container Commands (via Rancher Desktop)
 
 ```bash
-# Start all services (app + optional PostgreSQL)
-docker-compose up -d
+# Start all services (migrations → backend → frontend)
+docker compose up -d
 
 # View logs
-docker-compose logs -f app
+docker compose logs -f app
 
 # Stop services
-docker-compose down
+docker compose down
 
 # Remove volumes (database data)
-docker-compose down -v
+docker compose down -v
 
 # Rebuild on code changes
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ## Environment Variables Reference

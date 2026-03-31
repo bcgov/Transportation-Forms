@@ -1,0 +1,36 @@
+# Trivy configuration for Transportation Forms
+# https://aquasecurity.github.io/trivy/latest/docs/configuration/
+
+scan:
+  # Scanner types to run on filesystem scans
+  scanners:
+    - vuln
+    - secret
+    - misconfig
+
+severity:
+  # Only report CRITICAL and HIGH — ignore MEDIUM/LOW/UNKNOWN in CI gate
+  - CRITICAL
+  - HIGH
+
+vulnerability:
+  # Ignore vulnerabilities that do not have a fix available
+  ignore-unfixed: false
+
+secret:
+  config: .github/trivy-secret.yaml
+
+misconfig:
+  # Helm chart misconfiguration scanning
+  include-non-failures: false
+
+# File/directory patterns to skip
+skip-dirs:
+  - .git
+  - .venv
+  - node_modules
+  - htmlcov
+
+skip-files:
+  - "**/*.test.py"
+  - "tests/**"

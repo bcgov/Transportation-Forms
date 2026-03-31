@@ -1,0 +1,13 @@
+apiVersion: v2
+name: app
+description: Transportation Forms — backend, frontend, and supporting resources
+type: application
+version: 0.2.0
+appVersion: "2.0.0"
+keywords:
+  - transportation-forms
+  - bcgov
+  - openshift
+home: https://github.com/bcgov/transportation-forms
+maintainers:
+  - name: BCGov Transportation Forms Team

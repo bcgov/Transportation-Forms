@@ -1,0 +1,29 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Test artefacts
+htmlcov/
+.coverage
+coverage.xml
+test-results.xml
+
+# Local development
+*.log

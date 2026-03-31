@@ -1,0 +1,85 @@
+name: Merge
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. Deploy to TEST ─────────────────────────────────────────────────────
+  deploy-test:
+    name: Deploy to TEST
+    uses: ./.github/workflows/.deployer.yml
+    with:
+      environment: test
+      tag: latest
+    secrets:
+      oc_token: ${{ secrets.OC_TOKEN_TEST }}
+      database_url: ${{ secrets.DATABASE_URL_TEST }}
+      secret_key: ${{ secrets.SECRET_KEY_TEST }}
+      minio_root_user: ${{ secrets.MINIO_ROOT_USER_TEST }}
+      minio_root_password: ${{ secrets.MINIO_ROOT_PASSWORD_TEST }}
+      keycloak_server_url: ${{ secrets.KEYCLOAK_SERVER_URL_TEST }}
+      keycloak_realm: ${{ secrets.KEYCLOAK_REALM_TEST }}
+      keycloak_client_id: ${{ secrets.KEYCLOAK_CLIENT_ID_TEST }}
+      keycloak_client_secret: ${{ secrets.KEYCLOAK_CLIENT_SECRET_TEST }}
+      keycloak_redirect_uri: ${{ secrets.KEYCLOAK_REDIRECT_URI_TEST }}
+      initial_admin_email: ${{ secrets.INITIAL_ADMIN_EMAIL_TEST }}
+
+  # ── 2. Integration tests against TEST ────────────────────────────────────
+  tests:
+    name: Integration Tests (TEST)
+    needs: [deploy-test]
+    uses: ./.github/workflows/.tests.yml
+    with:
+      target: test
+    secrets:
+      oc_token: ${{ secrets.OC_TOKEN_TEST }}
+
+  # ── 3. Deploy to PROD (requires manual approval via GitHub environment) ───
+  deploy-prod:
+    name: Deploy to PROD
+    needs: [tests]
+    uses: ./.github/workflows/.deployer.yml
+    with:
+      environment: prod
+      tag: latest
+    secrets:
+      oc_token: ${{ secrets.OC_TOKEN_PROD }}
+      database_url: ${{ secrets.DATABASE_URL_PROD }}
+      secret_key: ${{ secrets.SECRET_KEY_PROD }}
+      minio_root_user: ${{ secrets.MINIO_ROOT_USER_PROD }}
+      minio_root_password: ${{ secrets.MINIO_ROOT_PASSWORD_PROD }}
+      keycloak_server_url: ${{ secrets.KEYCLOAK_SERVER_URL_PROD }}
+      keycloak_realm: ${{ secrets.KEYCLOAK_REALM_PROD }}
+      keycloak_client_id: ${{ secrets.KEYCLOAK_CLIENT_ID_PROD }}
+      keycloak_client_secret: ${{ secrets.KEYCLOAK_CLIENT_SECRET_PROD }}
+      keycloak_redirect_uri: ${{ secrets.KEYCLOAK_REDIRECT_URI_PROD }}
+      initial_admin_email: ${{ secrets.INITIAL_ADMIN_EMAIL_PROD }}
+
+  # ── 4. Promote images to 'prod' tag ──────────────────────────────────────
+  promote:
+    name: Promote images to prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [deploy-prod]
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        component: [backend, frontend, migrations]
+    steps:
+      - name: Retag ${{ matrix.component }} image as prod
+        uses: bcgov/action-builder-ghcr@v3
+        with:
+          package: ${{ matrix.component }}
+          tag: latest
+          tag_fallback: latest
+          promote: prod
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

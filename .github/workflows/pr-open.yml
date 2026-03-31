@@ -1,0 +1,103 @@
+name: PR Open
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+concurrency:
+  # One deployment per PR; cancel any in-progress run for the same PR.
+  group: ${{ github.workflow }}-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. Build container images ─────────────────────────────────────────────
+  builds:
+    name: Build ${{ matrix.component }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - component: backend
+            build_file: backend/Dockerfile
+            build_context: .
+            triggers: backend/ requirements.txt entrypoint.sh
+          - component: frontend
+            build_file: frontend/Dockerfile
+            build_context: .
+            triggers: frontend/index.html frontend/form_demo.html frontend/css/ frontend/assets/ frontend/Caddyfile frontend/coraza.conf
+          - component: migrations
+            build_file: migrations/Dockerfile
+            build_context: .
+            triggers: alembic/ alembic.ini migrations/Dockerfile migrations/entrypoint.sh backend/seeds/
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and push ${{ matrix.component }} image
+        uses: bcgov/action-builder-ghcr@v3
+        with:
+          package: ${{ matrix.component }}
+          tag: ${{ github.event.number }}
+          tag_fallback: latest
+          triggers: ${{ matrix.triggers }}
+          build_file: ${{ matrix.build_file }}
+          build_context: ${{ matrix.build_context }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 2. Deploy to DEV with PR-scoped release name ──────────────────────────
+  deploys:
+    name: Deploy PR-${{ github.event.number }} to DEV
+    needs: [builds]
+    uses: ./.github/workflows/.deployer.yml
+    with:
+      environment: dev
+      tag: ${{ github.event.number }}
+      params: >-
+        --set global.secrets.persist=false
+        --set backend.env.corsOrigins=https://frontend-transportation-forms-${{ github.event.number }}.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
+    secrets:
+      oc_token: ${{ secrets.OC_TOKEN }}
+      database_url: ${{ secrets.DATABASE_URL }}
+      secret_key: ${{ secrets.SECRET_KEY }}
+      minio_root_user: ${{ secrets.MINIO_ROOT_USER }}
+      minio_root_password: ${{ secrets.MINIO_ROOT_PASSWORD }}
+      keycloak_server_url: ${{ secrets.KEYCLOAK_SERVER_URL }}
+      keycloak_realm: ${{ secrets.KEYCLOAK_REALM }}
+      keycloak_client_id: ${{ secrets.KEYCLOAK_CLIENT_ID }}
+      keycloak_client_secret: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
+      keycloak_redirect_uri: ${{ secrets.KEYCLOAK_REDIRECT_URI }}
+      initial_admin_email: ${{ secrets.INITIAL_ADMIN_EMAIL }}
+
+  # ── 3. Run integration tests against the PR deployment ────────────────────
+  tests:
+    name: Integration Tests (PR-${{ github.event.number }})
+    needs: [deploys]
+    if: needs.deploys.outputs.triggered == 'true'
+    uses: ./.github/workflows/.tests.yml
+    with:
+      target: ${{ github.event.number }}
+    secrets:
+      oc_token: ${{ secrets.OC_TOKEN }}
+
+  # ── 4. Aggregate results ─────────────────────────────────────────────────
+  results:
+    name: PR Results
+    runs-on: ubuntu-latest
+    needs: [builds, deploys, tests]
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          BUILDS="${{ needs.builds.result }}"
+          DEPLOYS="${{ needs.deploys.result }}"
+          TESTS="${{ needs.tests.result }}"
+          echo "builds=${BUILDS} deploys=${DEPLOYS} tests=${TESTS}"
+          if [[ "$BUILDS"  != "success" && "$BUILDS"  != "skipped" ]]; then exit 1; fi
+          if [[ "$DEPLOYS" != "success" && "$DEPLOYS" != "skipped" ]]; then exit 1; fi
+          if [[ "$TESTS"   != "success" && "$TESTS"   != "skipped" ]]; then exit 1; fi
+          echo "All PR checks passed."
