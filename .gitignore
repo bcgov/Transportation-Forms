@@ -83,3 +83,11 @@ npm-debug.log
 # OS
 .DS_Store
 Thumbs.db
+
+#Exclude project management files
+TASKS.md
+SPECIFICATIONS.md
+ROUTING-IMPLEMENTATION.md
+PROJECT_PLAN.md
+OPENSHIFT_DEPLOYMENT.md
+CONSTITUTION.md
