@@ -12,9 +12,9 @@ echo "Ensure PostgreSQL is running on localhost:5432"
 echo ""
 
 # database name
-DB_NAME="transportation_forms"
-DB_USER="postgres"
-DB_PASSWORD="${DB_PASSWORD:-password}"
+DB_NAME="${POSTGRES_DB:-transportation_forms}"
+DB_USER="${POSTGRES_USER:?POSTGRES_USER environment variable must be set}"
+DB_PASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD environment variable must be set}"
 DB_HOST="localhost"
 DB_PORT="5432"
 

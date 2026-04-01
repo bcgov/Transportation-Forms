@@ -1,13 +1,10 @@
 """One-time script to set up the test database user and database.
 
-Reads connection details from environment variables, falling back to
-local development defaults (port 5432).
-
-Environment variables:
+Reads connection details from existing environment variables:
+    POSTGRES_USER      Superuser name
+    POSTGRES_PASSWORD  Superuser password
     PG_HOST            Postgres host          (default: localhost)
     PG_PORT            Postgres port          (default: 5432)
-    PG_SUPERUSER       Superuser name         (default: postgres)
-    PG_SUPERUSER_PASS  Superuser password     (default: password)
 """
 import os
 import psycopg2
@@ -15,32 +12,37 @@ import psycopg2
 conn = psycopg2.connect(
     host=os.getenv("PG_HOST", "localhost"),
     port=int(os.getenv("PG_PORT", "5432")),
-    user=os.getenv("PG_SUPERUSER", "postgres"),
-    password=os.getenv("PG_SUPERUSER_PASS", "password"),
+    user=os.environ["POSTGRES_USER"],
+    password=os.environ["POSTGRES_PASSWORD"],
     dbname="postgres",
 )
 conn.autocommit = True
 cur = conn.cursor()
 
+postgres_user = os.environ["POSTGRES_USER"]
+postgres_password = os.environ["POSTGRES_PASSWORD"]
+postgres_db = os.environ.get("POSTGRES_DB", "transportation_forms")
+
 # Create user if not exists
-cur.execute("SELECT 1 FROM pg_roles WHERE rolname = 'transportation'")
+cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (postgres_user,))
 if not cur.fetchone():
-    cur.execute("CREATE USER transportation WITH PASSWORD 'password' CREATEDB")
-    print("Created user 'transportation'")
+    cur.execute(f"CREATE USER {postgres_user} WITH PASSWORD %s CREATEDB", (postgres_password,))
+    print(f"Created user '{postgres_user}'")
 else:
-    print("User 'transportation' already exists")
+    print(f"User '{postgres_user}' already exists")
 
 # Create test database if not exists
-cur.execute("SELECT 1 FROM pg_database WHERE datname = 'transportation_forms_test'")
+test_db_name = f"{postgres_db}_test"
+cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (test_db_name,))
 if not cur.fetchone():
-    cur.execute("CREATE DATABASE transportation_forms_test OWNER transportation")
-    print("Created database 'transportation_forms_test'")
+    cur.execute(f"CREATE DATABASE {test_db_name} OWNER {postgres_user}")
+    print(f"Created database '{test_db_name}'")
 else:
-    print("Database 'transportation_forms_test' already exists")
+    print(f"Database '{test_db_name}' already exists")
 
 # Grant privileges
-cur.execute("GRANT ALL PRIVILEGES ON DATABASE transportation_forms TO transportation")
-cur.execute("GRANT ALL PRIVILEGES ON DATABASE transportation_forms_test TO transportation")
+cur.execute(f"GRANT ALL PRIVILEGES ON DATABASE {postgres_db} TO {postgres_user}")
+cur.execute(f"GRANT ALL PRIVILEGES ON DATABASE {test_db_name} TO {postgres_user}")
 print("Privileges granted")
 
 cur.close()
