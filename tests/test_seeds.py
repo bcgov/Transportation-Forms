@@ -1,7 +1,7 @@
 ﻿import pytest
 from sqlalchemy.orm import Session
 from backend.database import get_db, engine, Base
-from backend.models import Role, FormPrefix, BusinessArea
+from backend.models import Role, FormNumberPrefix, BusinessArea
 
 # Import all seeds
 from backend.seeds.default_roles import seed_roles
@@ -34,7 +34,7 @@ class TestDatabaseSeeds:
 
     def test_seed_prefixes_successful(self, seeded_db: Session):
         seed_prefixes(seeded_db)
-        prefixes = seeded_db.query(FormPrefix).all()
+        prefixes = seeded_db.query(FormNumberPrefix).all()
         assert len(prefixes) > 0
         codes = [p.prefix for p in prefixes]
         assert "MV" in codes
