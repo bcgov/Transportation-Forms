@@ -74,7 +74,7 @@ jobs:
       triggered: ${{ steps.meta.outputs.triggered }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.1
 
       - name: Resolve deployment metadata
         id: meta
@@ -85,7 +85,7 @@ jobs:
 
       # ── Deploy Crunchy PostgreSQL ─────────────────────────────────────────
       - name: Deploy Crunchy PostgreSQL
-        uses: bcgov/action-crunchy@v1
+        uses: bcgov/action-crunchy@v2.0.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
           oc_token: ${{ secrets.oc_token }}
@@ -102,7 +102,7 @@ jobs:
 
       # ── Deploy application via Helm ───────────────────────────────────────
       - name: Helm upgrade / install
-        uses: bcgov/action-oc-runner@v1
+        uses: bcgov/action-oc-runner@v1.4.1
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
           oc_token: ${{ secrets.oc_token }}
