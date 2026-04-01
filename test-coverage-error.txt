@@ -1,0 +1,357 @@
+Run pytest tests/ \
+  pytest tests/ \
+    --cov=backend \
+    --cov-report=xml \
+    --cov-report=html \
+    --cov-report=term \
+    --junit-xml=test-results.xml \
+    --verbose
+  shell: /usr/bin/bash -e {0}
+  env:
+    pythonLocation: /opt/hostedtoolcache/Python/3.12.13/x64
+    PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib/pkgconfig
+    Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+    Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+    Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+    LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib
+    DATABASE_URL: ***localhost:5432/transportation_forms
+    SECRET_KEY: ***
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.0.2, pluggy-1.6.0 -- /opt/hostedtoolcache/Python/3.12.13/x64/bin/python
+cachedir: .pytest_cache
+rootdir: /home/runner/work/Transportation-Forms/Transportation-Forms
+configfile: pytest.ini
+plugins: cov-7.1.0, xdist-3.8.0, anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 185 items
+
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_norole_user_can_submit_request PASSED [  0%]
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_duplicate_pending_request_returns_409 PASSED [  1%]
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_user_with_existing_roles_cannot_submit PASSED [  1%]
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_non_admin_blocked_from_admin_endpoints PASSED [  2%]
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_admin_can_list_and_approve_request PASSED [  2%]
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_admin_can_reject_request PASSED [  3%]
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_me_returns_latest_request_status PASSED [  3%]
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_audit_logs_written_for_submit_approve_reject PASSED [  4%]
+tests/test_admin_roles_api.py::TestAdminRoleManagementApi::test_non_admin_cannot_access_admin_role_endpoints PASSED [  4%]
+tests/test_admin_roles_api.py::TestAdminRoleManagementApi::test_admin_can_create_custom_role_and_audit_is_written PASSED [  5%]
+tests/test_admin_roles_api.py::TestAdminRoleManagementApi::test_duplicate_custom_role_returns_409 PASSED [  5%]
+tests/test_admin_roles_api.py::TestAdminRoleManagementApi::test_role_detail_returns_assigned_users PASSED [  6%]
+tests/test_admin_roles_api.py::TestAdminRoleManagementApi::test_system_role_editable_but_not_deletable PASSED [  7%]
+tests/test_admin_roles_api.py::TestAdminRoleManagementApi::test_custom_role_can_be_deleted PASSED [  7%]
+tests/test_admin_roles_api.py::TestAdminRoleManagementApi::test_get_missing_role_returns_404 PASSED [  8%]
+tests/test_admin_users_api.py::TestAdminUsersApi::test_non_admin_cannot_access_admin_users_endpoints PASSED [  8%]
+tests/test_admin_users_api.py::TestAdminUsersApi::test_admin_can_list_users_with_keycloak_and_roles PASSED [  9%]
+tests/test_admin_users_api.py::TestAdminUsersApi::test_admin_can_get_user_detail_including_first_sign_in_and_roles PASSED [  9%]
+tests/test_admin_users_api.py::TestAdminUsersApi::test_admin_can_assign_and_unassign_roles_for_user PASSED [ 10%]
+tests/test_admin_users_api.py::TestAdminUsersApi::test_update_roles_rejects_invalid_role_id PASSED [ 10%]
+tests/test_auth_audit.py::test_login_and_logout_audits_include_keycloak_id PASSED [ 11%]
+tests/test_auth_audit.py::test_refresh_does_not_create_login_or_logout_audit PASSED [ 11%]
+tests/test_auth_flow.py::test_login_returns_authorization_url PASSED     [ 12%]
+tests/test_auth_flow.py::test_callback_success_creates_user_updates_last_login_and_returns_tokens PASSED [ 12%]
+tests/test_auth_flow.py::test_callback_invalid_state_returns_400 PASSED  [ 13%]
+tests/test_auth_flow.py::test_refresh_success_returns_new_access_token_and_updates_last_login PASSED [ 14%]
+tests/test_auth_flow.py::test_refresh_invalid_token_returns_401 PASSED   [ 14%]
+tests/test_auth_flow.py::test_logout_forwards_refresh_token_and_writes_audit_log PASSED [ 15%]
+tests/test_auth_flow.py::test_me_returns_authenticated_user_with_keycloak_id PASSED [ 15%]
+tests/test_auth_flow.py::test_login_uses_frontend_redirect_uri_from_body PASSED [ 16%]
+tests/test_auth_flow.py::test_login_derives_redirect_uri_from_origin_header PASSED [ 16%]
+tests/test_auth_flow.py::test_login_rejects_disallowed_redirect_uri PASSED [ 17%]
+tests/test_auth_flow.py::test_callback_uses_redirect_uri_stored_in_state PASSED [ 17%]
+tests/test_auth_flow.py::test_callback_preserves_existing_portal_roles PASSED [ 18%]
+tests/test_dashboard_stats_api.py::test_unauthenticated_returns_401 PASSED [ 18%]
+tests/test_dashboard_stats_api.py::test_authenticated_empty_db_returns_zero_counts PASSED [ 19%]
+tests/test_dashboard_stats_api.py::test_published_forms_count PASSED     [ 20%]
+tests/test_dashboard_stats_api.py::test_forms_awaiting_approval_count PASSED [ 20%]
+tests/test_dashboard_stats_api.py::test_soft_deleted_forms_excluded PASSED [ 21%]
+tests/test_dashboard_stats_api.py::test_reservations_awaiting_approval_count PASSED [ 21%]
+tests/test_dashboard_stats_api.py::test_all_three_counts_independent PASSED [ 22%]
+tests/test_dashboard_stats_api.py::test_any_portal_role_can_access[reviewer] PASSED [ 22%]
+tests/test_dashboard_stats_api.py::test_any_portal_role_can_access[staff_manager] PASSED [ 23%]
+tests/test_dashboard_stats_api.py::test_any_portal_role_can_access[admin] PASSED [ 23%]
+tests/test_forms_personal_info_api.py::test_create_form_with_personal_info_yes PASSED [ 24%]
+tests/test_forms_personal_info_api.py::test_create_form_defaults_personal_info_to_no PASSED [ 24%]
+tests/test_forms_personal_info_api.py::test_update_form_personal_info_field PASSED [ 25%]
+tests/test_forms_personal_info_api.py::test_reject_invalid_personal_info_value PASSED [ 25%]
+tests/test_forms_personal_info_api.py::test_create_form_multiple_business_areas_rejected PASSED [ 26%]
+tests/test_forms_workflow.py::TestFormWorkflowService::test_happy_path_draft_to_archived FAILED [ 27%]
+tests/test_forms_workflow.py::TestFormWorkflowService::test_reject_requires_reason_and_returns_to_draft PASSED [ 27%]
+tests/test_forms_workflow.py::TestFormWorkflowService::test_submit_requires_approved_reservation_when_linked PASSED [ 28%]
+tests/test_forms_workflow.py::TestFormWorkflowService::test_invalid_transition_and_strict_idempotency PASSED [ 28%]
+tests/test_forms_workflow.py::TestFormWorkflowService::test_separation_of_duties_toggle_blocks_self_approval PASSED [ 29%]
+tests/test_forms_workflow.py::TestFormWorkflowApi::test_reviewer_can_publish_but_cannot_archive PASSED [ 29%]
+tests/test_forms_workflow.py::TestFormWorkflowApi::test_reject_endpoint_requires_reason_notes PASSED [ 30%]
+tests/test_forms_workflow.py::TestFormWorkflowApi::test_workflow_history_returns_desc_order PASSED [ 30%]
+tests/test_frontend_admin_visibility.py::TestFrontendAdminVisibilityAndGuards::test_admin_navbar_links_exist_and_hidden_by_default PASSED [ 31%]
+tests/test_frontend_admin_visibility.py::TestFrontendAdminVisibilityAndGuards::test_route_guard_blocks_non_admin_direct_navigation PASSED [ 31%]
+tests/test_frontend_admin_visibility.py::TestFrontendAdminVisibilityAndGuards::test_route_handler_supports_admin_pages_and_detail_routes PASSED [ 32%]
+tests/test_frontend_admin_visibility.py::TestFrontendAdminVisibilityAndGuards::test_request_access_panel_and_actions_exist PASSED [ 32%]
+tests/test_frontend_admin_visibility.py::TestFrontendAdminVisibilityAndGuards::test_request_access_panel_has_no_d_flex_static_class PASSED [ 33%]
+tests/test_reservation_api.py::TestAutoGenerateEndpoint::test_generate_success PASSED [ 34%]
+tests/test_reservation_api.py::TestAutoGenerateEndpoint::test_generate_invalid_prefix PASSED [ 34%]
+tests/test_reservation_api.py::TestAutoGenerateEndpoint::test_generate_nonexistent_prefix PASSED [ 35%]
+tests/test_reservation_api.py::TestCustomEndpoint::test_custom_success PASSED [ 35%]
+tests/test_reservation_api.py::TestCustomEndpoint::test_custom_duplicate_returns_409 PASSED [ 36%]
+tests/test_reservation_api.py::TestCustomEndpoint::test_custom_missing_reason PASSED [ 36%]
+tests/test_reservation_api.py::TestApprovalWorkflowEndpoints::test_submit_approve_flow PASSED [ 37%]
+tests/test_reservation_api.py::TestApprovalWorkflowEndpoints::test_reject_requires_approver_role PASSED [ 37%]
+tests/test_reservation_api.py::TestApprovalWorkflowEndpoints::test_approve_requires_approver_role PASSED [ 38%]
+tests/test_reservation_api.py::TestApprovalWorkflowEndpoints::test_request_changes_requires_approver_role PASSED [ 38%]
+tests/test_reservation_api.py::TestReleaseEndpoint::test_release_own_reservation PASSED [ 39%]
+tests/test_reservation_api.py::TestExpiryEndpoint::test_expire_requires_admin PASSED [ 40%]
+tests/test_reservation_api.py::TestExpiryEndpoint::test_expire_as_admin PASSED [ 40%]
+tests/test_reservation_api.py::TestExpiringEndpoint::test_expiring_requires_admin PASSED [ 41%]
+tests/test_reservation_api.py::TestExpiringEndpoint::test_expiring_as_admin PASSED [ 41%]
+tests/test_reservation_api.py::TestListEndpoints::test_list_my PASSED    [ 42%]
+tests/test_reservation_api.py::TestListEndpoints::test_list_all PASSED   [ 42%]
+tests/test_reservation_api.py::TestListEndpoints::test_get_detail PASSED [ 43%]
+tests/test_reservation_api.py::TestListEndpoints::test_get_nonexistent_returns_404 PASSED [ 43%]
+tests/test_reservation_api.py::TestListEndpoints::test_list_pending_as_admin PASSED [ 44%]
+tests/test_reservation_audit.py::TestAuditReserveNumber::test_auto_generate_creates_audit PASSED [ 44%]
+tests/test_reservation_audit.py::TestAuditReserveSpecialNumber::test_custom_generates_audit PASSED [ 45%]
+tests/test_reservation_audit.py::TestAuditSubmitForApproval::test_submit_creates_audit PASSED [ 45%]
+tests/test_reservation_audit.py::TestAuditApproveReservation::test_approve_creates_audit PASSED [ 46%]
+tests/test_reservation_audit.py::TestAuditRejectReservation::test_reject_creates_audit PASSED [ 47%]
+tests/test_reservation_audit.py::TestAuditRequestChanges::test_request_changes_creates_audit PASSED [ 47%]
+tests/test_reservation_audit.py::TestAuditReleaseNumber::test_release_creates_audit PASSED [ 48%]
+tests/test_reservation_audit.py::TestAuditReservationExpired::test_expire_creates_audit PASSED [ 48%]
+tests/test_reservation_audit.py::TestFullAuditTrail::test_full_workflow_audit_trail PASSED [ 49%]
+tests/test_reservation_concurrency.py::TestSequentialAutoGenerate::test_two_sequential_auto_generate_different PASSED [ 49%]
+tests/test_reservation_concurrency.py::TestSequentialAutoGenerate::test_many_sequential_auto_generate PASSED [ 50%]
+tests/test_reservation_concurrency.py::TestSequentialAutoGenerate::test_sequence_correctly_incremented_after_many PASSED [ 50%]
+tests/test_reservation_concurrency.py::TestCustomNumberConflict::test_second_custom_same_number_fails PASSED [ 51%]
+tests/test_reservation_concurrency.py::TestCustomNumberConflict::test_different_custom_numbers_ok PASSED [ 51%]
+tests/test_reservation_concurrency.py::TestAtomicReservation::test_reservation_and_audit_created_atomically PASSED [ 52%]
+tests/test_reservation_concurrency.py::TestAtomicReservation::test_submit_creates_approvers_atomically PASSED [ 52%]
+tests/test_reservation_concurrency.py::TestReReservation::test_released_number_re_reservable PASSED [ 53%]
+tests/test_reservation_concurrency.py::TestReReservation::test_expired_number_re_reservable PASSED [ 54%]
+tests/test_reservation_concurrency.py::TestMultiplePrefixConcurrency::test_interleaved_prefix_sequences PASSED [ 54%]
+tests/test_reservation_db_constraints.py::TestForeignKeyConstraints::test_reservation_requires_valid_prefix PASSED [ 55%]
+tests/test_reservation_db_constraints.py::TestForeignKeyConstraints::test_reservation_requires_valid_user PASSED [ 55%]
+tests/test_reservation_db_constraints.py::TestForeignKeyConstraints::test_approver_requires_valid_reservation PASSED [ 56%]
+tests/test_reservation_db_constraints.py::TestForeignKeyConstraints::test_approver_requires_valid_user PASSED [ 56%]
+tests/test_reservation_db_constraints.py::TestModelConstraints::test_valid_numbering_methods PASSED [ 57%]
+tests/test_reservation_db_constraints.py::TestModelConstraints::test_valid_status_values PASSED [ 57%]
+tests/test_reservation_db_constraints.py::TestModelConstraints::test_unique_approver_per_reservation PASSED [ 58%]
+tests/test_reservation_db_constraints.py::TestSoftDeleteBehavior::test_soft_deleted_not_returned PASSED [ 58%]
+tests/test_reservation_db_constraints.py::TestSoftDeleteBehavior::test_soft_deleted_not_in_list PASSED [ 59%]
+tests/test_reservation_integration.py::TestHappyPath::test_generate_submit_approve PASSED [ 60%]
+tests/test_reservation_integration.py::TestRejectPath::test_generate_submit_reject PASSED [ 60%]
+tests/test_reservation_integration.py::TestRejectPath::test_reject_requires_reason PASSED [ 61%]
+tests/test_reservation_integration.py::TestChangesRequestedPath::test_full_changes_cycle PASSED [ 61%]
+tests/test_reservation_integration.py::TestChangesRequestedPath::test_request_changes_requires_comments PASSED [ 62%]
+tests/test_reservation_integration.py::TestChangesRequestedPath::test_only_owner_can_resubmit PASSED [ 62%]
+tests/test_reservation_integration.py::TestCustomNumberPath::test_custom_submit_approve PASSED [ 63%]
+tests/test_reservation_integration.py::TestDuplicateCustomNumber::test_duplicate_custom_blocked PASSED [ 63%]
+tests/test_reservation_integration.py::TestDuplicateCustomNumber::test_duplicate_after_release_ok PASSED [ 64%]
+tests/test_reservation_integration.py::TestAutoSequenceIndependence::test_custom_does_not_change_sequence PASSED [ 64%]
+tests/test_reservation_integration.py::TestListAndDetail::test_list_my_reservations PASSED [ 65%]
+tests/test_reservation_integration.py::TestListAndDetail::test_list_pending_approvals PASSED [ 65%]
+tests/test_reservation_integration.py::TestListAndDetail::test_get_reservation_detail PASSED [ 66%]
+tests/test_reservation_integration.py::TestListAndDetail::test_list_reservations_enhanced_filters PASSED [ 67%]
+tests/test_reservation_integration.py::TestExpiringReservations::test_list_expiring PASSED [ 67%]
+tests/test_reservation_unit.py::TestSequenceGenerator::test_first_auto_generates_sequence_1 PASSED [ 68%]
+tests/test_reservation_unit.py::TestSequenceGenerator::test_sequential_increments PASSED [ 68%]
+tests/test_reservation_unit.py::TestSequenceGenerator::test_prefix_sequence_is_updated PASSED [ 69%]
+tests/test_reservation_unit.py::TestSequenceGenerator::test_inactive_prefix_raises PASSED [ 69%]
+tests/test_reservation_unit.py::TestSequenceGenerator::test_deleted_prefix_raises PASSED [ 70%]
+tests/test_reservation_unit.py::TestSequenceGenerator::test_nonexistent_prefix_raises PASSED [ 70%]
+tests/test_reservation_unit.py::TestSequenceGenerator::test_independent_prefix_sequences PASSED [ 71%]
+tests/test_reservation_unit.py::TestZeroPadding::test_padding_formats[2-01] PASSED [ 71%]
+tests/test_reservation_unit.py::TestZeroPadding::test_padding_formats[3-001] PASSED [ 72%]
+tests/test_reservation_unit.py::TestZeroPadding::test_padding_formats[4-0001] PASSED [ 72%]
+tests/test_reservation_unit.py::TestZeroPadding::test_padding_formats[6-000001] PASSED [ 73%]
+tests/test_reservation_unit.py::TestZeroPadding::test_padding_formats[8-00000001] PASSED [ 74%]
+tests/test_reservation_unit.py::TestZeroPadding::test_padding_overflow PASSED [ 74%]
+tests/test_reservation_unit.py::TestCustomNumberValidation::test_valid_custom_number PASSED [ 75%]
+tests/test_reservation_unit.py::TestCustomNumberValidation::test_custom_number_must_be_alphanumeric PASSED [ 75%]
+tests/test_reservation_unit.py::TestCustomNumberValidation::test_custom_number_max_length PASSED [ 76%]
+tests/test_reservation_unit.py::TestCustomNumberValidation::test_custom_number_at_max_length_ok PASSED [ 76%]
+tests/test_reservation_unit.py::TestCustomNumberValidation::test_custom_requires_reason PASSED [ 77%]
+tests/test_reservation_unit.py::TestCustomNumberValidation::test_custom_requires_reason_whitespace PASSED [ 77%]
+tests/test_reservation_unit.py::TestCustomNumberValidation::test_custom_empty_form_number PASSED [ 78%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[reserved-pending_approval-True] PASSED [ 78%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[pending_approval-approved-True] PASSED [ 79%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[pending_approval-rejected-True] PASSED [ 80%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[pending_approval-changes_requested-True] PASSED [ 80%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[changes_requested-pending_approval-True] PASSED [ 81%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[reserved-approved-False] PASSED [ 81%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[reserved-rejected-False] PASSED [ 82%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[approved-pending_approval-False] PASSED [ 82%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[approved-rejected-False] PASSED [ 83%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[rejected-pending_approval-False] PASSED [ 83%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[released-reserved-False] PASSED [ 84%]
+tests/test_reservation_unit.py::TestStatusTransition::test_validate_transition[expired-reserved-False] PASSED [ 84%]
+tests/test_reservation_unit.py::TestStatusTransition::test_submit_changes_status PASSED [ 85%]
+tests/test_reservation_unit.py::TestStatusTransition::test_submit_by_non_owner_raises PASSED [ 85%]
+tests/test_reservation_unit.py::TestStatusTransition::test_approve_from_wrong_status_raises PASSED [ 86%]
+tests/test_reservation_unit.py::TestStatusTransition::test_reject_from_wrong_status_raises PASSED [ 87%]
+tests/test_reservation_unit.py::TestStatusTransition::test_request_changes_from_wrong_status_raises PASSED [ 87%]
+tests/test_reservation_unit.py::TestUniqueness::test_duplicate_custom_number_blocked PASSED [ 88%]
+tests/test_reservation_unit.py::TestUniqueness::test_case_insensitive_uniqueness PASSED [ 88%]
+tests/test_reservation_unit.py::TestUniqueness::test_released_number_can_be_re_reserved PASSED [ 89%]
+tests/test_reservation_unit.py::TestUniqueness::test_expired_number_can_be_re_reserved PASSED [ 89%]
+tests/test_reservation_unit.py::TestExpiryDate::test_auto_generated_expiry_1_day PASSED [ 90%]
+tests/test_reservation_unit.py::TestExpiryDate::test_custom_expiry_14_days PASSED [ 90%]
+tests/test_reservation_unit.py::TestReleasePermissions::test_owner_can_release_own PASSED [ 91%]
+tests/test_reservation_unit.py::TestReleasePermissions::test_admin_can_release_any PASSED [ 91%]
+tests/test_reservation_unit.py::TestReleasePermissions::test_assigned_approver_can_release PASSED [ 92%]
+tests/test_reservation_unit.py::TestReleasePermissions::test_unrelated_user_cannot_release PASSED [ 92%]
+tests/test_reservation_unit.py::TestReleasePermissions::test_cannot_release_approved PASSED [ 93%]
+tests/test_reservation_unit.py::TestReleasePermissions::test_cannot_release_already_released PASSED [ 94%]
+tests/test_reservation_unit.py::TestReleasePermissions::test_cannot_release_expired PASSED [ 94%]
+tests/test_reservation_unit.py::TestAutoExpiry::test_expire_stale_reserved PASSED [ 95%]
+tests/test_reservation_unit.py::TestAutoExpiry::test_expire_stale_changes_requested PASSED [ 95%]
+tests/test_reservation_unit.py::TestAutoExpiry::test_fresh_reservations_not_expired PASSED [ 96%]
+tests/test_reservation_unit.py::TestAutoExpiry::test_approved_not_expired PASSED [ 96%]
+tests/test_reservation_unit.py::TestCustomVsAutoSequence::test_custom_does_not_affect_sequence PASSED [ 97%]
+tests/test_search_api.py::test_search_keyword_matches_indexed_fields PASSED [ 97%]
+tests/test_search_api.py::test_autocomplete_enforces_min_length_and_max_suggestions PASSED [ 98%]
+tests/test_search_api.py::test_filters_individual_and_combined PASSED    [ 98%]
+tests/test_search_api.py::test_sort_order_created_at PASSED              [ 99%]
+tests/test_search_api.py::test_pagination_contract_and_limits PASSED     [100%]
+
+=================================== FAILURES ===================================
+__________ TestFormWorkflowService.test_happy_path_draft_to_archived ___________
+tests/test_forms_workflow.py:53: in test_happy_path_draft_to_archived
+    assert str(submitted.status) == "pending_review"
+E   AssertionError: assert 'archived' == 'pending_review'
+E     
+E     - pending_review
+E     + archived
+=============================== warnings summary ===============================
+backend/database.py:42
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/database.py:42: MovedIn20Warning: The ``declarative_base()`` function is now available as sqlalchemy.orm.declarative_base(). (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    Base = declarative_base()
+
+backend/config.py:8
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/config.py:8: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Settings(BaseSettings):
+
+backend/routes/forms.py:153
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/routes/forms.py:153: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class FormResponse(BaseModel):
+
+backend/routes/business_areas.py:21
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/routes/business_areas.py:21: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class BusinessAreaResponse(BaseModel):
+
+backend/routes/prefixes.py:65
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/routes/prefixes.py:65: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class PrefixResponse(BaseModel):
+
+backend/routes/prefixes.py:83
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/routes/prefixes.py:83: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class PrefixPublicResponse(BaseModel):
+
+backend/routes/reservations.py:73
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/routes/reservations.py:73: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ReservationResponse(BaseModel):
+
+backend/routes/reservations.py:119
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/routes/reservations.py:119: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ApproverDecisionResponse(BaseModel):
+
+backend/routes/reservations.py:136
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/routes/reservations.py:136: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class PrefixInfoResponse(BaseModel):
+
+backend/routes/reservations.py:148
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/routes/reservations.py:148: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ReservationDetailResponse(BaseModel):
+
+backend/routes/reservations.py:182
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/routes/reservations.py:182: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ApprovedUnusedReservationsResponse(BaseModel):
+
+backend/main.py:90
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/main.py:90: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+../../../../../opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/fastapi/applications.py:4656
+  /opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/fastapi/applications.py:4656: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_admin_can_list_and_approve_request
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_audit_logs_written_for_submit_approve_reject
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/services/access_requests.py:201: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    request.processed_at = datetime.utcnow()
+
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_admin_can_reject_request
+tests/test_access_requests_api.py::TestAccessRequestsApi::test_audit_logs_written_for_submit_approve_reject
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/services/access_requests.py:266: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    request.processed_at = datetime.utcnow()
+
+tests/test_admin_roles_api.py::TestAdminRoleManagementApi::test_custom_role_can_be_deleted
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/services/roles.py:216: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = datetime.utcnow()
+
+tests/test_admin_users_api.py::TestAdminUsersApi::test_admin_can_assign_and_unassign_roles_for_user
+tests/test_admin_users_api.py::TestAdminUsersApi::test_admin_can_assign_and_unassign_roles_for_user
+  /home/runner/work/Transportation-Forms/Transportation-Forms/backend/routes/admin_users.py:213: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = datetime.utcnow()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+- generated xml file: /home/runner/work/Transportation-Forms/Transportation-Forms/test-results.xml -
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.12.13-final-0 _______________
+
+Name                                      Stmts   Miss  Cover
+-------------------------------------------------------------
+backend/__init__.py                           1      0   100%
+backend/auth/__init__.py                      1      0   100%
+backend/auth/authorization.py                89     89     0%
+backend/auth/dependencies.py                 51     25    51%
+backend/auth/jwt_handler.py                  74     20    73%
+backend/auth/keycloak_service.py            147    112    24%
+backend/auth/keys.py                         34      2    94%
+backend/auth/permissions.py                  62     62     0%
+backend/config.py                            55     10    82%
+backend/database.py                          19      4    79%
+backend/main.py                              68     27    60%
+backend/models.py                           255      1    99%
+backend/routes/__init__.py                    1      0   100%
+backend/routes/access_requests.py            75     12    84%
+backend/routes/admin_users.py               100      9    91%
+backend/routes/auth.py                      208     41    80%
+backend/routes/business_areas.py             19      2    89%
+backend/routes/forms.py                     226     76    66%
+backend/routes/prefixes.py                   99     40    60%
+backend/routes/reservations.py              263     58    78%
+backend/routes/roles.py                     109     17    84%
+backend/routes/stats.py                      20      0   100%
+backend/routes/workflow.py                  114     48    58%
+backend/seeds/__init__.py                     9      9     0%
+backend/seeds/default_business_areas.py      12     12     0%
+backend/seeds/default_demo_user.py           17     17     0%
+backend/seeds/default_prefixes.py            12     12     0%
+backend/seeds/default_roles.py               35     35     0%
+backend/seeds/seed_initial_admin.py          32     32     0%
+backend/services/__init__.py                  6      0   100%
+backend/services/access_requests.py          88      7    92%
+backend/services/forms.py                   244     72    70%
+backend/services/minio_service.py            48     35    27%
+backend/services/prefixes.py                 92     70    24%
+backend/services/reservations.py            287     33    89%
+backend/services/roles.py                    87     13    85%
+-------------------------------------------------------------
+TOTAL                                      3059   1002    67%
+Coverage HTML written to dir htmlcov
+Coverage XML written to file coverage.xml
+=========================== short test summary info ============================
+FAILED tests/test_forms_workflow.py::TestFormWorkflowService::test_happy_path_draft_to_archived - AssertionError: assert 'archived' == 'pending_review'
+  
+  - pending_review
+  + archived
+================= 1 failed, 184 passed, 20 warnings in 12.08s ==================
+Error: Process completed with exit code 1.
