@@ -87,8 +87,6 @@ jobs:
       - name: Run tests with coverage
         env:
           DATABASE_URL: postgresql://transportation:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/transportation_forms
-          TEST_DATABASE_URL: postgresql://transportation:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/transportation_forms_test
-          PG_ADMIN_URL: postgresql://transportation:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/postgres
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           pytest tests/ \

@@ -38,23 +38,19 @@ from backend.auth.jwt_handler import TokenData
 # PostgreSQL test database setup
 # ---------------------------------------------------------------------------
 
-# Connection to the *admin* database used to CREATE/DROP the test database.
-# Locally: read from the .env file (PG_ADMIN_URL) or falls back to port 5432.
-# CI: set PG_ADMIN_URL via GitHub Actions env block.
-_PG_ADMIN_URL = os.getenv(
-    "PG_ADMIN_URL",
-    "postgresql://transportation:password@localhost:5432/postgres",
-)
-
 # Connection to the dedicated *test* database.
-# Locally: read from the .env file (TEST_DATABASE_URL) or falls back to port 5432.
-# CI: set TEST_DATABASE_URL via GitHub Actions env block.
-TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    "postgresql://transportation:password@localhost:5432/transportation_forms_test",
-)
+# Locally/CI: read from the .env file or GitHub Actions env block.
+DATABASE_URL = os.environ["DATABASE_URL"]
 
-_TEST_DB_NAME = TEST_DATABASE_URL.rsplit("/", 1)[-1]
+# Connection to the *admin* database used to CREATE/DROP the test database.
+# Inferred by replacing the database path from DATABASE_URL with /postgres
+_PG_ADMIN_URL = DATABASE_URL.rsplit("/", 1)[0] + "/postgres"
+
+_TEST_DB_NAME = DATABASE_URL.rsplit("/", 1)[-1] + "_test"
+
+# Make sure tests run against the "_test" database instead of the main db
+TEST_DATABASE_URL = DATABASE_URL.rsplit("/", 1)[0] + f"/{_TEST_DB_NAME}"
+
 
 
 @pytest.fixture(scope="session")
