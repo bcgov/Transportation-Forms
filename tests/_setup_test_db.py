@@ -1,8 +1,23 @@
-"""One-time script to set up the test database user and database."""
+"""One-time script to set up the test database user and database.
+
+Reads connection details from environment variables, falling back to
+local development defaults (port 5432).
+
+Environment variables:
+    PG_HOST            Postgres host          (default: localhost)
+    PG_PORT            Postgres port          (default: 5432)
+    PG_SUPERUSER       Superuser name         (default: postgres)
+    PG_SUPERUSER_PASS  Superuser password     (default: password)
+"""
+import os
 import psycopg2
 
 conn = psycopg2.connect(
-    host="localhost", port=6432, user="postgres", password="password", dbname="postgres"
+    host=os.getenv("PG_HOST", "localhost"),
+    port=int(os.getenv("PG_PORT", "5432")),
+    user=os.getenv("PG_SUPERUSER", "postgres"),
+    password=os.getenv("PG_SUPERUSER_PASS", "password"),
+    dbname="postgres",
 )
 conn.autocommit = True
 cur = conn.cursor()

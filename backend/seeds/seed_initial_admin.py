@@ -4,6 +4,7 @@ Reads INITIAL_ADMIN_EMAIL from the environment.  Idempotent — no-op if the
 user already exists with the admin role already assigned.  Called from the
 migrations init container entrypoint when INITIAL_ADMIN_EMAIL is set.
 """
+
 import os
 
 from sqlalchemy.orm import Session
@@ -19,15 +20,11 @@ def seed_initial_admin(db: Session, email: str) -> None:
     inserting and never overwrites data.
     """
     existing = (
-        db.query(User)
-        .filter(User.email == email, User.deleted_at.is_(None))
-        .first()
+        db.query(User).filter(User.email == email, User.deleted_at.is_(None)).first()
     )
 
     admin_role = (
-        db.query(Role)
-        .filter(Role.name == "admin", Role.deleted_at.is_(None))
-        .first()
+        db.query(Role).filter(Role.name == "admin", Role.deleted_at.is_(None)).first()
     )
 
     if not admin_role:
@@ -50,7 +47,9 @@ def seed_initial_admin(db: Session, email: str) -> None:
             db.commit()
             print(f"Admin role assigned to existing user {email!r}")
         else:
-            print(f"Initial admin {email!r} already exists with admin role — no changes needed")
+            print(
+                f"Initial admin {email!r} already exists with admin role — no changes needed"
+            )
         return
 
     user = User(

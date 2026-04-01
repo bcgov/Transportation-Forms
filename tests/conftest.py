@@ -7,7 +7,7 @@ PostgreSQL behaviour (partial unique indexes, check constraints, etc.).
 
 Requires a running PostgreSQL instance.  By default the connection string
 is read from the ``TEST_DATABASE_URL`` environment variable; the fallback
-points at the Rancher Desktop Compose service exposed on port 6432.
+points at the Rancher Desktop Compose service on port 5432.
 """
 
 import os
@@ -39,15 +39,19 @@ from backend.auth.jwt_handler import TokenData
 # ---------------------------------------------------------------------------
 
 # Connection to the *admin* database used to CREATE/DROP the test database.
+# Locally: read from the .env file (PG_ADMIN_URL) or falls back to port 5432.
+# CI: set PG_ADMIN_URL via GitHub Actions env block.
 _PG_ADMIN_URL = os.getenv(
     "PG_ADMIN_URL",
-    "postgresql://transportation:password@localhost:6432/postgres",
+    "postgresql://transportation:password@localhost:5432/postgres",
 )
 
 # Connection to the dedicated *test* database.
+# Locally: read from the .env file (TEST_DATABASE_URL) or falls back to port 5432.
+# CI: set TEST_DATABASE_URL via GitHub Actions env block.
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql://transportation:password@localhost:6432/transportation_forms_test",
+    "postgresql://transportation:password@localhost:5432/transportation_forms_test",
 )
 
 _TEST_DB_NAME = TEST_DATABASE_URL.rsplit("/", 1)[-1]
