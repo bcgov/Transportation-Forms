@@ -46,13 +46,15 @@ class TestFormWorkflowService:
         form_id = uuid.UUID(str(form.id))
 
         submitted = FormService.submit_form_for_review(db, form_id, reviewer.id)
-        approved = FormService.approve_form(db, form_id, reviewer.id)
-        published = FormService.publish_form(db, form_id, reviewer.id)
-        archived = FormService.archive_form(db, form_id, user_id=reviewer.id)
-
         assert str(submitted.status) == "pending_review"
+
+        approved = FormService.approve_form(db, form_id, reviewer.id)
         assert str(approved.status) == "approved"
+
+        published = FormService.publish_form(db, form_id, reviewer.id)
         assert str(published.status) == "published"
+
+        archived = FormService.archive_form(db, form_id, user_id=reviewer.id)
         assert archived is not None
         assert str(archived.status) == "archived"
 
