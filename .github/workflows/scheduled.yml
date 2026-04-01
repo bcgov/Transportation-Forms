@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.1
 
       - name: Remove stale PR releases
         uses: bcgov/action-oc-runner@v1.4.1
@@ -48,7 +48,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.1
 
       - name: Generate SchemaSpy docs
         uses: bcgov/action-oc-runner@v1
@@ -72,7 +72,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.1
 
       - name: ZAP Full Scan — Frontend
         uses: zaproxy/action-full-scan@v0.10.0

@@ -18,7 +18,7 @@ jobs:
       (github.event.action == 'closed')
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.1
 
       - name: Update demo route in OpenShift
         uses: bcgov/action-oc-runner@v1
