@@ -116,6 +116,24 @@ def upload_file(
     return object_key, public_url
 
 
+def get_presigned_url(object_key: str, expiration: int = 3600) -> str:
+    """Generate a pre-signed URL for temporary access to a MinIO object.
+
+    Args:
+        object_key: The MinIO object key.
+        expiration: URL validity in seconds (default 1 hour).
+
+    Returns:
+        Pre-signed URL string.
+    """
+    client = _get_s3_client()
+    return client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.MINIO_BUCKET, "Key": object_key},
+        ExpiresIn=expiration,
+    )
+
+
 def delete_file(object_key: str) -> bool:
     """Delete a file from MinIO.
 

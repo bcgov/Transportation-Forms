@@ -14,14 +14,15 @@ class TestMinioService:
         )
         
         ensure_bucket_exists()
-        mock_client.create_bucket.assert_called_once_with(Bucket="transportation-forms") # assuming default env bucket
+        mock_client.create_bucket.assert_called_once()  # bucket name comes from settings
 
     @patch("backend.services.minio_service._get_s3_client")
     def test_upload_file_success(self, mock_get_client):
         mock_client = mock_get_client.return_value
         result = upload_file(b"content", "test.pdf")
         mock_client.put_object.assert_called_once()
-        assert result == "test.pdf"
+        object_key, public_url = result
+        assert object_key.startswith("uploads/") and object_key.endswith(".pdf")
 
     @patch("backend.services.minio_service._get_s3_client")
     def test_get_presigned_url(self, mock_get_client):

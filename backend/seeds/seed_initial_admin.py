@@ -63,6 +63,10 @@ def seed_initial_admin(db: Session, email: str) -> None:
     print(f"Initial admin {email!r} seeded successfully")
 
 
+# Alias for backward compatibility
+seed_admin = seed_initial_admin
+
+
 if __name__ == "__main__":
     email = os.environ.get("INITIAL_ADMIN_EMAIL", "").strip()
     if not email:

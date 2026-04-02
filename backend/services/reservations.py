@@ -91,7 +91,7 @@ class ReservationService:
         full_form_number = f"{prefix.prefix}{form_number}"
 
         now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(days=1)
+        expires_at = (now + timedelta(days=1)).replace(tzinfo=None)
 
         reservation = FormNumberReservation(
             prefix_id=prefix_id,
@@ -227,7 +227,7 @@ class ReservationService:
             )
 
         now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(days=14)
+        expires_at = (now + timedelta(days=14)).replace(tzinfo=None)
 
         reservation = FormNumberReservation(
             prefix_id=prefix_id,

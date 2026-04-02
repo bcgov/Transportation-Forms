@@ -74,3 +74,7 @@ def seed_default_prefixes(db: Session) -> None:
 
     db.commit()
     print("✓ Default form number prefixes seeded successfully")
+
+
+# Alias for backward compatibility
+seed_prefixes = seed_default_prefixes
