@@ -116,6 +116,10 @@ def seed_default_roles(db: Session) -> dict:
     return results
 
 
+# Alias for backward compatibility
+seed_roles = seed_default_roles
+
+
 def get_role_by_name(db: Session, role_name: str) -> Role:
     """
     Get a role by name.

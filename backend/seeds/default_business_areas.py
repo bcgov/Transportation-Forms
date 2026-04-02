@@ -61,3 +61,7 @@ def seed_default_business_areas(db: Session) -> None:
 
     db.commit()
     print("✓ Default business areas seeded successfully")
+
+
+# Alias for backward compatibility
+seed_business_areas = seed_default_business_areas

@@ -201,3 +201,47 @@ class TestFormWorkflowApi:
         assert len(items) >= 2
         assert items[0]["action"] == "reject"
         assert items[1]["action"] == "submit"
+
+    @pytest.mark.integration
+    def test_insufficient_role_returns_403(self, db, user_factory, client_factory):
+        """A user with no allowed role gets 403 on workflow endpoints."""
+        creator = _create_user(user_factory, "creator-norole@example.com")
+        form = _create_form(db, creator.id, status="draft")
+        staff_client = client_factory(creator, ["staff_viewer"])
+        resp = staff_client.post(f"/api/v1/staff/forms/{form.id}/submit")
+        assert resp.status_code == 403
+
+    @pytest.mark.integration
+    def test_submit_form_not_found_returns_404(self, db, user_factory, client_factory):
+        reviewer = _create_user(user_factory, "reviewer-notfound@example.com")
+        reviewer_client = client_factory(reviewer, ["reviewer"])
+        resp = reviewer_client.post(f"/api/v1/staff/forms/{uuid.uuid4()}/submit")
+        assert resp.status_code == 404
+
+    @pytest.mark.integration
+    def test_approve_form_not_found_returns_404(self, db, user_factory, client_factory):
+        reviewer = _create_user(user_factory, "reviewer-notfound2@example.com")
+        reviewer_client = client_factory(reviewer, ["reviewer"])
+        resp = reviewer_client.post(f"/api/v1/staff/forms/{uuid.uuid4()}/approve")
+        assert resp.status_code == 404
+
+    @pytest.mark.integration
+    def test_publish_form_not_found_returns_404(self, db, user_factory, client_factory):
+        reviewer = _create_user(user_factory, "reviewer-notfound3@example.com")
+        reviewer_client = client_factory(reviewer, ["reviewer"])
+        resp = reviewer_client.post(f"/api/v1/staff/forms/{uuid.uuid4()}/publish")
+        assert resp.status_code == 404
+
+    @pytest.mark.integration
+    def test_archive_form_not_found_returns_404(self, db, user_factory, client_factory):
+        admin = _create_user(user_factory, "admin-notfound@example.com")
+        admin_client = client_factory(admin, ["admin"])
+        resp = admin_client.post(f"/api/v1/staff/forms/{uuid.uuid4()}/archive")
+        assert resp.status_code == 404
+
+    @pytest.mark.integration
+    def test_history_form_not_found_returns_404(self, db, user_factory, client_factory):
+        reviewer = _create_user(user_factory, "reviewer-hist404@example.com")
+        reviewer_client = client_factory(reviewer, ["reviewer"])
+        resp = reviewer_client.get(f"/api/v1/staff/forms/{uuid.uuid4()}/workflow-history")
+        assert resp.status_code == 404

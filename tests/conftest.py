@@ -16,10 +16,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Generator
 
 import pytest
+from fastapi import Request
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.database import Base
+from backend.auth.dependencies import get_current_user
+from backend.database import Base, get_db
+from backend.main import app as fastapi_app
 from backend.models import (
     AuditLog,
     BusinessArea,
@@ -309,3 +313,52 @@ def make_token_data(
         roles=roles or ["staff"],
         token_type="access",
     )
+
+
+# ---------------------------------------------------------------------------
+# Shared API TestClient fixtures (used by test_prefixes_api and similar)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def admin_token_headers() -> dict:
+    """Authorization header that the `client` fixture maps to an admin user."""
+    return {"Authorization": "Bearer admin"}
+
+
+@pytest.fixture()
+def user_token_headers() -> dict:
+    """Authorization header that the `client` fixture maps to a staff user."""
+    return {"Authorization": "Bearer user"}
+
+
+@pytest.fixture()
+def client(db, admin_user, staff_user) -> TestClient:
+    """TestClient whose auth switches based on the Authorization header value.
+
+    Bearer 'admin'  → admin TokenData (roles=["admin"])
+    anything else   → staff TokenData (roles=["staff"])
+    """
+
+    def _get_user(request: Request) -> TokenData:
+        auth = request.headers.get("Authorization", "")
+        if auth.strip().endswith("admin"):
+            return TokenData(
+                sub=str(admin_user.id),
+                email=admin_user.email,
+                name=f"{admin_user.first_name} {admin_user.last_name}",
+                roles=["admin"],
+                token_type="access",
+            )
+        return TokenData(
+            sub=str(staff_user.id),
+            email=staff_user.email,
+            name=f"{staff_user.first_name} {staff_user.last_name}",
+            roles=["staff"],
+            token_type="access",
+        )
+
+    fastapi_app.dependency_overrides[get_db] = lambda: db
+    fastapi_app.dependency_overrides[get_current_user] = _get_user
+    yield TestClient(fastapi_app)
+    fastapi_app.dependency_overrides.pop(get_db, None)
+    fastapi_app.dependency_overrides.pop(get_current_user, None)

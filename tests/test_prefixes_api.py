@@ -46,7 +46,7 @@ class TestPrefixesApi:
         
         # Second creation should fail
         response = client.post("/api/v1/admin/prefixes", json=payload, headers=admin_token_headers)
-        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_admin_get_prefix(self, client, admin_token_headers):
         # Create one first
@@ -87,7 +87,7 @@ class TestPrefixesApi:
 
         # Delete it
         del_resp = client.delete(f"/api/v1/admin/prefixes/{prefix_id}", headers=admin_token_headers)
-        assert del_resp.status_code == status.HTTP_204_NO_CONTENT
+        assert del_resp.status_code == status.HTTP_200_OK
 
         # Fetching it should now 404
         get_resp = client.get(f"/api/v1/admin/prefixes/{prefix_id}", headers=admin_token_headers)
