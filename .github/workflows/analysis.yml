@@ -208,7 +208,7 @@ jobs:
           for job_result in \
             "${{ needs.test.result }}" \
             "${{ needs.bandit.result }}"; do
-            if [[ "$job_result" != "success" && "$job_result" != "skipped" ]]; then
+            if [[ -n "$job_result" && "$job_result" != "success" && "$job_result" != "skipped" ]]; then
               echo "Job failed: ${job_result}"
               FAILED=1
             fi
