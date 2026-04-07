@@ -59,6 +59,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://transportation:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/transportation_forms
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
         run: |
           pytest tests/ \
             --cov=backend \
