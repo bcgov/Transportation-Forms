@@ -45,9 +45,13 @@ on:
         required: true
       secret_key:
         required: true
-      minio_root_user:
+      s3_endpoint_url:
         required: false
-      minio_root_password:
+      s3_access_key:
+        required: false
+      s3_secret_key:
+        required: false
+      s3_bucket:
         required: false
       keycloak_server_url:
         required: false
@@ -92,7 +96,7 @@ jobs:
           oc_server: ${{ vars.OC_SERVER }}
           environment: ${{ inputs.environment }}
           chart: charts/crunchy
-          values: charts/crunchy/values.yml
+          values_file: charts/crunchy/values.yml
           values_override: >-
             ${{
               inputs.environment == 'prod' && 'charts/crunchy/values-prod.yml' ||
@@ -132,8 +136,10 @@ jobs:
               --set global.repository=bcgov/transportation-forms \
               --set secrets.databaseUrl="${{ secrets.database_url }}" \
               --set secrets.secretKey="${{ secrets.secret_key }}" \
-              --set secrets.minioRootUser="${{ secrets.minio_root_user }}" \
-              --set secrets.minioRootPassword="${{ secrets.minio_root_password }}" \
+              --set secrets.s3EndpointUrl="${{ secrets.s3_endpoint_url }}" \
+              --set secrets.s3AccessKey="${{ secrets.s3_access_key }}" \
+              --set secrets.s3SecretKey="${{ secrets.s3_secret_key }}" \
+              --set secrets.s3Bucket="${{ secrets.s3_bucket }}" \
               --set secrets.keycloakServerUrl="${{ secrets.keycloak_server_url }}" \
               --set secrets.keycloakRealm="${{ secrets.keycloak_realm }}" \
               --set secrets.keycloakClientId="${{ secrets.keycloak_client_id }}" \

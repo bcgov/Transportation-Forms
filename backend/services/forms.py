@@ -20,7 +20,7 @@ from backend.models import (
     FormNumberReservation,
 )
 from backend.config import settings
-from backend.services import minio_service
+from backend.services import s3_service
 
 
 class FormWorkflowValidationError(ValueError):
@@ -81,7 +81,7 @@ class FormService:
             effective_date: When the form becomes effective
             form_source: 'URL' or 'DOWNLOAD' (or None)
             form_source_url: Source URL when form_source == 'URL'
-            form_attachment_url: MinIO object URL when form_source == 'DOWNLOAD'
+            form_attachment_url: S3 object key when form_source == 'DOWNLOAD'
             form_attachment_filename: Original filename of uploaded attachment
             form_number_reservation_id: UUID of approved reservation (TASK-413)
             collects_personal_info: Whether form collects personal information
@@ -389,7 +389,7 @@ class FormService:
             form.effective_date = kwargs["effective_date"]
         if "collects_personal_info" in kwargs:
             form.collects_personal_info = kwargs["collects_personal_info"]
-        # TASK-416: handle attachment field updates and MinIO deletion
+        # TASK-416: handle attachment field updates and S3 deletion
         if "form_source" in kwargs:
             form.form_source = kwargs["form_source"]
         if "form_source_url" in kwargs:
@@ -397,11 +397,11 @@ class FormService:
         if "form_attachment_url" in kwargs:
             old_url = form.form_attachment_url
             new_url = kwargs["form_attachment_url"]
-            # Delete the old file from MinIO whenever the URL changes (removed or replaced)
+            # Delete the old file from S3 whenever the URL changes (removed or replaced)
             if old_url and old_url != new_url:
-                old_key = FormService._extract_minio_object_key(old_url)
+                old_key = FormService._extract_s3_object_key(old_url)
                 if old_key:
-                    minio_service.delete_file(old_key)
+                    s3_service.delete_file(old_key)
             form.form_attachment_url = new_url
         if "form_attachment_filename" in kwargs:
             form.form_attachment_filename = kwargs["form_attachment_filename"]
@@ -742,14 +742,17 @@ class FormService:
     # =====================================================================
 
     @staticmethod
-    def _extract_minio_object_key(url: str) -> Optional[str]:
-        """Extract the MinIO object key from a full public URL."""
+    def _extract_s3_object_key(url: str) -> Optional[str]:
+        """Extract the S3 object key from the stored attachment reference.
+
+        New records store the object key directly; legacy records may store
+        a full MinIO URL that requires parsing.
+        """
         if not url:
             return None
-        prefix = f"{settings.MINIO_PUBLIC_URL}/{settings.MINIO_BUCKET}/"
-        if url.startswith(prefix):
-            return url[len(prefix) :]
-        # Fallback: look for the 'uploads/' path segment used by all stored objects
+        if url.startswith("uploads/"):
+            return url  # new format: value IS the object key
+        # Fallback: extract key from legacy full-URL format still present in existing DB rows
         import re
 
         match = re.search(r"(uploads/[^?#]+)", url)

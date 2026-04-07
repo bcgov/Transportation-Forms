@@ -195,7 +195,7 @@ class Form(Base):
     )  # URL when form_source == 'URL'
     form_attachment_url = Column(
         String(500), nullable=True
-    )  # MinIO object URL when form_source == 'Download'
+    )  # S3 object key when form_source == 'Download'
     form_attachment_filename = Column(
         String(255), nullable=True
     )  # Original uploaded filename

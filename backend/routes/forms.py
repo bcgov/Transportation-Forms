@@ -15,7 +15,7 @@ from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
 from backend.services.forms import FormService
-from backend.services import minio_service
+from backend.services import s3_service
 
 # ============================================================================
 # Pydantic Models (Request/Response)
@@ -56,7 +56,7 @@ class FormCreateRequest(BaseModel):
     form_attachment_url: Optional[str] = Field(
         None,
         max_length=500,
-        description="MinIO object URL (set after file upload when form_source='Download')",
+        description="S3 object key (set after file upload when form_source='Download')",
     )
     form_attachment_filename: Optional[str] = Field(
         None, max_length=255, description="Original filename of the uploaded attachment"
@@ -125,7 +125,7 @@ class FormUpdateRequest(BaseModel):
     form_attachment_url: Optional[str] = Field(
         None,
         max_length=500,
-        description="MinIO object URL when form_source is 'Download' (null to clear attachment)",
+        description="S3 object key when form_source is 'Download' (null to clear attachment)",
     )
     form_attachment_filename: Optional[str] = Field(
         None, max_length=255, description="Original filename of the uploaded attachment"
@@ -228,9 +228,9 @@ router = APIRouter(
 
 
 class FileUploadResponse(BaseModel):
-    """Response returned after a successful file upload to MinIO."""
+    """Response returned after a successful file upload to S3 object storage."""
 
-    url: str
+    url: str  # S3 object key (e.g. "uploads/<uuid>.pdf") — not a browser URL
     filename: str
     object_key: str
 
@@ -243,7 +243,7 @@ async def upload_form_attachment(
     current_user: TokenData = Depends(get_current_user),
 ) -> FileUploadResponse:
     """
-    Upload a form attachment file to MinIO and return its public URL.
+    Upload a form attachment file to S3 object storage and return its object key.
 
     Call this endpoint **before** creating the form when form_source is 'Download'.
     Use the returned `url` as the `form_attachment_url` in the create-form request.
@@ -261,13 +261,13 @@ async def upload_form_attachment(
     original_filename = file.filename or "attachment"
 
     try:
-        object_key, public_url = minio_service.upload_file(
+        object_key, object_key_ref = s3_service.upload_file(
             file_bytes=file_bytes,
             original_filename=original_filename,
             content_type=content_type,
         )
         return FileUploadResponse(
-            url=public_url, filename=original_filename, object_key=object_key
+            url=object_key_ref, filename=original_filename, object_key=object_key
         )
     except Exception as exc:
         raise HTTPException(

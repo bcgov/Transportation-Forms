@@ -1,4 +1,6 @@
 # MinIO S3-compatible object storage for Transportation Forms
+# NOTE: This manifest is for local development only and is not deployed to OpenShift.
+# In production, the backend connects to an external S3-compatible service via S3_* env vars.
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

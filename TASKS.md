@@ -333,12 +333,12 @@ No backend, service, or test changes are required.
 - **Dependencies:** TASK-414, TASK-415
 - **Description:** Three related bugs exist in the Edit Form workflow that prevent the View modal from accurately reflecting the current state of a form after edits are saved:
   1. **Missing attachment not uploaded on edit** — If a form has no file attached and the user uploads a file via the Edit Form modal, the new file does not appear in the View modal after saving.
-  2. **Deleted attachment not removed from DB/S3** — If the user removes an existing file attachment from the Edit Form modal, the file record is not deleted from the database and the file is not removed from MinIO/S3 storage.
+  2. **Deleted attachment not removed from DB/S3** — If the user removes an existing file attachment from the Edit Form modal, the file record is not deleted from the database and the file is not removed from S3 storage.
   3. **Field changes not reflected in View modal** — After saving edits to any form field (e.g., title, description, personal info flag), the View modal continues to display stale data from before the edit.
 - **Scope:** Frontend (`frontend/index.html`) and Backend (`backend/routes/forms.py`, `backend/services/forms.py`).
 - **Acceptance Criteria:**
   - [x] When a form with no existing attachment is edited and a new file is uploaded, the View modal displays the attachment after saving
-  - [x] When an existing attachment is removed during an edit, the associated database record is cleared and the file is removed from MinIO/S3 storage
+  - [x] When an existing attachment is removed during an edit, the associated database record is cleared and the file is removed from S3 storage
   - [x] After saving any edit (title, description, personal info, etc.), the View modal immediately reflects all updated field values without requiring a page refresh
   - [x] No regressions to the Add New Form file upload flow
   - [x] No regressions to forms that already have attachments when editing without changing the file
@@ -346,7 +346,7 @@ No backend, service, or test changes are required.
   - [x] No UI design changes
 - **Implemented:**
   - **`backend/routes/forms.py`** — Added `form_source`, `form_source_url`, `form_attachment_url`, `form_attachment_filename` to `FormUpdateRequest`. Uses Pydantic v2 `model_fields_set` in the PUT route to distinguish "field not sent" from "field explicitly set to null", enabling both update and deletion of attachment data.
-  - **`backend/services/forms.py`** — `update_form()` now handles the 4 new attachment kwargs. When `form_attachment_url` changes (removed or replaced), the old MinIO object is deleted via `minio_service.delete_file()`. Added `_extract_minio_object_key()` static helper to derive the storage key from the full public URL. Added `settings` and `minio_service` imports.
+  - **`backend/services/forms.py`** — `update_form()` now handles the 4 new attachment kwargs. When `form_attachment_url` changes (removed or replaced), the old S3 object is deleted via `s3_service.delete_file()`. Added `_extract_s3_object_key()` static helper to derive the storage key from the stored attachment reference. Added `settings` and `s3_service` imports.
   - **`frontend/index.html`** — `handleFormSubmit()`: (1) Download-source validation now only blocks in **create** mode — in edit mode, a cleared file is treated as an intentional attachment removal. (2) `effectiveFormSource` computes `null` when the user is in edit mode with formSource='Download' but no file present, ensuring `form_source`, `form_attachment_url`, and `form_attachment_filename` are all sent as `null` to correctly clear the attachment in the backend.
 
 ### 2.1 Project Initialization
@@ -1228,14 +1228,14 @@ After implementation, verify:
 - **Priority:** P1
 - **Effort:** 5pt
 - **Assigned To:** To Be Assigned
-- **Description:** Enhance form creation functionality with field validation, business area persistence, file upload support via MinIO, and Form Number reservation linkage. Per schema changes, version_number and category fields no longer exist; business areas is now single-select (not multi-select).
+- **Description:** Enhance form creation functionality with field validation, business area persistence, file upload support via S3-compatible object storage, and Form Number reservation linkage. Per schema changes, version_number and category fields no longer exist; business areas is now single-select (not multi-select).
 - **Backend Acceptance Criteria:**
   - [ ] POST /api/v1/forms - Enhanced endpoint to accept: form_source (URL or Download), form_attachment_url or form_attachment (file), form_number_reservation_id (required), single business_area_id (not array)
   - [ ] Form Number Reservation - Validate form_number_reservation_id exists and is in 'approved' status before form creation (TASK-413 API)
   - [ ] Form Number Linkage - Save form_number_reservation_id FK to forms table for tracking which reserved number was used
   - [ ] Business Area - Single-select only via business_area_id (UUID, not array); NOT multi-select per TASK-418/419
   - [ ] Form Source - Support two types: 'URL' (with URL field) or 'Download' (with file attachment per TASK-416)
-  - [ ] File Attachment - Support uploads via MinIO/S3 per TASK-416 (add only, not replace during create)
+  - [ ] File Attachment - Support uploads via S3 per TASK-416 (add only, not replace during create)
   - [ ] Validation - Enforce required fields: title, description, form_number_reservation_id, business_area_id, form_source, and conditional URL/file per source type
   - [ ] Collects Personal Info - Support collects_personal_info field (Yes/No, default No) added by TASK-414
   - [ ] NO version_number field - Removed by TASK-420; do not accept or return
@@ -1253,8 +1253,8 @@ After implementation, verify:
   - [ ] NO Version Number field - Do not show; versioning is internal only (TASK-420)
   - [ ] NO Category field - Do not show; removed by TASK-417
 - **Infrastructure Requirements:**
-  - [x] MinIO setup in docker-compose.yml for local development file storage (via Rancher Desktop)
-  - [x] MinIO access credentials configured in .env
+  - [x] S3-compatible object store setup in docker-compose.yml for local development file storage (via Rancher Desktop)
+  - [x] S3 access credentials configured in .env
   - [x] S3-compatible boto3 client for file operations
 - **Schema Changes:**
   - [x] ALTER TABLE forms ADD COLUMN version_number INT DEFAULT 1
@@ -1270,14 +1270,14 @@ After implementation, verify:
   - [x] Backend: Enhanced `backend/services/forms.py` create_form() method
   - [x] Backend: Enhanced `backend/routes/forms.py` POST endpoint + file upload endpoint (POST /api/v1/forms/upload)
   - [x] Backend: Migration script `alembic/versions/002_task_110c_form_creation_enhancement.py`
-  - [x] Backend: MinIO client configuration `backend/services/minio_service.py`
+  - [x] Backend: S3 client configuration `backend/services/s3_service.py`
   - [x] Backend: New business areas read endpoint `backend/routes/business_areas.py`
   - [x] Frontend: Updated create form UI with all new fields and conditional sections
   - [x] Frontend: File upload handler with drag-drop support
 - **Testing Guide:**
   - [ ] Create form with all new fields - verify data saved to database
   - [ ] Create form with URL source - verify URL stored correctly
-  - [ ] Create form with Download source - upload file - verify file in MinIO, URL stored in database
+  - [ ] Create form with Download source - upload file - verify file in S3, URL stored in database
   - [ ] Validate description required - attempt create without description - verify error appears
   - [ ] Validate URL required when source is URL - verify error if URL empty
   - [ ] Business areas - select multiple - verify saved to junction table
@@ -1313,7 +1313,7 @@ After implementation, verify:
   - [ ] Collects Personal Info - Display Yes/No indicator (field added by TASK-414)
   - [ ] Created By and Date - Show audit information
   - [ ] Read-Only Display - All fields displayed in read-only format (no editing in view modal)
-  - [ ] Download Link - If form attached, provide download capability with proper MinIO/S3 pre-signed URL handling
+  - [ ] Download Link - If form attached, provide download capability with proper S3 pre-signed URL handling
   - [ ] Responsive - Modal responsive on all screen sizes
   - [ ] NO Version Number display - Do not show; versioning is internal
   - [ ] NO Category display - Do not show; field removed
@@ -1348,7 +1348,7 @@ After implementation, verify:
   - [ ] Business Area - Update single business_area_id only (NOT many-to-many, NOT array per TASK-418)
   - [ ] Form Attachment - Support updating/replacing/removing per TASK-416: allow setting attachment_url/filename to null for deletion, or to new values for replacement
   - [ ] Attachment Removal - Allow form_attachment_url and form_attachment_filename to be set to null in single request to clear attachment (per TASK-416)
-  - [ ] Attachment Replacement - Support uploading new file while old file is removed from MinIO/S3 (per TASK-416)
+  - [ ] Attachment Replacement - Support uploading new file while old file is removed from S3 (per TASK-416)
   - [ ] File Versioning - Internal versioning via form_versions table for file audit trail (NOT user-facing version_number)
   - [ ] NO version_number field - Cannot be updated; field removed by TASK-420
   - [ ] NO category field - Cannot be updated; field removed by TASK-417
@@ -1363,7 +1363,7 @@ After implementation, verify:
   - [ ] Conditional URL Field - Show/require when source='URL'
   - [ ] Conditional File Upload - Show when source='Download' with options to upload NEW file or CLEAR attachment
   - [ ] Clear Attachment Button - Allow user to remove currently attached file (sets to null; per TASK-416)
-  - [ ] Replace Attachment - Upload new file when one currently exists (old file deleted from MinIO/S3 per TASK-416)
+  - [ ] Replace Attachment - Upload new file when one currently exists (old file deleted from S3 per TASK-416)
   - [ ] Audit Fields - Show "Last Updated by [User]" and timestamp
   - [ ] Internal File Versioning - Display past file versions if available (for audit purposes, not user workflow)
   - [ ] Update Feedback - Show success/error messages with what was changed
@@ -1371,7 +1371,7 @@ After implementation, verify:
   - [ ] NO Category field - Do not show; field removed
 - **Infrastructure Requirements:**
   - [ ] Implement form versioning strategy (store snapshots or diffs)
-  - [ ] MinIO integration for new/replacement files
+  - [ ] S3 integration for new/replacement files
 - **Schema Changes:**
   - [ ] CREATE TABLE form_versions (id, form_id, version_number, snapshot_data, created_by, created_at)
   - [ ] ALTER TABLE forms ADD COLUMN status VARCHAR(50) DEFAULT 'Draft'
@@ -1395,7 +1395,7 @@ After implementation, verify:
   - [ ] Rollback to previous version - verify form reverted correctly
   - [ ] Check audit log - verify all changes logged with before/after values
   - [ ] Test status field - change through all statuses - verify persisted
-  - [ ] Remove attachment - verify file deleted from MinIO and database cleared
+  - [ ] Remove attachment - verify file deleted from S3 and database cleared
   - [ ] Verify updated_by shows correct user
 - **Dependencies:** TASK-110, TASK-110C, TASK-110R
 - **Notes:** This task focuses on update operations including rollback, status tracking, and comprehensive audit trails
@@ -1518,21 +1518,21 @@ After implementation, verify:
 - **Priority:** P0
 - **Effort:** 3pt
 - **Assigned To:** AI Code Agent
-- **Description:** Implement S3/MinIO file upload, download, and pre-signed URL generation with attachment lifecycle management (add, replace, delete) per TASK-416 workflow.
+- **Description:** Implement S3 file upload, download, and pre-signed URL generation with attachment lifecycle management (add, replace, delete) per TASK-416 workflow.
 - **Acceptance Criteria:**
-  - [ ] S3/MinIO client initialization: MinIO for local dev, S3 for production (credentials from env vars)
+  - [ ] S3 client initialization: MinIO for local dev, S3 for production (credentials from env vars)
   - [ ] File upload: validation (type, size), progress tracking
   - [ ] Pre-signed URL generation: 5-minute expiry
   - [ ] Download tracking: log to form_downloads table
-  - [ ] File Delete on Form Update - When attachment replaced or cleared via TASK-416, delete old file from MinIO/S3 storage
+  - [ ] File Delete on Form Update - When attachment replaced or cleared via TASK-416, delete old file from S3 storage
   - [ ] Attachment Lifecycle - Support add (new attachment), replace (delete old, upload new), delete (clear attachment_url, delete file) workflows per TASK-416
   - [ ] Version History - Keep file version records in form_versions table (internal tracking, not S3 versioning)
-  - [ ] Error handling: S3/MinIO errors, network errors, file not found on delete
-  - [ ] Configuration: bucket name, region, credentials from env; MinIO endpoint for dev vs S3 endpoint for prod
-  - [ ] Unit tests: 80%+ coverage (mocked S3/MinIO)
-  - [ ] NO PDF Thumbnail generation - Out of scope; MinIO doesn't support native generation
+  - [ ] Error handling: S3 errors, network errors, file not found on delete
+  - [ ] Configuration: bucket name, region, credentials from env; S3 endpoint configurable per environment
+  - [ ] Unit tests: 80%+ coverage (mocked S3)
+  - [ ] NO PDF Thumbnail generation - Out of scope
 - **Dependencies:** TASK-110, TASK-416
-- **PR Title:** "api: implement s3/minio file operations with presigned urls"
+- **PR Title:** "api: implement s3 file operations with presigned urls"
 
 #### TASK-114: Workflow Service
 - **Status:** COMPLETED ✅ (March 23, 2026)
@@ -1801,7 +1801,7 @@ Draft (initial) → Pending Review → Approved → Published → Archived
   - [ ] File Attachment Lifecycle - Support add (new), replace (old deleted), clear (set to null) per TASK-416 via form_source_url, form_attachment_url, form_attachment_filename fields
   - [ ] File upload: multipart/form-data handling
   - [ ] File validation: type, size (50MB max)
-  - [ ] Attachment Deletion - Delete old file from MinIO/S3 when replaced or cleared (per TASK-416)
+  - [ ] Attachment Deletion - Delete old file from S3 when replaced or cleared (per TASK-416)
   - [ ] Response per SPECIFICATION.md 7.4
   - [ ] Error handling: 401, 403, 400, 404
   - [ ] Audit logging for all changes including form_number_reservation_id

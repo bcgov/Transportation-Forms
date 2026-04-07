@@ -71,22 +71,26 @@ spec:
               value: {{ .Values.backend.env.logLevel | quote }}
             - name: CORS_ORIGINS
               value: {{ .Values.backend.env.corsOrigins | quote }}
-            - name: MINIO_ENDPOINT
-              value: {{ .Values.backend.env.minioEndpoint | quote }}
-            - name: MINIO_ACCESS_KEY
+            - name: S3_ENDPOINT_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.backend.secretName }}
-                  key: minio-root-user
-            - name: MINIO_SECRET_KEY
+                  key: s3-endpoint-url
+            - name: S3_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.backend.secretName }}
-                  key: minio-root-password
-            - name: MINIO_BUCKET
-              value: {{ .Values.backend.env.minioBucket | quote }}
-            - name: MINIO_PUBLIC_URL
-              value: {{ .Values.backend.env.minioPublicUrl | quote }}
+                  key: s3-access-key
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.backend.secretName }}
+                  key: s3-secret-key
+            - name: S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.backend.secretName }}
+                  key: s3-bucket
             - name: KEYCLOAK_SERVER_URL
               valueFrom:
                 secretKeyRef:

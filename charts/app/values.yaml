@@ -68,9 +68,8 @@ backend:
     sqlalchemyEcho: "false"
     logLevel: INFO
     corsOrigins: ""
-    minioEndpoint: ""
-    minioBucket: form-attachments
-    minioPublicUrl: ""
+    # All S3 credentials (endpoint, bucket, access key, secret key) are in the secrets section.
+    # Do NOT add s3EndpointUrl or s3Bucket here with hardcoded defaults.
 
   # Pod anti-affinity encourages spreading replicas across nodes
   affinity:
@@ -158,8 +157,10 @@ networkPolicy:
 secrets:
   databaseUrl: ""
   secretKey: ""
-  minioRootUser: ""
-  minioRootPassword: ""
+  s3EndpointUrl: ""
+  s3AccessKey: ""
+  s3SecretKey: ""
+  s3Bucket: ""
   keycloakServerUrl: ""
   keycloakRealm: ""
   keycloakClientId: ""
