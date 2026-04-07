@@ -1,23 +1,23 @@
 """Application configuration settings."""
 
 from pydantic_settings import BaseSettings
-from pydantic import model_validator
+from pydantic import model_validator, Field
 from typing import Optional
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: str = Field(default="development", validation_alias="ENVIRONMENT")
 
-    # Database
+    # Database (required, no defaults)
     DATABASE_URL: str
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 3600
 
-    # API
+    # API (required)
     API_PREFIX: str = "/api/v1"
     SECRET_KEY: str
     CORS_ORIGINS: str = (
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:8000,http://127.0.0.1:30300,http://127.0.0.1:30800"
     )
 
-    # KeyCloak
+    # KeyCloak (optional until auth disabled)
     KEYCLOAK_SERVER_URL: Optional[str] = None
     KEYCLOAK_REALM: Optional[str] = None
     KEYCLOAK_CLIENT_ID: Optional[str] = None
@@ -37,21 +37,19 @@ class Settings(BaseSettings):
     # Authentication
     AUTH_DEMO_MODE: bool = False
 
-    # AWS S3
+    # AWS S3 (optional until enabled)
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_S3_BUCKET: Optional[str] = None
     AWS_REGION: str = "us-west-2"
 
-    # MinIO (local development file storage, S3-compatible)
-    # Defaults are the well-known MinIO container defaults; overridden in
-    # OpenShift via secretKeyRef (see helm/templates/app-deployment.yaml).
-    MINIO_ENDPOINT: str = "http://minio:9000"
-    MINIO_ACCESS_KEY: str = "minioadmin"
-    MINIO_SECRET_KEY: str = "minioadmin"
-    MINIO_BUCKET: str = "form-attachments"
-    MINIO_PUBLIC_URL: str = "http://localhost:9000"  # URL accessible from browser
-
+    # MinIO (S3-compatible) — S3_* env vars with Field(alias=...) for env loading
+    # When loaded from environment, Field(alias=...) tells BaseSettings which env var to read
+    MINIO_ENDPOINT: str = Field(default="http://minio:9000", alias="MINIO_ENDPOINT")
+    MINIO_ACCESS_KEY: str = Field(default="NONE", alias="MINIO_ACCESS_KEY")
+    MINIO_SECRET_KEY: str = Field(default="NONE", alias="MINIO_SECRET_KEY")
+    MINIO_BUCKET: str = Field(default="form-attachments", alias="MINIO_BUCKET")
+    MINIO_PUBLIC_URL: str = Field(default="http://localhost:9000", alias="MINIO_PUBLIC_URL")
     # Feature Flags
     ENABLE_SEMANTIC_SEARCH: bool = True
     ENABLE_EMAIL_NOTIFICATIONS: bool = False
@@ -72,7 +70,7 @@ class Settings(BaseSettings):
             "MINIO_SECRET_KEY": self.MINIO_SECRET_KEY,
         }
 
-        missing = [key for key, value in required.items() if not value]
+        missing = [key for key, value in required.items() if not value or value == "None"]
         if missing:
             raise ValueError(
                 "Missing required secrets (set via environment or .env): "
@@ -109,5 +107,5 @@ class Settings(BaseSettings):
         extra = "ignore"  # Ignore extra fields in .env
 
 
-# Global settings instance
+# Global settings instance  
 settings = Settings()

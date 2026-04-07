@@ -92,3 +92,7 @@ PROJECT_PLAN.md
 OPENSHIFT_DEPLOYMENT.md
 CONSTITUTION.md
 build-deploy.ps1
+requirements-dev.txt
+
+.github/workflows/demo.yml
+plan-renameMinioToS3.prompt.md
