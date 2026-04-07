@@ -37,19 +37,11 @@ class Settings(BaseSettings):
     # Authentication
     AUTH_DEMO_MODE: bool = False
 
-    # AWS S3 (optional until enabled)
-    AWS_ACCESS_KEY_ID: Optional[str] = None
-    AWS_SECRET_ACCESS_KEY: Optional[str] = None
-    AWS_S3_BUCKET: Optional[str] = None
-    AWS_REGION: str = "us-west-2"
-
-    # MinIO (S3-compatible) — S3_* env vars with Field(alias=...) for env loading
-    # When loaded from environment, Field(alias=...) tells BaseSettings which env var to read
-    MINIO_ENDPOINT: str = Field(default="http://minio:9000", alias="MINIO_ENDPOINT")
-    MINIO_ACCESS_KEY: str = Field(default="NONE", alias="MINIO_ACCESS_KEY")
-    MINIO_SECRET_KEY: str = Field(default="NONE", alias="MINIO_SECRET_KEY")
-    MINIO_BUCKET: str = Field(default="form-attachments", alias="MINIO_BUCKET")
-    MINIO_PUBLIC_URL: str = Field(default="http://localhost:9000", alias="MINIO_PUBLIC_URL")
+    # S3-compatible object storage (MinIO in local dev, custom S3 service in production)
+    S3_ENDPOINT_URL: str = Field(alias="S3_ENDPOINT_URL")
+    S3_ACCESS_KEY: str = Field(alias="S3_ACCESS_KEY")
+    S3_SECRET_KEY: str = Field(alias="S3_SECRET_KEY")
+    S3_BUCKET: str = Field(alias="S3_BUCKET")
     # Feature Flags
     ENABLE_SEMANTIC_SEARCH: bool = True
     ENABLE_EMAIL_NOTIFICATIONS: bool = False
@@ -66,8 +58,8 @@ class Settings(BaseSettings):
         required = {
             "DATABASE_URL": self.DATABASE_URL,
             "SECRET_KEY": self.SECRET_KEY,
-            "MINIO_ACCESS_KEY": self.MINIO_ACCESS_KEY,
-            "MINIO_SECRET_KEY": self.MINIO_SECRET_KEY,
+            "S3_ACCESS_KEY": self.S3_ACCESS_KEY,
+            "S3_SECRET_KEY": self.S3_SECRET_KEY,
         }
 
         missing = [key for key, value in required.items() if not value or value == "None"]

@@ -5,7 +5,7 @@
 - **Backend API:** http://localhost:8000/api/v1
 - **API Docs:** http://localhost:8000/api/v1/docs
 - **Database:** localhost:6432
-- **MinIO Console:** http://localhost:9001
+- **MinIO Console (local dev only):** http://localhost:9001
 
 ## Container Commands
 ```bash

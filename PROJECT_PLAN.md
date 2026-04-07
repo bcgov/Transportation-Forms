@@ -214,9 +214,9 @@ Full-Text Search         → Built-in tsvector for keyword search
 - **Cost:** Open-source, no licensing fees
 - **Maturity:** 25+ years of stability
 
-### 3.4 Storage: AWS S3 (or S3-compatible)
+### 3.4 Storage: S3-compatible Object Storage
 ```
-AWS S3 / MinIO / Azure Blob Storage           → Scalable object storage
+S3-compatible object storage (MinIO local dev)  → Scalable object storage
 Pre-signed URLs          → Secure temporary download links
 Versioning               → Automatic version history
 Lifecycle Policies       → Automatic archival and cleanup

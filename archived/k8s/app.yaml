@@ -52,22 +52,26 @@ spec:
               value: "INFO"
             - name: CORS_ORIGINS
               value: "http://localhost:30300,http://localhost:30800,http://127.0.0.1:30300,http://127.0.0.1:30800"
-            - name: MINIO_ENDPOINT
-              value: "http://transportation-forms-minio:9000"
-            - name: MINIO_ACCESS_KEY
+            - name: S3_ENDPOINT_URL
               valueFrom:
                 secretKeyRef:
                   name: transportation-forms-secrets
-                  key: minio-root-user
-            - name: MINIO_SECRET_KEY
+                  key: s3-endpoint-url
+            - name: S3_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
                   name: transportation-forms-secrets
-                  key: minio-root-password
-            - name: MINIO_BUCKET
-              value: "form-attachments"
-            - name: MINIO_PUBLIC_URL
-              value: "http://localhost:30900"
+                  key: s3-access-key
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: s3-secret-key
+            - name: S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: transportation-forms-secrets
+                  key: s3-bucket
             - name: KEYCLOAK_SERVER_URL
               valueFrom:
                 secretKeyRef:

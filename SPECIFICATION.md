@@ -51,7 +51,7 @@ All technology decisions align with [CONSTITUTION.md](CONSTITUTION.md) requireme
 - Frontend: jQuery, CSS/SCSS, Bootstrap 5
 - Backend: Python 3.12 LTS with FastAPI
 - Database: PostgreSQL 16 LTS
-- Storage: S3 or compatible, use MinIO for local development
+- Storage: S3-compatible object storage (MinIO for local development)
 - Authentication: KeyCloak OIDC (Phase 1), Azure AD user lookup (Phase 2), JWT tokens (RS256)
 - API Documentation: OpenAPI/Swagger
 

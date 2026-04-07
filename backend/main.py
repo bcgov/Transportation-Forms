@@ -86,16 +86,16 @@ async def serve_frontend():
     )
 
 
-# Initialise MinIO bucket on startup (idempotent — safe to run every boot)
+# Initialise S3 object storage bucket on startup (idempotent — safe to run every boot)
 @app.on_event("startup")
 async def startup_event():
     try:
-        from backend.services.minio_service import ensure_bucket_exists
+        from backend.services.s3_service import ensure_bucket_exists
 
         ensure_bucket_exists()
-        logger.info("MinIO bucket initialised.")
+        logger.info("S3 bucket initialised.")
     except Exception as exc:  # noqa: BLE001
-        logger.warning("MinIO bucket initialisation skipped", error=str(exc))
+        logger.warning("S3 bucket initialisation skipped", error=str(exc))
 
 
 # Include API routes

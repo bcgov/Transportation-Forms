@@ -231,8 +231,10 @@ jobs:
       oc_token: ${{ secrets.OC_TOKEN }}
       database_url: ${{ secrets.DATABASE_URL }}
       secret_key: ${{ secrets.SECRET_KEY }}
-      minio_root_user: ${{ secrets.MINIO_ROOT_USER }}
-      minio_root_password: ${{ secrets.MINIO_ROOT_PASSWORD }}
+      s3_endpoint_url: ${{ secrets.S3_ENDPOINT_URL }}
+      s3_access_key: ${{ secrets.S3_ACCESS_KEY }}
+      s3_secret_key: ${{ secrets.S3_SECRET_KEY }}
+      s3_bucket: ${{ secrets.S3_BUCKET }}
       keycloak_server_url: ${{ secrets.KEYCLOAK_SERVER_URL }}
       keycloak_realm: ${{ secrets.KEYCLOAK_REALM }}
       keycloak_client_id: ${{ secrets.KEYCLOAK_CLIENT_ID }}

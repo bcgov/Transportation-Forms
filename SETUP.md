@@ -72,7 +72,7 @@ KEYCLOAK_REDIRECT_URI=http://localhost:30300/callback
 The project uses separate container images for the backend, frontend (Caddy + Coraza WAF), and database migrations.
 
 ```bash
-# Build and start all services (migrations → backend → frontend + db + minio)
+# Build and start all services (migrations → backend → frontend + db + S3-compatible object store)
 docker compose up -d
 
 # Verify all containers are running
@@ -80,7 +80,7 @@ docker compose ps
 ```
 
 This will:
-1. Start PostgreSQL and MinIO
+1. Start PostgreSQL and S3-compatible object store (MinIO)
 2. Run Alembic database migrations (migrations service)
 3. Start the FastAPI backend on port 8000
 4. Start the Caddy frontend on port 3000 (with Coraza WAF)

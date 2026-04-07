@@ -36,8 +36,10 @@ BC Transportation Forms — FastAPI backend, Caddy + Coraza WAF frontend, Crunch
 | Secret | `OC_TOKEN` | DEV service account token |
 | Secret | `DATABASE_URL` | DEV PostgreSQL connection string |
 | Secret | `SECRET_KEY` | JWT signing secret |
-| Secret | `MINIO_ROOT_USER` | MinIO / S3 access key |
-| Secret | `MINIO_ROOT_PASSWORD` | MinIO / S3 secret key |
+| Secret | `S3_ENDPOINT_URL` | S3-compatible endpoint URL |
+| Secret | `S3_ACCESS_KEY` | S3-compatible access key |
+| Secret | `S3_SECRET_KEY` | S3-compatible secret key |
+| Secret | `S3_BUCKET` | S3-compatible bucket name |
 | Secret | `KEYCLOAK_SERVER_URL` | Keycloak base URL |
 | Secret | `KEYCLOAK_REALM` | Keycloak realm |
 | Secret | `KEYCLOAK_CLIENT_ID` | Keycloak client ID |
@@ -68,7 +70,7 @@ docker compose down
 - **Frontend:** http://localhost:3000
 - **Backend API:** http://localhost:8000
 - **API docs:** http://localhost:8000/api/v1/docs
-- **MinIO console:** http://localhost:9001
+- **MinIO console (local dev only):** http://localhost:9001
 
 ## Helm Chart
 
