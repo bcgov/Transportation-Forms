@@ -12,6 +12,9 @@ crunchy:
     pgBouncer:
       replicas: 2
 
+  pgmonitor:
+    enabled: false
+
   # S3-backed backups for PROD — credentials injected by deploy_db.sh via --set
   pgBackRest:
     s3:
