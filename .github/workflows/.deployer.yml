@@ -70,7 +70,7 @@ jobs:
   deploy:
     name: Deploy to ${{ inputs.environment }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     environment:
       name: ${{ inputs.environment }}
     outputs:
@@ -95,14 +95,17 @@ jobs:
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           environment: ${{ inputs.environment }}
-          chart: charts/crunchy
-          values_file: charts/crunchy/values.yml
-          values_override: >-
+          directory: charts/crunchy
+          values_file: >-
             ${{
               inputs.environment == 'prod' && 'charts/crunchy/values-prod.yml' ||
               inputs.environment == 'test' && 'charts/crunchy/values-test.yml' ||
-              ''
+              'charts/crunchy/values.yml'
             }}
+          s3_access_key: ${{ secrets.s3_access_key }}
+          s3_secret_key: ${{ secrets.s3_secret_key }}
+          s3_bucket: ${{ secrets.s3_bucket }}
+          s3_endpoint: ${{ secrets.s3_endpoint_url }}
 
       # ── Deploy application via Helm ───────────────────────────────────────
       - name: Helm upgrade / install
