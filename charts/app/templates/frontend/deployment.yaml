@@ -63,12 +63,9 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
-            runAsUser: 1001
             capabilities:
               drop: ["ALL"]
       {{- with .Values.frontend.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      securityContext:
-        fsGroup: 0
