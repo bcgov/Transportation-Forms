@@ -3,28 +3,22 @@
 
 crunchy:
   instances:
-    - name: ha
-      replicas: 3
-      dataVolumeClaimSpec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: 10Gi
+    replicas: 3
+    dataVolumeClaimSpec:
+      storage: 10Gi
+      storageClassName: netapp-block-standard
 
   proxy:
     pgBouncer:
       replicas: 2
 
-  # S3-backed backups for PROD — bucket and credentials supplied via cluster secrets
-  backups:
-    pgbackrest:
-      repos:
-        - name: repo1
-          schedules:
-            full: "0 3 * * 0"
-            differential: "0 1 * * 1-6"
-          s3:
-            bucket: ""          # Override at deploy time: --set crunchy.backups.pgbackrest.repos[0].s3.bucket=...
-            region: ""
-            endpoint: ""
+  # S3-backed backups for PROD — credentials injected by deploy_db.sh via --set
+  pgBackRest:
+    s3:
+      enabled: true
+      fullBackupSchedule: "0 3 * * 0"
+      incrementalBackupSchedule: "0 1 * * 1-6"
+      bucket: ~     # set via s3_bucket action input
+      endpoint: ~   # set via s3_endpoint action input
+      accessKey: ~  # set via s3_access_key action input
+      secretKey: ~  # set via s3_secret_key action input
