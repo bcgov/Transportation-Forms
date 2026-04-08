@@ -46,25 +46,25 @@ on:
       secret_key:
         required: true
       s3_endpoint_url:
-        required: false
+        required: true
       s3_access_key:
-        required: false
+        required: true
       s3_secret_key:
-        required: false
+        required: true
       s3_bucket:
-        required: false
+        required: true
       keycloak_server_url:
-        required: false
+        required: true
       keycloak_realm:
-        required: false
+        required: true
       keycloak_client_id:
-        required: false
+        required: true
       keycloak_client_secret:
-        required: false
+        required: true
       keycloak_redirect_uri:
-        required: false
+        required: true
       initial_admin_email:
-        required: false
+        required: true
 
 jobs:
   deploy:
@@ -147,6 +147,6 @@ jobs:
               --set secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
               --set secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
               ${{ inputs.params }} \
-              --timeout 10m \
+              --timeout 5m \
               --wait \
               --atomic

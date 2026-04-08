@@ -19,8 +19,8 @@ crunchy:
     name: db
     replicas: 1
     dataVolumeClaimSpec:
-      storage: 1Gi
-      walStorage: 256Mi
+      storage: 5Gi
+      walStorage: 1Gi
       storageClassName: netapp-block-standard
     requests:
       cpu: 150m
@@ -63,7 +63,7 @@ crunchy:
       incrementalBackupSchedule: "0 2 * * 1-6"
       volume:
         accessModes: "ReadWriteOnce"
-        storage: 2Gi
+        storage: 1Gi
         storageClassName: netapp-file-backup
     repoHost:
       requests:
