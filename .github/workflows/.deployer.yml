@@ -70,7 +70,7 @@ jobs:
   deploy:
     name: Deploy to ${{ inputs.environment }}
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 16
     environment:
       name: ${{ inputs.environment }}
     outputs:
@@ -149,6 +149,6 @@ jobs:
               --set secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
               --set secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
               ${{ inputs.params }} \
-              --timeout 5m \
+              --timeout 10m \
               --wait \
               --atomic
