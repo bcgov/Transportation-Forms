@@ -3,30 +3,19 @@
 
 crunchy:
   instances:
-    - name: ha
-      replicas: 2
-      dataVolumeClaimSpec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: 2Gi
+    replicas: 2
+    dataVolumeClaimSpec:
+      storage: 2Gi
+      storageClassName: netapp-block-standard
 
   proxy:
     pgBouncer:
       replicas: 2
 
-  backups:
-    pgbackrest:
-      repos:
-        - name: repo1
-          schedules:
-            full: "0 4 * * 0"
-            differential: "0 1 * * 1-6"
-          volume:
-            volumeClaimSpec:
-              accessModes:
-                - ReadWriteOnce
-              resources:
-                requests:
-                  storage: 5Gi
+  pgBackRest:
+    pvc:
+      fullBackupSchedule: "0 4 * * 0"
+      incrementalBackupSchedule: "0 1 * * 1-6"
+      volume:
+        storage: 5Gi
+        storageClassName: netapp-file-backup

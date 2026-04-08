@@ -1,24 +1,26 @@
 # Crunchy PostgreSQL HA — base / DEV configuration
 # Deployed via bcgov/action-crunchy in the deployer workflow.
+# Values schema matches bcgov/action-crunchy@v2.0.0 chart expectations.
 #
 # Documentation: https://access.crunchydata.com/documentation/postgres-operator/latest/
 # BCGov action: https://github.com/bcgov/action-crunchy
+
+global:
+  config:
+    dbName: app
 
 crunchy:
   enabled: true
 
   postgresVersion: 16
 
-  # ── Primary + replica instances ──────────────────────────────────────────────
+  # ── Primary instance (object, not list — matches action chart schema) ─────────
   instances:
-    - name: ha
-      replicas: 1
-      dataVolumeClaimSpec:
-        accessModes:
-          - ReadWriteOnce
-        resources:
-          requests:
-            storage: 1Gi
+    name: db
+    replicas: 1
+    dataVolumeClaimSpec:
+      storage: 1Gi
+      storageClassName: netapp-block-standard
 
   # ── Application users ────────────────────────────────────────────────────────
   users:
@@ -29,22 +31,21 @@ crunchy:
 
   # ── PgBouncer connection pooler ───────────────────────────────────────────────
   proxy:
+    enabled: true
     pgBouncer:
       replicas: 1
-      image: registry.developers.crunchydata.com/crunchydata/crunchy-pgbouncer:ubi8-1.21-0
 
-  # ── Backups (volume-based for DEV — no S3 required) ──────────────────────────
-  backups:
-    pgbackrest:
-      repos:
-        - name: repo1
-          schedules:
-            full: "0 8 * * 0"   # Weekly full backup on Sunday 08:00 UTC
-            differential: "0 2 * * 1-6"  # Daily differential Mon–Sat
-          volume:
-            volumeClaimSpec:
-              accessModes:
-                - ReadWriteOnce
-              resources:
-                requests:
-                  storage: 2Gi
+  # ── pgBackRest backups (camelCase — matches action chart schema) ──────────────
+  # deploy_db.sh sets --set crunchy.pgBackRest.s3.enabled=true only when S3 vars
+  # are provided; s3.enabled must be defined here to avoid nil pointer errors.
+  pgBackRest:
+    enabled: true
+    s3:
+      enabled: false  # No S3 for DEV — volume-based backups only
+    pvc:
+      fullBackupSchedule: "0 8 * * 0"       # Weekly full on Sunday 08:00 UTC
+      incrementalBackupSchedule: "0 2 * * 1-6"  # Daily incremental Mon–Sat
+      volume:
+        accessModes: "ReadWriteOnce"
+        storage: 2Gi
+        storageClassName: netapp-file-backup
