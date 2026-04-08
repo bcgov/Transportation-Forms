@@ -11,7 +11,15 @@ global:
 
 crunchy:
   enabled: true
-
+  instances:
+    name: db
+    replicas: 1
+    dataVolumeClaimSpec:
+      storage: 1Gi
+      storageClassName: netapp-block-standard
+    requests:
+      cpu: 150m
+      memory: 256Mi
   postgresVersion: 16
 
   # ── Primary instance (object, not list — matches action chart schema) ─────────
