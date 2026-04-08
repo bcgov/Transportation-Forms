@@ -1,7 +1,7 @@
 # Crunchy PostgreSQL HA — TEST environment overrides
 # Applied on top of values.yml
 
-crunchyPostgresHa:
+crunchy:
   instances:
     - name: ha
       replicas: 2

@@ -1,7 +1,7 @@
 # Crunchy PostgreSQL HA — PROD environment overrides
 # Applied on top of values.yml
 
-crunchyPostgresHa:
+crunchy:
   instances:
     - name: ha
       replicas: 3
@@ -25,6 +25,6 @@ crunchyPostgresHa:
             full: "0 3 * * 0"
             differential: "0 1 * * 1-6"
           s3:
-            bucket: ""          # Override at deploy time: --set crunchyPostgresHa.backups.pgbackrest.repos[0].s3.bucket=...
+            bucket: ""          # Override at deploy time: --set crunchy.backups.pgbackrest.repos[0].s3.bucket=...
             region: ""
             endpoint: ""
