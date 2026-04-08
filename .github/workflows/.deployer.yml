@@ -95,7 +95,6 @@ jobs:
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           environment: ${{ inputs.environment }}
-          directory: charts/crunchy
           values_file: >-
             ${{
               inputs.environment == 'prod' && 'charts/crunchy/values-prod.yml' ||
