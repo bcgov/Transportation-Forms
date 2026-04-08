@@ -82,6 +82,10 @@ backend:
               matchLabels:
                 app.kubernetes.io/component: backend
 
+# ── Crunchy PostgreSQL ────────────────────────────────────────────────────────
+  crunchy:
+    enabled: true  # or true, depending on your environment
+
 # ── Frontend (Caddy + Coraza WAF) ─────────────────────────────────────────────
 frontend:
   replicaCount: 1

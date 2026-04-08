@@ -31,6 +31,9 @@ backend:
     environment: production
     sqlalchemyEcho: "false"
     logLevel: WARNING
+# ── Crunchy PostgreSQL ────────────────────────────────────────────────────────
+  crunchy:
+    enabled: false  # or true, depending on your environment
 
 frontend:
   replicaCount: 3
