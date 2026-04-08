@@ -4,7 +4,7 @@
 # Documentation: https://access.crunchydata.com/documentation/postgres-operator/latest/
 # BCGov action: https://github.com/bcgov/action-crunchy
 
-crunchyPostgresHa:
+crunchy:
   enabled: true
 
   postgresVersion: 16
