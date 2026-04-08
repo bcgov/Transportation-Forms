@@ -53,7 +53,7 @@ crunchy:
 
   # ── pgBackRest backups ────────────────────────────────────────────────────────
   pgBackRest:
-    enabled: true
+    enabled: false  # S3 backups disabled for DEV
     s3:
       enabled: false   # No S3 for DEV — volume-based backups only
     pvc:
