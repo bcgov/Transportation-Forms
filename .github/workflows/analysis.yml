@@ -226,6 +226,7 @@ jobs:
     needs: [results]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     uses: ./.github/workflows/.deployer.yml
+    timeout-minutes: 5
     with:
       environment: dev
       tag: latest
