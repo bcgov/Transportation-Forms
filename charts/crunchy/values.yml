@@ -1,6 +1,6 @@
 # Crunchy PostgreSQL HA — base / DEV configuration
 # Deployed via bcgov/action-crunchy in the deployer workflow.
-# Values schema matches bcgov/action-crunchy@v2.0.0 chart expectations.
+# Schema validated against bcgov/action-crunchy@v2.0.0 PostgresCluster.yaml template.
 #
 # Documentation: https://access.crunchydata.com/documentation/postgres-operator/latest/
 # BCGov action: https://github.com/bcgov/action-crunchy
@@ -11,24 +11,24 @@ global:
 
 crunchy:
   enabled: true
+  imagePullPolicy: IfNotPresent
+  postgresVersion: 16
+
+  # ── Instances (object, not list) ─────────────────────────────────────────────
   instances:
     name: db
     replicas: 1
     dataVolumeClaimSpec:
       storage: 1Gi
+      walStorage: 256Mi
       storageClassName: netapp-block-standard
     requests:
       cpu: 150m
       memory: 256Mi
-  postgresVersion: 16
-
-  # ── Primary instance (object, not list — matches action chart schema) ─────────
-  instances:
-    name: db
-    replicas: 1
-    dataVolumeClaimSpec:
-      storage: 1Gi
-      storageClassName: netapp-block-standard
+    replicaCertCopy:
+      requests:
+        cpu: 1m
+        memory: 32Mi
 
   # ── Application users ────────────────────────────────────────────────────────
   users:
@@ -37,27 +37,59 @@ crunchy:
         - transportation_forms
     - name: pgbouncer
 
-  # ── PgBouncer connection pooler ───────────────────────────────────────────────
+  # ── Monitoring — disabled for DEV ─────────────────────────────────────────────
+  pgmonitor:
+    enabled: false
+
+  # ── PgBouncer ─────────────────────────────────────────────────────────────────
   proxy:
     enabled: true
     pgBouncer:
       replicas: 1
+      maxConnections: 10
+      requests:
+        cpu: 5m
+        memory: 32Mi
 
-  # ── Monitoring (pgmonitor / Prometheus exporter) ────────────────────────────────
-  pgmonitor:
-    enabled: false
-
-  # ── pgBackRest backups (camelCase — matches action chart schema) ──────────────
-  # deploy_db.sh sets --set crunchy.pgBackRest.s3.enabled=true only when S3 vars
-  # are provided; s3.enabled must be defined here to avoid nil pointer errors.
+  # ── pgBackRest backups ────────────────────────────────────────────────────────
   pgBackRest:
     enabled: true
     s3:
-      enabled: false  # No S3 for DEV — volume-based backups only
+      enabled: false   # No S3 for DEV — volume-based backups only
     pvc:
-      fullBackupSchedule: "0 8 * * 0"       # Weekly full on Sunday 08:00 UTC
-      incrementalBackupSchedule: "0 2 * * 1-6"  # Daily incremental Mon–Sat
+      retention: 1
+      retentionFullType: count
+      fullBackupSchedule: "0 8 * * 0"
+      incrementalBackupSchedule: "0 2 * * 1-6"
       volume:
         accessModes: "ReadWriteOnce"
         storage: 2Gi
         storageClassName: netapp-file-backup
+    repoHost:
+      requests:
+        cpu: 20m
+        memory: 128Mi
+    sidecars:
+      requests:
+        cpu: 5m
+        memory: 16Mi
+    jobs:
+      requests:
+        cpu: 20m
+        memory: 128Mi
+
+  # ── Patroni ───────────────────────────────────────────────────────────────────
+  patroni:
+    postgresql:
+      pg_hba:
+        - "host all all 0.0.0.0/0 md5"
+        - "host all all ::1/128 md5"
+      parameters:
+        shared_buffers: 16MB
+        wal_buffers: "64kB"
+        min_wal_size: 32MB
+        max_wal_size: 64MB
+        max_slot_wal_keep_size: 128MB
+        work_mem: 2MB
+        log_min_duration_statement: 1000ms
+        effective_io_concurrency: 20

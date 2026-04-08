@@ -6,22 +6,31 @@ crunchy:
     replicas: 3
     dataVolumeClaimSpec:
       storage: 10Gi
-      storageClassName: netapp-block-standard
+      walStorage: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
 
   proxy:
     pgBouncer:
       replicas: 2
 
-  pgmonitor:
-    enabled: false
-
   # S3-backed backups for PROD — credentials injected by deploy_db.sh via --set
   pgBackRest:
+    backupPath: /backups/prod/cluster/version
+    clusterCounter: 1
+    retentionFullType: count
     s3:
       enabled: true
+      retention: 7
       fullBackupSchedule: "0 3 * * 0"
       incrementalBackupSchedule: "0 1 * * 1-6"
-      bucket: ~     # set via s3_bucket action input
-      endpoint: ~   # set via s3_endpoint action input
-      accessKey: ~  # set via s3_access_key action input
-      secretKey: ~  # set via s3_secret_key action input
+      bucket: ~      # injected by deploy_db.sh
+      endpoint: ~    # injected by deploy_db.sh
+      accessKey: ~   # injected by deploy_db.sh
+      secretKey: ~   # injected by deploy_db.sh
+    pvc:
+      fullBackupSchedule: "0 4 * * 0"
+      incrementalBackupSchedule: "0 1 * * 1-6"
+      volume:
+        storage: 10Gi

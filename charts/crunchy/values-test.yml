@@ -6,14 +6,14 @@ crunchy:
     replicas: 2
     dataVolumeClaimSpec:
       storage: 2Gi
-      storageClassName: netapp-block-standard
+      walStorage: 512Mi
+    requests:
+      cpu: 250m
+      memory: 512Mi
 
   proxy:
     pgBouncer:
       replicas: 2
-
-  pgmonitor:
-    enabled: false
 
   pgBackRest:
     pvc:
@@ -21,4 +21,3 @@ crunchy:
       incrementalBackupSchedule: "0 1 * * 1-6"
       volume:
         storage: 5Gi
-        storageClassName: netapp-file-backup
