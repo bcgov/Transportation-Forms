@@ -12,6 +12,9 @@ crunchy:
     pgBouncer:
       replicas: 2
 
+  pgmonitor:
+    enabled: false
+
   pgBackRest:
     pvc:
       fullBackupSchedule: "0 4 * * 0"

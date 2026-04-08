@@ -35,6 +35,10 @@ crunchy:
     pgBouncer:
       replicas: 1
 
+  # ── Monitoring (pgmonitor / Prometheus exporter) ────────────────────────────────
+  pgmonitor:
+    enabled: false
+
   # ── pgBackRest backups (camelCase — matches action chart schema) ──────────────
   # deploy_db.sh sets --set crunchy.pgBackRest.s3.enabled=true only when S3 vars
   # are provided; s3.enabled must be defined here to avoid nil pointer errors.
