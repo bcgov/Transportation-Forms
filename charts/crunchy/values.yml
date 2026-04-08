@@ -12,14 +12,14 @@ global:
 crunchy:
   enabled: true
   imagePullPolicy: IfNotPresent
-  postgresVersion: 18
+  postgresVersion: 17
 
   # ── Instances (object, not list) ─────────────────────────────────────────────
   instances:
     name: db
     replicas: 1
     dataVolumeClaimSpec:
-      storage: 4Gi
+      storage: 1Gi
       walStorage: 1Gi
       storageClassName: netapp-block-standard
     requests:
