@@ -84,8 +84,20 @@ jobs:
         id: meta
         shell: bash
         run: |
-          echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          echo "triggered=true"       >> "$GITHUB_OUTPUT"
+          TAG="${{ inputs.tag }}"
+          ENV="${{ inputs.environment }}"
+
+          # For PR deployments (tag is a numeric PR number), use it as the release suffix.
+          # For environment deploys (dev/test/prod), use the environment name.
+          if [[ "$TAG" =~ ^[0-9]+$ ]]; then
+            RELEASE_NAME="transportation-forms-${TAG}"
+          else
+            RELEASE_NAME="transportation-forms-${ENV}"
+          fi
+
+          echo "tag=${TAG}"             >> "$GITHUB_OUTPUT"
+          echo "release=${RELEASE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "triggered=true"          >> "$GITHUB_OUTPUT"
 
       # ── Deploy Crunchy PostgreSQL ─────────────────────────────────────────
       - name: Deploy Crunchy PostgreSQL
@@ -116,9 +128,9 @@ jobs:
           commands: |
             set -euo pipefail
 
-            RELEASE_NAME="transportation-forms-${{ inputs.environment }}"
+            RELEASE_NAME="${{ steps.meta.outputs.release }}"
             CHART="charts/app"
-            TAG="${{ inputs.tag }}"
+            TAG="${{ steps.meta.outputs.tag }}"
             ENV="${{ inputs.environment }}"
 
             # Determine values file override (test/prod have specific files)
@@ -133,9 +145,9 @@ jobs:
               --namespace "${{ vars.OC_NAMESPACE }}" \
               -f "${CHART}/values.yaml" \
               ${VALUES_OVERRIDE} \
-              --set global.tag="${TAG}" \
-              --set global.registry=ghcr.io \
-              --set global.repository=bcgov/transportation-forms \
+              --set-string global.tag="${TAG}" \
+              --set-string global.registry=ghcr.io \
+              --set-string global.repository=bcgov/transportation-forms \
               --set secrets.databaseUrl="${{ secrets.database_url }}" \
               --set secrets.secretKey="${{ secrets.secret_key }}" \
               --set secrets.s3EndpointUrl="${{ secrets.s3_endpoint_url }}" \

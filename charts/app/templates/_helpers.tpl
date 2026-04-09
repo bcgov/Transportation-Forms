@@ -51,7 +51,7 @@ Backend image reference.
   ghcr.io/bcgov/transportation-forms/backend:<tag>
 */}}
 {{- define "app.backend.image" -}}
-{{- printf "%s/%s/backend:%s" .Values.global.registry .Values.global.repository .Values.global.tag }}
+{{- printf "%s/%s/backend:%s" .Values.global.registry .Values.global.repository (.Values.global.tag | toString) }}
 {{- end }}
 
 {{/*
@@ -59,7 +59,7 @@ Frontend image reference.
   ghcr.io/bcgov/transportation-forms/frontend:<tag>
 */}}
 {{- define "app.frontend.image" -}}
-{{- printf "%s/%s/frontend:%s" .Values.global.registry .Values.global.repository .Values.global.tag }}
+{{- printf "%s/%s/frontend:%s" .Values.global.registry .Values.global.repository (.Values.global.tag | toString) }}
 {{- end }}
 
 {{/*
@@ -67,5 +67,5 @@ Migrations image reference.
   ghcr.io/bcgov/transportation-forms/migrations:<tag>
 */}}
 {{- define "app.migrations.image" -}}
-{{- printf "%s/%s/migrations:%s" .Values.global.registry .Values.global.repository .Values.global.tag }}
+{{- printf "%s/%s/migrations:%s" .Values.global.registry .Values.global.repository (.Values.global.tag | toString) }}
 {{- end }}

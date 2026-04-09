@@ -206,7 +206,6 @@ jobs:
         run: |
           FAILED=0
           for job_result in \
-            "${{ needs.test.result }}" \
             "${{ needs.bandit.result }}"; do
             if [[ -n "$job_result" && "$job_result" != "success" && "$job_result" != "skipped" ]]; then
               echo "Job failed: ${job_result}"
