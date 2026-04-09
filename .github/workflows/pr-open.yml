@@ -16,7 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: read
+      attestations: write
+      id-token: write
       packages: write
     strategy:
       matrix:
@@ -24,21 +25,17 @@ jobs:
           - component: backend
             build_file: backend/Dockerfile
             build_context: .
-            triggers: backend/ requirements.txt entrypoint.sh
+            triggers: ('backend/' 'requirements.txt' 'entrypoint.sh')
           - component: frontend
             build_file: frontend/Dockerfile
             build_context: .
-            triggers: frontend/index.html frontend/form_demo.html frontend/css/ frontend/assets/ frontend/Caddyfile frontend/coraza.conf
+            triggers: ('frontend/')
           - component: migrations
             build_file: migrations/Dockerfile
             build_context: .
-            triggers: alembic/ alembic.ini migrations/Dockerfile migrations/entrypoint.sh backend/seeds/
+            triggers: ('alembic/' 'alembic.ini' 'migrations/' 'backend/seeds/')
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.1
-
-      - name: Build and push ${{ matrix.component }} image
-        uses: bcgov/action-builder-ghcr@v4.2.1
+      - uses: bcgov/action-builder-ghcr@v4.2.1
         with:
           package: ${{ matrix.component }}
           tags: ${{ github.event.number }}
@@ -46,8 +43,6 @@ jobs:
           triggers: ${{ matrix.triggers }}
           build_file: ${{ matrix.build_file }}
           build_context: ${{ matrix.build_context }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ── 2. Deploy to DEV with PR-scoped release name ──────────────────────────
   deploys:
@@ -56,7 +51,7 @@ jobs:
     uses: ./.github/workflows/.deployer.yml
     with:
       environment: dev
-      tags: ${{ github.event.number }}
+      tag: ${{ github.event.number }}
       params: >-
         --set global.secrets.persist=false
         --set backend.env.corsOrigins=https://frontend-transportation-forms-${{ github.event.number }}.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
