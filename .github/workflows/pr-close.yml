@@ -54,7 +54,7 @@ jobs:
         component: [backend, frontend, migrations]
     steps:
       - name: Retag ${{ matrix.component }} PR image as latest
-        uses: bcgov/action-builder-ghcr@v3
+        uses: bcgov/action-builder-ghcr@v4.2.1
         with:
           package: ${{ matrix.component }}
           tag: ${{ github.event.number }}
