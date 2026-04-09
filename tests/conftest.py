@@ -13,7 +13,7 @@ points at the Rancher Desktop Compose service on port 5432.
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Generator
+from typing import Generator, Any
 
 import pytest
 from fastapi import Request
@@ -308,7 +308,7 @@ def make_token_data(
     """Build a ``TokenData`` from a User ORM object (for dependency overrides)."""
     return TokenData(
         sub=str(user.id),
-        email=user.email,
+        email=str(user.email),
         name=f"{user.first_name} {user.last_name}",
         roles=roles or ["staff"],
         token_type="access",
@@ -332,7 +332,7 @@ def user_token_headers() -> dict:
 
 
 @pytest.fixture()
-def client(db, admin_user, staff_user) -> TestClient:
+def client(db, admin_user, staff_user) -> Generator[TestClient, None, None]:
     """TestClient whose auth switches based on the Authorization header value.
 
     Bearer 'admin'  → admin TokenData (roles=["admin"])
@@ -344,14 +344,14 @@ def client(db, admin_user, staff_user) -> TestClient:
         if auth.strip().endswith("admin"):
             return TokenData(
                 sub=str(admin_user.id),
-                email=admin_user.email,
+                email=str(admin_user.email),
                 name=f"{admin_user.first_name} {admin_user.last_name}",
                 roles=["admin"],
                 token_type="access",
             )
         return TokenData(
             sub=str(staff_user.id),
-            email=staff_user.email,
+            email=str(staff_user.email),
             name=f"{staff_user.first_name} {staff_user.last_name}",
             roles=["staff"],
             token_type="access",
