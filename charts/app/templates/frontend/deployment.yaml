@@ -24,7 +24,7 @@ spec:
       containers:
         - name: frontend
           image: {{ include "app.frontend.image" . }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: {{ .Values.frontend.containerPort }}

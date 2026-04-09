@@ -73,6 +73,30 @@ spec:
         - protocol: TCP
           port: 53
 ---
+# ── Network Policy: allow ingress controller → backend ─────────────────────────
+# Permits the OpenShift router to reach the backend pods via the backend Route.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "app.fullname" . }}-allow-ingress-to-backend
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-ingress
+      ports:
+        - protocol: TCP
+          port: {{ .Values.backend.containerPort }}
+---
 # ── Network Policy: deny all other ingress to backend ────────────────────────
 # Only the frontend (and ingress controller for direct health checks) may reach
 # the backend. Everything else is denied.

@@ -57,7 +57,7 @@ jobs:
         uses: bcgov/action-builder-ghcr@v4.2.1
         with:
           package: ${{ matrix.component }}
-          tag: ${{ github.event.number }}
+          tags: ${{ github.event.number }}
           tag_fallback: latest
           promote: latest
         env:

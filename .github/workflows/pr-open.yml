@@ -56,7 +56,7 @@ jobs:
     uses: ./.github/workflows/.deployer.yml
     with:
       environment: dev
-      tags: ${{ github.event.number }}
+      tag: ${{ github.event.number }}
       params: >-
         --set global.secrets.persist=false
         --set backend.env.corsOrigins=https://frontend-transportation-forms-${{ github.event.number }}.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
