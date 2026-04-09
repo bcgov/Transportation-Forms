@@ -86,16 +86,9 @@ jobs:
         run: |
           TAG="${{ inputs.tag }}"
           ENV="${{ inputs.environment }}"
+          RELEASE_NAME="transportation-forms-${ENV}"
 
-          # For PR deployments (tag is a numeric PR number), use it as the release suffix.
-          # For environment deploys (dev/test/prod), use the environment name.
-          if [[ "$TAG" =~ ^[0-9]+$ ]]; then
-            RELEASE_NAME="transportation-forms-${TAG}"
-          else
-            RELEASE_NAME="transportation-forms-${ENV}"
-          fi
-
-          echo "tag=${TAG}"             >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}"              >> "$GITHUB_OUTPUT"
           echo "release=${RELEASE_NAME}" >> "$GITHUB_OUTPUT"
           echo "triggered=true"          >> "$GITHUB_OUTPUT"
 
