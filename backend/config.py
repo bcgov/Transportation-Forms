@@ -99,5 +99,9 @@ class Settings(BaseSettings):
         extra = "ignore"  # Ignore extra fields in .env
 
 
-# Global settings instance  
-settings = Settings()
+# Global settings instance (lazy-loaded to support testing and CLI contexts)
+try:
+    settings = Settings()  # type: ignore[call-arg]
+except ValueError:
+    # Allow import in test/CLI contexts where env vars are not yet loaded
+    settings = None  # type: ignore

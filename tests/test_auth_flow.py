@@ -172,7 +172,7 @@ def test_refresh_success_returns_new_access_token_and_updates_last_login(
 
     # T1: Verify JWT role claims are embedded in the refreshed access token.
     refreshed_token_data = jwt_handler.validate_token(response.json()["access_token"])
-    assert "staff_viewer" in (refreshed_token_data.roles or [])
+    assert refreshed_token_data and "staff_viewer" in (refreshed_token_data.roles or [])
 
     db.refresh(user)
     assert user.last_login is not None
