@@ -11,8 +11,8 @@ concurrency:
 jobs:
   validate:
     name: Validate PR Title (Conventional Commits)
-    uses: bcgov/quickstart-openshift-helpers/.github/workflows/.pr-validate.yml@v0
+    uses: bcgov/quickstart-openshift-helpers/.github/workflows/.pr-validate.yml@v1.1.0
     with:
       markdown_links: |
-        [Frontend](https://frontend-${{ github.event.number }}-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }})
-        [Backend API](https://backend-${{ github.event.number }}-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}/health)
+        [Frontend](https://frontend-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }})
+        [Backend API](https://backend-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}/health)

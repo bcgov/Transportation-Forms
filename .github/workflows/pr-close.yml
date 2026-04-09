@@ -12,12 +12,14 @@ jobs:
   # ── Clean up PR Helm release and OpenShift resources ─────────────────────
   cleanup:
     name: Remove PR-${{ github.event.number }} deployment
-    uses: bcgov/quickstart-openshift-helpers/.github/workflows/.pr-close.yml@v0
+    uses: bcgov/quickstart-openshift-helpers/.github/workflows/.pr-close.yml@v1.1.0
     with:
+      cleanup: helm
+      repository: transportation-forms
+      target: ${{ github.event.number }}
+    secrets:
       oc_namespace: ${{ vars.OC_NAMESPACE }}
       oc_server: ${{ vars.OC_SERVER }}
-      release_name: transportation-forms-${{ github.event.number }}
-    secrets:
       oc_token: ${{ secrets.OC_TOKEN }}
 
   # ── Clean up Crunchy PR database user ────────────────────────────────────

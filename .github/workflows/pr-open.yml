@@ -24,15 +24,12 @@ jobs:
           - component: backend
             build_file: backend/Dockerfile
             build_context: .
-            triggers: backend/ requirements.txt entrypoint.sh
           - component: frontend
             build_file: frontend/Dockerfile
             build_context: .
-            triggers: frontend/index.html frontend/form_demo.html frontend/css/ frontend/assets/ frontend/Caddyfile frontend/coraza.conf
           - component: migrations
             build_file: migrations/Dockerfile
             build_context: .
-            triggers: alembic/ alembic.ini migrations/Dockerfile migrations/entrypoint.sh backend/seeds/
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.1
@@ -43,7 +40,6 @@ jobs:
           package: ${{ matrix.component }}
           tags: ${{ github.event.number }}
           tag_fallback: latest
-          triggers: ${{ matrix.triggers }}
           build_file: ${{ matrix.build_file }}
           build_context: ${{ matrix.build_context }}
         env:
@@ -56,10 +52,10 @@ jobs:
     uses: ./.github/workflows/.deployer.yml
     with:
       environment: dev
-      tags: ${{ github.event.number }}
+      tag: ${{ github.event.number }}
       params: >-
         --set global.secrets.persist=false
-        --set backend.env.corsOrigins=https://frontend-transportation-forms-${{ github.event.number }}.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
+        --set backend.env.corsOrigins=https://frontend-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
     secrets:
       oc_token: ${{ secrets.OC_TOKEN }}
       database_url: ${{ secrets.DATABASE_URL }}
@@ -82,7 +78,7 @@ jobs:
     if: needs.deploys.outputs.triggered == 'true'
     uses: ./.github/workflows/.tests.yml
     with:
-      target: ${{ github.event.number }}
+      target: dev
     secrets:
       oc_token: ${{ secrets.OC_TOKEN }}
 
