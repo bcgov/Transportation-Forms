@@ -41,7 +41,7 @@ jobs:
         uses: bcgov/action-builder-ghcr@v4.2.1
         with:
           package: ${{ matrix.component }}
-          tag: ${{ github.event.number }}
+          tags: ${{ github.event.number }}
           tag_fallback: latest
           triggers: ${{ matrix.triggers }}
           build_file: ${{ matrix.build_file }}
@@ -56,7 +56,7 @@ jobs:
     uses: ./.github/workflows/.deployer.yml
     with:
       environment: dev
-      tag: ${{ github.event.number }}
+      tags: ${{ github.event.number }}
       params: >-
         --set global.secrets.persist=false
         --set backend.env.corsOrigins=https://frontend-transportation-forms-${{ github.event.number }}.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
