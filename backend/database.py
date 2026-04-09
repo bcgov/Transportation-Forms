@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+assert DATABASE_URL is not None, "DATABASE_URL environment variable is required"
 
 # Connection pool settings
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
