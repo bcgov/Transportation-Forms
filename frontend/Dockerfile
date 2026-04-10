@@ -1,8 +1,12 @@
 # ── Stage 1: Build custom Caddy with Coraza WAF plugin ───────────────────────
 FROM caddy:2-builder AS caddy-build
 
+RUN apk add --no-cache ca-certificates libcap
 RUN xcaddy build \
     --with github.com/corazawaf/coraza-caddy/v2
+# Strip file capabilities here so the final image does not need libcap
+RUN setcap -r /usr/bin/caddy
+
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM caddy:2-alpine AS runtime
