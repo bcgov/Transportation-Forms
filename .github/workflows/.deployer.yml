@@ -149,6 +149,6 @@ jobs:
               --set secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
               --set secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
               ${{ inputs.params }} \
-              --timeout 10m \
+              --timeout 9m \
               --wait \
               --atomic
