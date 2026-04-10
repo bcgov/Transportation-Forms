@@ -133,7 +133,7 @@ jobs:
               --namespace "${{ vars.OC_NAMESPACE }}" \
               -f "${CHART}/values.yaml" \
               ${VALUES_OVERRIDE} \
-              --set global.tag="${TAG}" \
+              --set-string global.tag="${TAG}" \
               --set global.registry=ghcr.io \
               --set global.repository=bcgov/transportation-forms \
               --set secrets.databaseUrl="${{ secrets.database_url }}" \
