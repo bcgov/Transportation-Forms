@@ -1,0 +1,69 @@
+name: Deploy DEV
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  builds:
+    name: Build ${{ matrix.component }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - component: backend
+            build_file: backend/Dockerfile
+            build_context: .
+            triggers: ('backend/' 'requirements.txt' 'entrypoint.sh')
+          - component: frontend
+            build_file: frontend/Dockerfile
+            build_context: .
+            triggers: ('frontend/index.html' 'frontend/form_demo.html' 'frontend/css/' 'frontend/assets/' 'frontend/Caddyfile' 'frontend/coraza.conf')
+          - component: migrations
+            build_file: migrations/Dockerfile
+            build_context: .
+            triggers: ('alembic/' 'alembic.ini' 'migrations/Dockerfile' 'migrations/entrypoint.sh' 'backend/seeds/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Build and push ${{ matrix.component }} image
+        uses: bcgov/action-builder-ghcr@v4.2.1
+        with:
+          package: ${{ matrix.component }}
+          tags: latest
+          tag_fallback: latest
+          triggers: ${{ matrix.triggers }}
+          build_file: ${{ matrix.build_file }}
+          build_context: ${{ matrix.build_context }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-dev:
+    name: Deploy to DEV
+    needs: [builds]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    uses: ./.github/workflows/.deployer.yml
+    with:
+      environment: dev
+      tag: latest
+    secrets:
+      oc_token: ${{ secrets.OC_TOKEN }}
+      database_url: ${{ secrets.DATABASE_URL }}
+      secret_key: ${{ secrets.SECRET_KEY }}
+      s3_endpoint_url: ${{ secrets.S3_ENDPOINT_URL }}
+      s3_access_key: ${{ secrets.S3_ACCESS_KEY }}
+      s3_secret_key: ${{ secrets.S3_SECRET_KEY }}
+      s3_bucket: ${{ secrets.S3_BUCKET }}
+      keycloak_server_url: ${{ secrets.KEYCLOAK_SERVER_URL }}
+      keycloak_realm: ${{ secrets.KEYCLOAK_REALM }}
+      keycloak_client_id: ${{ secrets.KEYCLOAK_CLIENT_ID }}
+      keycloak_client_secret: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
+      keycloak_redirect_uri: ${{ secrets.KEYCLOAK_REDIRECT_URI }}
+      initial_admin_email: ${{ secrets.INITIAL_ADMIN_EMAIL }}
