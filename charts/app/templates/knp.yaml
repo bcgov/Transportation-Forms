@@ -69,9 +69,13 @@ spec:
     # Allow DNS resolution
     - ports:
         - protocol: UDP
-          port: 53
+          port: 5353
         - protocol: TCP
-          port: 53
+          port: 5353
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
 ---
 # ── Network Policy: deny all other ingress to backend ────────────────────────
 # Only the frontend (and ingress controller for direct health checks) may reach
