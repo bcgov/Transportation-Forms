@@ -1,8 +1,9 @@
 name: PR Open
 
 on:
-  pull_request:
-    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
+  #pull_request:
+    #types: [opened, reopened, synchronize, ready_for_review]
 
 concurrency:
   # One deployment per PR; cancel any in-progress run for the same PR.
