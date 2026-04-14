@@ -49,6 +49,8 @@ jobs:
     name: Deploy to DEV
     needs: [builds]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
     uses: ./.github/workflows/.deployer.yml
     with:
       environment: dev
