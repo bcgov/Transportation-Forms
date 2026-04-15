@@ -55,6 +55,9 @@ jobs:
     with:
       environment: dev
       tag: latest
+      params: >-
+        --set global.secrets.persist=false
+        --set backend.env.corsOrigins=https://frontend-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
     secrets:
       oc_token: ${{ secrets.OC_TOKEN }}
       database_url: ${{ secrets.DATABASE_URL }}
