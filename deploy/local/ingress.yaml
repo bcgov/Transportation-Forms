@@ -1,0 +1,35 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: transportation-forms-local-ingress
+  namespace: default
+  annotations:
+    ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  # In k3s (Rancher Desktop), traefik is the default ingress class.
+  # We leave out className so the default takes it, or specify traefik.
+  # We omit the 'host' field so it responds to localhost, 127.0.0.1, AND the custom local domain.
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: transportation-forms-local-app-frontend
+            port:
+              number: 3000
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: transportation-forms-local-app-backend
+            port:
+              number: 8000
+      - path: /auth
+        pathType: Prefix
+        backend:
+          service:
+            name: transportation-forms-local-app-backend
+            port:
+              number: 8000

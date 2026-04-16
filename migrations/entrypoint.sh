@@ -13,6 +13,30 @@
 
 set -e
 
+# Wait for PostgreSQL to become available (handles k8s startup race conditions
+# where the Crunchy primary service endpoint may not be ready yet).
+MAX_RETRIES=30
+RETRY_INTERVAL=2
+for i in $(seq 1 $MAX_RETRIES); do
+  if python -c "
+import os, sys
+from sqlalchemy import create_engine, text
+url = os.getenv('DATABASE_URL')
+engine = create_engine(url, pool_pre_ping=True)
+with engine.connect() as conn:
+    conn.execute(text('SELECT 1'))
+" 2>/dev/null; then
+    echo "==> Database is ready."
+    break
+  fi
+  if [ "$i" -eq "$MAX_RETRIES" ]; then
+    echo "ERROR: Database not available after $MAX_RETRIES attempts."
+    exit 1
+  fi
+  echo "Waiting for database... (attempt $i/$MAX_RETRIES)"
+  sleep $RETRY_INTERVAL
+done
+
 echo "==> Running Alembic database migrations..."
 alembic upgrade head
 echo "==> Migrations complete."

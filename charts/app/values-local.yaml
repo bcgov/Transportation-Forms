@@ -46,6 +46,8 @@ ingress:
 
 # ── Lighter resource limits for local dev ─────────────────────────────────────
 backend:
+  env:
+    corsOrigins: "http://transportation-forms.local,http://localhost,http://127.0.0.1"
   resources:
     requests:
       cpu: "25m"
