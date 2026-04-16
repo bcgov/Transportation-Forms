@@ -134,13 +134,12 @@ tasks:
     dir: ../..
     cmds:
       - |
-        # Extract DATABASE_URL from Crunchy-generated secret.
-        # Build URL in Python to safely handle passwords with shell-special chars.
+        # Extract the pre-built DATABASE_URL (uri) directly from Crunchy-generated secret.
         CRUNCHY_SECRET="{{.CRUNCHY_RELEASE}}-crunchy-pguser-app"
-        DB_URI=$(kubectl get secret "$CRUNCHY_SECRET" -o json | python -c "import sys,json,base64,urllib.parse;data=json.load(sys.stdin)['data'];dec=lambda k:base64.b64decode(data[k]).decode();pw=urllib.parse.quote(dec('password'),safe='');print('postgresql://{}:{}@{}:{}/{}'.format(dec('user'),pw,dec('host'),dec('port'),dec('dbname')))")
+        DB_URI=$(kubectl get secret "$CRUNCHY_SECRET" -o jsonpath="{.data.uri}" | base64 -d)
 
         if [ -z "$DB_URI" ]; then
-          echo "ERROR: Could not extract DATABASE_URL from Crunchy secret."
+          echo "ERROR: Could not extract DATABASE_URL (uri) from Crunchy secret."
           echo "Ensure deploy:db has completed successfully."
           exit 1
         fi

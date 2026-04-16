@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = (
         "http://localhost:3000,http://localhost:8000,http://localhost:8080,"
         "http://localhost:30300,http://localhost:30800,http://127.0.0.1:3000,"
+        "http://localhost,http://127.0.0.1,"
         "http://127.0.0.1:8000,http://127.0.0.1:30300,http://127.0.0.1:30800"
     )
 
