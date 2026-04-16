@@ -49,8 +49,7 @@ def _make_client():
         aws_access_key_id=s.S3_ACCESS_KEY,
         aws_secret_access_key=s.S3_SECRET_KEY,
         verify=False,
-        config=Config(signature_version="s3v4"),
-        region_name="ca-central-1",
+        config=Config(signature_version="s3v4")
     )
 
 

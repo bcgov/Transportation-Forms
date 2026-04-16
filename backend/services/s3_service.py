@@ -30,8 +30,7 @@ def _get_s3_client():
         aws_access_key_id=settings.S3_ACCESS_KEY,
         aws_secret_access_key=settings.S3_SECRET_KEY,
         verify=False,
-        config=Config(signature_version="s3v4"),
-        region_name="us-east-1",  # MinIO ignores region but boto3 requires one
+        config=Config(signature_version="s3v4")
     )
 
 

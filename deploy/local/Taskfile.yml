@@ -21,6 +21,8 @@
 #   task -d deploy/local build           # rebuild images only
 #   task -d deploy/local deploy          # redeploy app only
 #   task -d deploy/local teardown:all    # remove everything
+# Run rollout if it get deployed:
+# example: kubectl rollout restart deployment/transportation-forms-local-backend -n transportation-forms-local
 # ─────────────────────────────────────────────────────────────────────────────
 
 version: "3"
