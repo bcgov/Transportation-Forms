@@ -10,6 +10,7 @@ same code works with both MinIO and real AWS S3.
 import json
 import uuid
 import logging
+import hashlib
 from typing import Tuple
 
 import boto3
@@ -28,6 +29,7 @@ def _get_s3_client():
         endpoint_url=settings.S3_ENDPOINT_URL,
         aws_access_key_id=settings.S3_ACCESS_KEY,
         aws_secret_access_key=settings.S3_SECRET_KEY,
+        verify=False,
         config=Config(signature_version="s3v4"),
         region_name="us-east-1",  # MinIO ignores region but boto3 requires one
     )
@@ -102,11 +104,18 @@ def upload_file(
     object_key = f"uploads/{uuid.uuid4()}{ext}"
 
     client = _get_s3_client()
+    
+    hasher = hashlib.sha256()
+    hasher.update(file_bytes)
+    local_sha256 = hasher.hexdigest()
+
     client.put_object(
         Bucket=settings.S3_BUCKET,
         Key=object_key,
         Body=file_bytes,
         ContentType=content_type,
+        ChecksumAlgorithm='SHA256',
+        ChecksumSHA256=local_sha256
         # Public read is granted via bucket policy set in ensure_bucket_exists().
         # ACL="public-read" is not used: MinIO 2022+ disables S3 ACLs by default.
     )
