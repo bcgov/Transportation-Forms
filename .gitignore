@@ -96,3 +96,4 @@ requirements-dev.txt
 
 .github/workflows/demo.yml
 plan-renameMinioToS3.prompt.md
+deploy\local/*

@@ -22,7 +22,9 @@ logger = logging.getLogger('alembic.env')
 
 # Set SQLAlchemy URL from environment
 sqlalchemy_url = os.getenv('DATABASE_URL')
-config.set_main_option('sqlalchemy.url', sqlalchemy_url)
+# Escape % for configparser interpolation (Crunchy-generated passwords may
+# contain URL-encoded special characters like %29, %5D, etc.)
+config.set_main_option('sqlalchemy.url', sqlalchemy_url.replace('%', '%%'))
 
 # Import models for target_metadata
 from backend.database import Base

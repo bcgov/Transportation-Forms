@@ -1,0 +1,18 @@
+crunchy:
+  instances:
+    dataVolumeClaimSpec:
+      storageClassName: local-path    # k3s default (replaces netapp-block-standard)
+  pgBackRest:
+    pvc:
+      volume:
+        storageClassName: local-path  # k3s default (replaces netapp-file-backup)
+  # PGO v6 requires databases to be an explicit array (not null) for all users
+  users:
+    - name: app
+      databases:
+        - transportation_forms
+      # Grant SUPERUSER so the app can create tables in the public schema on PG15+
+      options: "SUPERUSER"
+    - name: pgbouncer
+      databases:
+        - transportation_forms
