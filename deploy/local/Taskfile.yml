@@ -19,10 +19,13 @@
 #   cd deploy/local && task all          # full pipeline
 #   task -d deploy/local all             # from repo root
 #   task -d deploy/local build           # rebuild images only
+#   task -d deploy/local build:frontend  # rebuild frontend image only
+#   task -d deploy/local build:backend   # rebuild backend image only
 #   task -d deploy/local deploy          # redeploy app only
 #   task -d deploy/local teardown:all    # remove everything
-# Run rollout if it get deployed:
-# example: kubectl rollout restart deployment/transportation-forms-local-backend -n transportation-forms-local
+# Run rollout if it doesn't get deployed:
+# Frontend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-frontend -n default
+# Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-backend -n default
 # ─────────────────────────────────────────────────────────────────────────────
 
 version: "3"
