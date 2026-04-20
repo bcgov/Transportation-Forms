@@ -174,7 +174,7 @@ edgeStyle=entityRelationEdgeStyle;html=1;endArrow=ERmany;startArrow=ERone;
 
 ### Step 6 — Save and Validate
 
-1. **Write the file** to the requested path with `.drawio` extension
+1. **Write the file** to the requested path with timestamp suffixed with `.drawio` extension
 2. **Run the validator** (optional but recommended):
    ```bash
    python .github/skills/diagram-architect/scripts/validate-drawio.py <path-to-file.drawio>

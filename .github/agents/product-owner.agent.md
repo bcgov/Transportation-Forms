@@ -63,7 +63,7 @@ You operate inside this repo and manage feature intake as structured work items.
    03-security.md owner: Security Reviewer
    04-test-plan.md owner: Quality Analyst
    05-implementation-notes.md owner: Software Engineer
-4)Ensure /work-items/INDEX.md exists. If it exists, append one line:
+4)Ensure /plan/INDEX.md exists. If it exists, append one line:
    - FEAT-NNNN | Title | status | folder path
 
 
