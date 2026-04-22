@@ -98,3 +98,5 @@ requirements-dev.txt
 plan-renameMinioToS3.prompt.md
 deploy\local/*
 plan
+
+.github/copilot-instructions.md
