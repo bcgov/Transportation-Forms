@@ -16,9 +16,9 @@ COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
 
 # Copy static web assets
 COPY frontend/index.html      /srv/index.html
-COPY frontend/form_demo.html  /srv/form_demo.html
 COPY frontend/css/            /srv/static/css/
 COPY frontend/assets/         /srv/static/assets/
+COPY frontend/js/             /srv/static/js/
 
 # Copy Caddy and WAF configuration
 COPY frontend/Caddyfile       /etc/caddy/Caddyfile
