@@ -1,8 +1,6 @@
 name: Deployer (reusable)
 
 on:
-  push:
-    branches: [master]
   workflow_call:
     inputs:
       environment:
