@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - master
+    paths:
+      - 'alembic/**'
+      - 'charts/**'
+      - 'backend/**'
+      - 'frontend/**'
   workflow_dispatch:
 
 jobs:
