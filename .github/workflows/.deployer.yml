@@ -3,12 +3,6 @@ name: Deployer (reusable)
 on:
   push:
     branches: [master]
-    paths:
-      - ".github/workflows/*"
-      - "alembic/*"
-      - "charts/*"
-      - "backend/*"
-      - "frontend/*"
   workflow_call:
     inputs:
       environment:
