@@ -9,59 +9,139 @@ on:
       - 'charts/**'
       - 'backend/**'
       - 'frontend/**'
+      - 'migrations/**'
+      - 'requirements.txt'
+      - 'entrypoint.sh'
   workflow_dispatch:
 
 jobs:
-  builds:
-    name: Build ${{ matrix.component }}
+  # ── Detect which components changed ─────────────────────────────────────────
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      migrations: ${{ steps.filter.outputs.migrations }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Detect changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'requirements.txt'
+              - 'entrypoint.sh'
+            migrations:
+              - 'alembic/**'
+              - 'alembic.ini'
+              - 'migrations/**'
+            frontend:
+              - 'frontend/**'
+
+  # ── Build backend image ──────────────────────────────────────────────────────
+  build-backend:
+    name: Build backend image
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        include:
-          - component: backend
-            build_file: backend/Dockerfile
-            build_context: .
-            #triggers: ('backend/' 'requirements.txt' 'entrypoint.sh')
-          - component: frontend
-            build_file: frontend/Dockerfile
-            build_context: .
-            #triggers: ('frontend/index.html' 'frontend/form_demo.html' 'frontend/css/' 'frontend/assets/' 'frontend/Caddyfile' 'frontend/coraza.conf')
-          - component: migrations
-            build_file: migrations/Dockerfile
-            build_context: .
-            #triggers: ('alembic/' 'alembic.ini' 'migrations/Dockerfile' 'migrations/entrypoint.sh' 'backend/seeds/')
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.1
 
-      - name: Build and push ${{ matrix.component }} image
+      - name: Build and push backend image
         uses: bcgov/action-builder-ghcr@v4.2.1
         with:
-          package: ${{ matrix.component }}
+          package: backend
           tags: |
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          #triggers: ${{ matrix.triggers }}
-          build_file: ${{ matrix.build_file }}
-          build_context: ${{ matrix.build_context }}
+          build_file: backend/Dockerfile
+          build_context: .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── Build migrations image ───────────────────────────────────────────────────
+  build-migrations:
+    name: Build migrations image
+    needs: changes
+    if: needs.changes.outputs.migrations == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Build and push migrations image
+        uses: bcgov/action-builder-ghcr@v4.2.1
+        with:
+          package: migrations
+          tags: |
+            latest
+            ${{ github.sha }}
+          tag_fallback: latest
+          build_file: migrations/Dockerfile
+          build_context: .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Build frontend image ─────────────────────────────────────────────────────
+  build-frontend:
+    name: Build frontend image
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Build and push frontend image
+        uses: bcgov/action-builder-ghcr@v4.2.1
+        with:
+          package: frontend
+          tags: |
+            latest
+            ${{ github.sha }}
+          tag_fallback: latest
+          build_file: frontend/Dockerfile
+          build_context: .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Deploy to DEV ────────────────────────────────────────────────────────────
   deploy-dev:
     name: Deploy to DEV
-    needs: [builds]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [changes, build-backend, build-migrations, build-frontend]
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/master' &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     permissions:
       contents: read
     uses: ./.github/workflows/.deployer.yml
     with:
       environment: dev
-      tag: ${{ github.sha }}
+      backend_tag: ${{ needs.build-backend.result == 'success' && github.sha || 'latest' }}
+      migrations_tag: ${{ needs.build-migrations.result == 'success' && github.sha || 'latest' }}
+      frontend_tag: ${{ needs.build-frontend.result == 'success' && github.sha || 'latest' }}
       params: >-
         --set global.secrets.persist=false
         --set backend.env.corsOrigins=https://frontend-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}

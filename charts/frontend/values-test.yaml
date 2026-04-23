@@ -1,0 +1,25 @@
+# ── TEST environment overrides ────────────────────────────────────────────────
+# Applied on top of values.yaml: helm upgrade ... -f values.yaml -f values-test.yaml
+
+global:
+  secrets:
+    persist: true
+
+image:
+  tag: test
+
+domain: apps.silver.devops.gov.bc.ca
+
+replicaCount: 2
+
+deploymentStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80

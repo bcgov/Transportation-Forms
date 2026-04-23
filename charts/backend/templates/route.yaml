@@ -1,0 +1,27 @@
+{{- if .Values.routes.enabled }}
+# ── OpenShift Route: Backend API ──────────────────────────────────────────────
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "backend.fullname" . }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  annotations:
+    haproxy.router.openshift.io/rate-limit-connections: "true"
+    haproxy.router.openshift.io/rate-limit-connections.rate-http: "200"
+    haproxy.router.openshift.io/rate-limit-connections.rate-tcp: "200"
+    haproxy.router.openshift.io/disable_cookies: "true"
+spec:
+  host: backend-{{ .Release.Name }}.{{ .Values.domain }}
+  to:
+    kind: Service
+    name: {{ include "backend.fullname" . }}
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+{{- end }}

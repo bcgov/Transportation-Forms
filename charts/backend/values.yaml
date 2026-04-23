@@ -1,0 +1,114 @@
+# ── Global image settings (overridden per environment / PR) ───────────────────
+global:
+  registry: ghcr.io
+  repository: bcgov/transportation-forms
+  secrets:
+    # false  → Helm will delete secrets when the release is removed (safe for PR envs)
+    # true   → Helm will not delete secrets on release removal (safe for long-lived envs)
+    persist: false
+
+# ── Image tags (split so backend and migrations can be versioned independently)
+image:
+  tag: latest
+  migrationsTag: latest
+
+# ── OpenShift domain (used to build route hostnames) ─────────────────────────
+domain: apps.silver.devops.gov.bc.ca
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Replica / scaling ─────────────────────────────────────────────────────────
+replicaCount: 1
+
+containerPort: 8000
+servicePort: 8000
+
+deploymentStrategy:
+  type: Recreate
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "128Mi"
+  limits:
+    cpu: "100m"
+    memory: "256Mi"
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+# Startup probe allows up to 60 s (30 × 2 s) for cold start + migrations
+startupProbe:
+  failureThreshold: 30
+  periodSeconds: 2
+
+readinessProbe:
+  path: /health
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 5
+
+livenessProbe:
+  path: /health
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+secretName: transportation-forms-secrets
+
+env:
+  environment: development
+  sqlalchemyEcho: "false"
+  logLevel: INFO
+  corsOrigins: ""
+  # All S3 credentials (endpoint, bucket, access key, secret key) are in the secrets section.
+  # Do NOT add s3EndpointUrl or s3Bucket here with hardcoded defaults.
+
+# Pod anti-affinity encourages spreading replicas across nodes
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+
+# ── Crunchy PostgreSQL ────────────────────────────────────────────────────────
+crunchy:
+  enabled: true
+
+# ── OpenShift Routes (disable for local k8s / Rancher Desktop) ────────────────
+routes:
+  enabled: true
+
+# ── Network Policies ──────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: true
+
+# ── Secret values (supply at deploy time via --set or CI/CD env vars) ─────────
+# These are empty defaults so `helm template` works without real credentials.
+secrets:
+  databaseUrl: ""
+  secretKey: ""
+  s3EndpointUrl: ""
+  s3AccessKey: ""
+  s3SecretKey: ""
+  s3Bucket: ""
+  keycloakServerUrl: ""
+  keycloakRealm: ""
+  keycloakClientId: ""
+  keycloakClientSecret: ""
+  keycloakRedirectUri: ""
+  initialAdminEmail: ""

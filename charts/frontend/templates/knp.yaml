@@ -1,0 +1,24 @@
+{{- if .Values.networkPolicy.enabled }}
+# ── Network Policy: allow ingress controller → frontend ───────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "frontend.fullname" . }}-allow-ingress-to-frontend
+  labels:
+    {{- include "frontend.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "frontend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-ingress
+      ports:
+        - protocol: TCP
+          port: {{ .Values.containerPort }}
+{{- end }}
