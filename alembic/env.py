@@ -28,6 +28,7 @@ config.set_main_option('sqlalchemy.url', sqlalchemy_url.replace('%', '%%'))
 
 # Import models for target_metadata
 from backend.database import Base
+import backend.models  # Ensure models are loaded for target_metadata
 target_metadata = Base.metadata
 
 

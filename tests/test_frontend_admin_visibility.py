@@ -14,38 +14,38 @@ class TestFrontendAdminVisibilityAndGuards:
         assert 'id="rolesLink"' in html
         assert 'id="usersLink"' in html
         assert 'id="accessRequestsLink"' in html
-        assert 'id="rolesLink" href="/roles" onclick="navigateTo(event, \'/roles\')" style="display:none;"' in html
-        assert 'id="usersLink" href="/users" onclick="navigateTo(event, \'/users\')" style="display:none;"' in html
-        assert 'id="accessRequestsLink" href="/access-requests" onclick="navigateTo(event, \'/access-requests\')" style="display:none;"' in html
+        assert 'href="/roles"' in html
+        assert 'data-route="/roles"' in html
 
     def test_route_guard_blocks_non_admin_direct_navigation(self):
-        html = FRONTEND_INDEX.read_text(encoding="utf-8")
+        js = (FRONTEND_INDEX.parent / "js" / "router.js").read_text(encoding="utf-8")
 
-        assert "function isAdminRoute(path)" in html
-        assert "path === '/roles'" in html
-        assert "path === '/users'" in html
-        assert "path === '/access-requests'" in html
-        assert "if (isAuthenticated() && isAdminRoute(path) && !isAdminUser())" in html
-        assert "window.history.replaceState({}, '', '/');" in html
+        assert "export function isAdminRoute(path)" in js
+        assert "path === ROUTES.ROLES" in js
+        assert "path === ROUTES.USERS" in js
+        assert "path === ROUTES.ACCESS_REQUESTS" in js
+        assert "if (isAuthenticated() && isAdminRoute(path) && !isAdminUser())" in js
+        assert "window.history.replaceState({}, '', ROUTES.HOME);" in js
 
     def test_route_handler_supports_admin_pages_and_detail_routes(self):
-        html = FRONTEND_INDEX.read_text(encoding="utf-8")
+        js = (FRONTEND_INDEX.parent / "js" / "router.js").read_text(encoding="utf-8")
 
-        assert "else if (path === '/roles')" in html
-        assert "else if (path.startsWith('/roles/'))" in html
-        assert "else if (path === '/users')" in html
-        assert "else if (path.startsWith('/users/'))" in html
-        assert "else if (path === '/access-requests' || path.startsWith('/access-requests/'))" in html
+        assert "path === ROUTES.ROLES" in js
+        assert "path.startsWith('/roles/')" in js
+        assert "path === ROUTES.USERS" in js
+        assert "path.startsWith('/users/')" in js
+        assert "path === ROUTES.ACCESS_REQUESTS" in js
 
     def test_request_access_panel_and_actions_exist(self):
         html = FRONTEND_INDEX.read_text(encoding="utf-8")
+        admin_js = (FRONTEND_INDEX.parent / "js" / "views" / "admin" / "access-requests.js").read_text(encoding="utf-8")
 
         assert 'id="requestAccessPanel"' in html
         assert 'id="requestAccessBtn"' in html
-        assert "function loadRequestAccessState()" in html
-        assert "function submitAccessRequest()" in html
-        assert "`${API_BASE}/access-requests/me`" in html
-        assert "`${API_BASE}/access-requests`" in html
+        assert "function loadRequestAccessState()" in admin_js
+        assert "function submitAccessRequest()" in admin_js
+        assert "`${API_BASE}/access-requests/me`" in admin_js
+        assert "`${API_BASE}/access-requests`" in admin_js
 
     def test_request_access_panel_has_no_d_flex_static_class(self):
         """Ensure requestAccessPanel does not carry a Bootstrap d-flex class.

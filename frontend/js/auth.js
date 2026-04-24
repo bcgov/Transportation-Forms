@@ -88,6 +88,19 @@ export function hasPortalRoles() {
 }
 
 /**
+ * Returns true when the current user's JWT permissions array contains the
+ * specified granular permission string (e.g. 'form:approve').
+ *
+ * @param {string} permission  The exact permission string to check.
+ * @returns {boolean}
+ */
+export function hasPermission(permission) {
+  const user = getCurrentUser();
+  const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  return permissions.includes(permission);
+}
+
+/**
  * Validates the stored access token against /auth/me, attempting a token
  * refresh on 401. Clears the session if validation ultimately fails.
  *

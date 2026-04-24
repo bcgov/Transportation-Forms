@@ -13,7 +13,6 @@ from sqlalchemy.exc import OperationalError
 
 from backend.models import (
     Form,
-    FormBusinessArea,
     FormWorkflow,
     BusinessArea,
     AuditLog,
@@ -40,9 +39,8 @@ class FormService:
 
     VALID_TRANSITIONS = {
         "draft": ["pending_review"],
-        "pending_review": ["approved", "draft"],
-        "approved": ["published"],
-        "published": ["archived", "draft"],
+        "pending_review": ["published", "draft"],
+        "published": ["archived"],
         "archived": ["published"],
     }
 
@@ -57,7 +55,7 @@ class FormService:
         description: Optional[str],
         is_public: bool,
         keywords: Optional[List[str]],
-        business_area_ids: Optional[List[UUID]],
+        business_area_id: Optional[UUID],
         created_by_id: UUID,
         effective_date: Optional[datetime] = None,
         form_source: Optional[str] = None,
@@ -76,7 +74,7 @@ class FormService:
             description: Form description
             is_public: Whether form is publicly visible
             keywords: List of search keywords
-            business_area_ids: List of associated business area IDs
+            business_area_id: Associated business area ID
             created_by_id: UUID of user creating the form
             effective_date: When the form becomes effective
             form_source: 'URL' or 'DOWNLOAD' (or None)
@@ -138,6 +136,7 @@ class FormService:
             effective_date=effective_date,
             status="draft",
             current_version=0,
+            business_area_id=business_area_id,
             form_source=form_source,
             form_source_url=form_source_url,
             form_attachment_url=form_attachment_url,
@@ -145,24 +144,6 @@ class FormService:
             form_number_reservation_id=form_number_reservation_id,
             collects_personal_info=collects_personal_info or "No",
         )
-
-        # Associate business areas
-        if business_area_ids:
-            business_areas = (
-                db.query(BusinessArea)
-                .filter(
-                    BusinessArea.id.in_(business_area_ids),
-                    BusinessArea.deleted_at.is_(None),
-                )
-                .all()
-            )
-
-            if len(business_areas) != len(business_area_ids):
-                raise ValueError("One or more business areas do not exist")
-
-            for ba in business_areas:
-                form_ba = FormBusinessArea(business_area=ba)
-                form.business_areas.append(form_ba)
 
         db.add(form)
         db.commit()
@@ -267,13 +248,7 @@ class FormService:
             query = query.filter(Form.status == status)
 
         if business_area_ids:
-            query = query.join(
-                FormBusinessArea,
-                and_(
-                    FormBusinessArea.form_id == Form.id,
-                    FormBusinessArea.deleted_at.is_(None),
-                ),
-            ).filter(FormBusinessArea.business_area_id.in_(business_area_ids))
+            query = query.filter(Form.business_area_id.in_(business_area_ids))
 
         if form_source:
             normalized_source = "URL" if form_source.lower() == "link" else "Download"
@@ -407,21 +382,8 @@ class FormService:
             form.form_attachment_filename = kwargs["form_attachment_filename"]
 
         # Handle business area updates
-        if "business_area_ids" in kwargs:
-            form.business_areas.clear()
-            business_area_ids = kwargs["business_area_ids"]
-            if business_area_ids:
-                business_areas = (
-                    db.query(BusinessArea)
-                    .filter(
-                        BusinessArea.id.in_(business_area_ids),
-                        BusinessArea.deleted_at.is_(None),
-                    )
-                    .all()
-                )
-                for ba in business_areas:
-                    form_ba = FormBusinessArea(business_area=ba)
-                    form.business_areas.append(form_ba)
+        if "business_area_id" in kwargs:
+            form.business_area_id = kwargs["business_area_id"]
 
         db.commit()
         db.refresh(form)
@@ -602,9 +564,8 @@ class FormService:
     def approve_form(db: Session, form_id: UUID, approver_id: UUID) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
 
-        if FormService._is_separation_of_duties_enforced(db) and str(
-            form.created_by_id
-        ) == str(approver_id):
+        # BR-002: Separation of duties — always enforced
+        if str(form.created_by_id) == str(approver_id):
             raise FormWorkflowValidationError(
                 "You cannot approve your own form submission."
             )
@@ -613,7 +574,7 @@ class FormService:
             db,
             form,
             action="approve",
-            to_status="approved",
+            to_status="published",
             triggered_by_id=approver_id,
         )
 
@@ -811,11 +772,10 @@ class FormService:
             "is_public": form.is_public,
             "current_version": form.current_version,
             "keywords": form.keywords,
-            "business_areas": [
-                {"id": str(ba.business_area.id), "name": ba.business_area.name}
-                for ba in form.business_areas
-                if not ba.deleted_at
-            ],
+            "business_area": (
+                {"id": str(form.business_area.id), "name": form.business_area.name}
+                if form.business_area else None
+            ),
             "created_by": {
                 "id": str(form.created_by.id),
                 "email": form.created_by.email,
