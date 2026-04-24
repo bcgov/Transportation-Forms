@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.database import get_db
-from backend.models import BusinessArea, Form, FormBusinessArea
+from backend.models import BusinessArea, Form
 
 
 @pytest.fixture()
@@ -67,13 +67,8 @@ def _create_form(
     db.flush()
 
     if business_area is not None:
-        db.add(
-            FormBusinessArea(
-                id=uuid.uuid4(),
-                form_id=form.id,
-                business_area_id=business_area.id,
-            )
-        )
+        form.business_area_id = business_area.id
+        db.add(form)
         db.flush()
 
     return form

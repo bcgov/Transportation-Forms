@@ -459,9 +459,22 @@
                         <div id="formErrors" class="alert alert-danger" style="display:none;"></div>
 
                         <!-- Action Buttons -->
-                        <div class="mt-4 d-flex gap-2">
+                        <div class="mt-4 d-flex flex-wrap gap-2">
                             <button type="submit" class="btn btn-bc-primary btn-lg px-4" id="submitBtn">
-                                <i class="fas fa-check"></i> Create Form
+                                <i class="fas fa-save"></i> Save draft
+                            </button>
+                            <!-- FEAT-0001: Workflow action buttons (shown/hidden by forms-create.js) -->
+                            <button type="button" class="btn btn-primary btn-lg px-4" id="submitForReviewBtn" style="display:none;">
+                                <i class="fas fa-paper-plane"></i> Submit for Review
+                            </button>
+                            <button type="button" class="btn btn-success btn-lg px-4" id="approvePublishBtn" style="display:none;">
+                                <i class="fas fa-check-circle"></i> Approve &amp; Publish
+                            </button>
+                            <button type="button" class="btn btn-danger btn-lg px-4" id="rejectFormBtn" style="display:none;">
+                                <i class="fas fa-times-circle"></i> Reject
+                            </button>
+                            <button type="button" class="btn btn-warning btn-lg px-4" id="archiveFormBtn" style="display:none;">
+                                <i class="fas fa-archive"></i> Archive
                             </button>
                             <button type="button" class="btn btn-outline-secondary btn-lg px-4" data-action="back-to-list">
                                 <i class="fas fa-arrow-left"></i> Back to List
@@ -685,8 +698,7 @@
         <div id="approvalsView" style="display: none;">
             <div class="form-container" style="max-width: 1100px;">
                 <h2 class="mb-4"><i class="fas fa-check-double"></i> Pending Approvals</h2>
-                <p class="text-muted mb-4">Review and process form number reservation requests awaiting your approval.
-                </p>
+                <p class="text-muted mb-4">Review and process form number reservations and form approval requests.</p>
 
                 <div class="row mb-3">
                     <div class="col-md-8">
@@ -876,6 +888,62 @@
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="button" class="btn btn-danger" id="confirmRejectBtn">
+                            <i class="fas fa-times-circle"></i> Confirm Rejection
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Reject Modal (FEAT-0001) -->
+        <div class="modal fade" id="formRejectModal" tabindex="-1" aria-labelledby="formRejectModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="formRejectModalLabel"><i class="fas fa-times-circle"></i> Reject Form</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted">The form will be returned to <strong>Draft</strong> status. The creator will see your reason.</p>
+                        <div class="mb-3">
+                            <label for="formRejectReason" class="form-label"><strong>Reason for Rejection</strong> <span style="color:red;">*</span></label>
+                            <textarea class="form-control" id="formRejectReason" rows="4"
+                                placeholder="Explain what needs to be fixed before resubmission..." required maxlength="1000"></textarea>
+                            <div class="invalid-feedback">Rejection reason is required.</div>
+                            <small class="text-muted">Max 1000 characters.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-danger" id="confirmFormRejectBtn">
+                            <i class="fas fa-times-circle"></i> Confirm Rejection
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Reject Modal (from Approvals page) (FEAT-0001) -->
+        <div class="modal fade" id="approvalsFormRejectModal" tabindex="-1" aria-labelledby="approvalsFormRejectModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="approvalsFormRejectModalLabel"><i class="fas fa-times-circle"></i> Reject Form</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted">The form will be returned to <strong>Draft</strong> status with your rejection reason.</p>
+                        <div class="mb-3">
+                            <label for="approvalsFormRejectReason" class="form-label"><strong>Reason for Rejection</strong> <span style="color:red;">*</span></label>
+                            <textarea class="form-control" id="approvalsFormRejectReason" rows="4"
+                                placeholder="Explain what needs to be fixed before resubmission..." required maxlength="1000"></textarea>
+                            <div class="invalid-feedback">Rejection reason is required.</div>
+                            <small class="text-muted">Max 1000 characters.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-danger" id="confirmFormApprovalsRejectBtn">
                             <i class="fas fa-times-circle"></i> Confirm Rejection
                         </button>
                     </div>

@@ -110,6 +110,10 @@ tasks:
       # Fix for K3s: The action-crunchy chart includes a strict NetworkPolicy that blocks
       # cross-namespace or pod-to-pod communication. We remove it locally.
       - rm -f "{{.CRUNCHY_CACHE}}/charts/crunchy/templates/knp.yaml"
+      # Fix openshift flag locally on the chart itself instead of patching via kubectl.
+      # This avoids Server-Side Apply conflicts upon redeployment on local k3s.
+      - |
+        powershell -Command "(Get-Content -Path '{{.CRUNCHY_CACHE}}/charts/crunchy/templates/postgrescluster.yaml') -replace 'openshift: true', 'openshift: false' | Set-Content -Path '{{.CRUNCHY_CACHE}}/charts/crunchy/templates/postgrescluster.yaml'"
       # Deploy Crunchy using the action's chart + project values + local overrides
       - |
         helm upgrade --install "{{.CRUNCHY_RELEASE}}" \
@@ -117,11 +121,6 @@ tasks:
           -f charts/crunchy/values.yml \
           -f deploy/local/crunchy-overrides.yaml \
           --timeout 5m
-      # Patch openshift: true → false (hardcoded in chart template, not for k3s)
-      - |
-        echo "Patching PostgresCluster for k3s (openshift: false)..."
-        kubectl patch postgrescluster {{.CRUNCHY_RELEASE}}-crunchy \
-          --type merge -p '{"spec":{"openshift":false}}'
       # Wait for the PostgresCluster primary to become ready
       - |
         echo "Waiting for Crunchy PostgreSQL primary to become ready..."
@@ -149,12 +148,16 @@ tasks:
           exit 1
         fi
 
+        # Extract only the primary host from the HA DB_URI to avoid SQLAlchemy parsing issues
+        # Also URL-encode any remaining commas (like in the password) as %2C to prevent Helm's --set-string from splitting it
+        PRIMARY_DB_URI=$(powershell -Command "\$u='$DB_URI'; \$parts=\$u.Split('@'); \$auth=\$parts[0]; \$tail=\$parts[1]; \$hosts=\$tail.Split('/')[0]; \$db=\$tail.Substring(\$hosts.Length); \$primary=\$hosts.Split(',')[0]; if (\$primary.IndexOf(':') -lt 0) { \$primary += ':5432' }; [Console]::Out.Write((\$auth + '@' + \$primary + \$db).Replace(',', '%2C'))")
+
         echo "Deploying application with Helm..."
         helm upgrade --install "{{.RELEASE_NAME}}" "{{.CHART}}" \
           -f "{{.CHART}}/values.yaml" \
           -f "{{.CHART}}/values-local.yaml" \
           --set-string global.tag="{{.TAG}}" \
-          --set-string secrets.databaseUrl="${DB_URI}" \
+          --set-string secrets.databaseUrl="${PRIMARY_DB_URI}" \
           --set secrets.secretKey="${SECRET_KEY}" \
           --set secrets.s3EndpointUrl="${S3_ENDPOINT_URL}" \
           --set secrets.s3AccessKey="${S3_ACCESS_KEY}" \

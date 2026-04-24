@@ -40,8 +40,8 @@ class FormCreateRequest(BaseModel):
         default=False, description="Whether form is publicly visible"
     )
     keywords: Optional[List[str]] = Field(default=None, description="Search keywords")
-    business_area_ids: Optional[List[str]] = Field(
-        default=None, description="Associated business area IDs"
+    business_area_id: Optional[str] = Field(
+        default=None, description="Associated business area ID"
     )
     effective_date: Optional[datetime] = Field(
         None, description="When form becomes effective"
@@ -96,10 +96,6 @@ class FormCreateRequest(BaseModel):
             if self.collects_personal_info not in ("Yes", "No"):
                 raise ValueError("collects_personal_info must be 'Yes' or 'No'")
 
-        # TASK-418: at most one business area per form
-        if self.business_area_ids is not None and len(self.business_area_ids) > 1:
-            raise ValueError("At most one business area may be selected")
-
         return self
 
 
@@ -110,7 +106,7 @@ class FormUpdateRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=2000)
     is_public: Optional[bool] = None
     keywords: Optional[List[str]] = None
-    business_area_ids: Optional[List[str]] = None
+    business_area_id: Optional[str] = None
     effective_date: Optional[datetime] = None
     collects_personal_info: Optional[str] = Field(
         None, description="Does this form collect personal information? ('Yes' or 'No')"
@@ -144,9 +140,6 @@ class FormUpdateRequest(BaseModel):
             if src_upper not in ("URL", "DOWNLOAD"):
                 raise ValueError("form_source must be 'URL' or 'Download'")
             self.form_source = "URL" if src_upper == "URL" else "Download"
-        # TASK-418: at most one business area per form
-        if self.business_area_ids is not None and len(self.business_area_ids) > 1:
-            raise ValueError("At most one business area may be selected")
         return self
 
 
@@ -160,7 +153,7 @@ class FormResponse(BaseModel):
     is_public: bool
     current_version: int
     keywords: List[str]
-    business_areas: List[BusinessAreaRef]
+    business_area: Optional[BusinessAreaRef] = None
     created_by: Dict[str, str]
     effective_date: Optional[str]
     # TASK-110C: new fields
@@ -294,14 +287,14 @@ async def create_form(
     - **description**: Optional form description
     - **is_public**: Whether form is publicly visible
     - **keywords**: List of search keywords
-    - **business_area_ids**: Associated business areas
+    - **business_area_id**: Associated business area ID
     - **effective_date**: When form becomes effective
     """
     try:
         # Convert string UUIDs to UUID objects
-        business_area_ids = None
-        if request.business_area_ids:
-            business_area_ids = [UUID(ba_id) for ba_id in request.business_area_ids]
+        business_area_id = None
+        if request.business_area_id:
+            business_area_id = UUID(request.business_area_id)
 
         form_number_reservation_id = None
         if request.form_number_reservation_id:
@@ -313,7 +306,7 @@ async def create_form(
             description=request.description,
             is_public=request.is_public,
             keywords=request.keywords,
-            business_area_ids=business_area_ids,
+            business_area_id=business_area_id,
             created_by_id=UUID(current_user.sub),
             effective_date=request.effective_date,
             form_source=request.form_source,
@@ -393,6 +386,14 @@ async def update_form(
     try:
         form_uuid = UUID(form_id)
 
+        # BR-003: Prevent structural edits while form is in Pending Review state
+        form_check = FormService.get_form_by_id(db, form_uuid)
+        if form_check and str(form_check.status) == "pending_review":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Form cannot be edited while it is in Pending Review state",
+            )
+
         # Build update kwargs
         update_data = {}
         if request.title is not None:
@@ -405,10 +406,8 @@ async def update_form(
             update_data["keywords"] = request.keywords
         if request.effective_date is not None:
             update_data["effective_date"] = request.effective_date
-        if request.business_area_ids is not None:
-            update_data["business_area_ids"] = [
-                UUID(ba_id) for ba_id in request.business_area_ids
-            ]
+        if request.business_area_id is not None:
+            update_data["business_area_id"] = UUID(request.business_area_id)
         if request.collects_personal_info is not None:
             update_data["collects_personal_info"] = request.collects_personal_info
         # TASK-416: attachment fields — use model_fields_set to support explicit null (clearing)

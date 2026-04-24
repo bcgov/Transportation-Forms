@@ -20,13 +20,15 @@ import {
     restoreUploadState,
 } from './file-upload.js';
 import { loadBusinessAreas, initBusinessAreaCombobox, getBusinessAreaOptions, closeBusinessAreaDropdown } from './business-areas.js';
-import { getAuthToken } from '../auth.js';
+import { getAuthToken, hasPermission } from '../auth.js';
 
 // ─── Module-private state ─────────────────────────────────────────────────────
 
 let _currentFormId = null;
+let _currentFormStatus = null;
 let _formNumberReservationId = null;
 let _formNumberReservations = [];
+let _workflowListenersAttached = false;
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
@@ -81,6 +83,211 @@ function _initFormListeners() {
         backBtn.parentNode.replaceChild(clone, backBtn);
         clone.removeAttribute('onclick');
         clone.addEventListener('click', () => _navigate(ROUTES.FORMS_LIST));
+    }
+
+    _initWorkflowButtonListeners();
+}
+
+/** Wire workflow action button listeners once per page lifetime. */
+function _initWorkflowButtonListeners() {
+    if (_workflowListenersAttached) return;
+    _workflowListenersAttached = true;
+
+    document.getElementById('submitForReviewBtn')
+        ?.addEventListener('click', _submitFormForReview);
+    document.getElementById('approvePublishBtn')
+        ?.addEventListener('click', _approveAndPublish);
+    document.getElementById('archiveFormBtn')
+        ?.addEventListener('click', _archiveForm);
+    document.getElementById('rejectFormBtn')
+        ?.addEventListener('click', _openFormRejectModal);
+    document.getElementById('confirmFormRejectBtn')
+        ?.addEventListener('click', _confirmFormReject);
+}
+
+/**
+ * Show/hide and label workflow action buttons based on form status and user permissions.
+ * @param {string|null} status  Current form status, or null for create mode.
+ */
+function _updateWorkflowButtons(status) {
+    const saveDraftBtn = document.getElementById('submitBtn');
+    const submitForReviewBtn = document.getElementById('submitForReviewBtn');
+    const approvePublishBtn = document.getElementById('approvePublishBtn');
+    const rejectFormBtn = document.getElementById('rejectFormBtn');
+    const archiveFormBtn = document.getElementById('archiveFormBtn');
+
+    // Default: hide all workflow extras
+    [submitForReviewBtn, approvePublishBtn, rejectFormBtn, archiveFormBtn].forEach(el => {
+        if (el) el.style.display = 'none';
+    });
+
+    if (!status) {
+        // Create mode — just show "Save draft"
+        if (saveDraftBtn) saveDraftBtn.style.display = '';
+        return;
+    }
+
+    if (status === 'draft') {
+        if (saveDraftBtn) saveDraftBtn.style.display = '';
+        if (submitForReviewBtn && hasPermission('form:submit_for_review')) {
+            submitForReviewBtn.style.display = '';
+        }
+    } else if (status === 'pending_review') {
+        // Locked — no save/edit actions available to creators
+        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
+        if (approvePublishBtn && hasPermission('form:approve') && hasPermission('form:review')) {
+            approvePublishBtn.style.display = '';
+        }
+        if (rejectFormBtn && hasPermission('form:approve') && hasPermission('form:review')) {
+            rejectFormBtn.style.display = '';
+        }
+    } else if (status === 'published') {
+        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
+        if (archiveFormBtn && hasPermission('form:approve')) {
+            archiveFormBtn.style.display = '';
+        }
+    } else {
+        // archived or unknown — no actions
+        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
+    }
+}
+
+/**
+ * Lock or unlock all form fields.
+ * @param {boolean} locked
+ */
+function _setFormFieldsLocked(locked) {
+    const selectors = [
+        '#title', '#description', '#formSource', '#formSourceUrl',
+        '#effectiveDate', '#isPublic', '#collectsPersonalInfo',
+        '#businessAreaInput', '#formNumber',
+    ];
+    selectors.forEach(sel => {
+        const el = document.querySelector(sel);
+        if (el) el.disabled = locked;
+    });
+    // File upload area
+    const uploadArea = document.getElementById('fileUploadArea');
+    if (uploadArea) uploadArea.style.pointerEvents = locked ? 'none' : '';
+    // Keywords input
+    const keywordInput = document.getElementById('keywordInput');
+    if (keywordInput) keywordInput.disabled = locked;
+    const addKeywordBtn = document.getElementById('addKeywordBtn');
+    if (addKeywordBtn) addKeywordBtn.disabled = locked;
+}
+
+// ─── Workflow action handlers ─────────────────────────────────────────────────
+
+async function _submitFormForReview() {
+    if (!_currentFormId) return;
+    const btn = document.getElementById('submitForReviewBtn');
+    btn.disabled = true;
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${_currentFormId}/submit`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to submit for review');
+        }
+        showAlert('Form submitted for review successfully.', 'success');
+        setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function _approveAndPublish() {
+    if (!_currentFormId) return;
+    const btn = document.getElementById('approvePublishBtn');
+    btn.disabled = true;
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${_currentFormId}/approve`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to approve form');
+        }
+        showAlert('Form has been approved and published.', 'success');
+        setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function _openFormRejectModal() {
+    const reasonField = document.getElementById('formRejectReason');
+    if (reasonField) {
+        reasonField.value = '';
+        reasonField.classList.remove('is-invalid');
+    }
+    window.bootstrap?.Modal.getOrCreateInstance(
+        document.getElementById('formRejectModal')
+    )?.show();
+}
+
+async function _confirmFormReject() {
+    if (!_currentFormId) return;
+    const reasonField = document.getElementById('formRejectReason');
+    const reason = reasonField?.value?.trim() || '';
+    if (!reason) {
+        reasonField?.classList.add('is-invalid');
+        return;
+    }
+
+    const btn = document.getElementById('confirmFormRejectBtn');
+    btn.disabled = true;
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${_currentFormId}/reject`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${getAuthToken()}`,
+            },
+            body: JSON.stringify({ reason_notes: reason }),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to reject form');
+        }
+        window.bootstrap?.Modal.getInstance(
+            document.getElementById('formRejectModal')
+        )?.hide();
+        showAlert('Form rejected and returned to draft.', 'warning');
+        setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function _archiveForm() {
+    if (!_currentFormId) return;
+    const btn = document.getElementById('archiveFormBtn');
+    btn.disabled = true;
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${_currentFormId}/archive`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to archive form');
+        }
+        showAlert('Form archived successfully.', 'success');
+        setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
     }
 }
 
@@ -176,8 +383,22 @@ async function _loadFormForEdit(formId) {
 
         setKeywords(form.keywords || []);
 
-        document.getElementById('submitBtn').textContent = 'Update Form';
-        document.querySelector('#createView h2').textContent = 'Edit Form';
+        // Workflow button state and field locking (FEAT-0001)
+        _currentFormStatus = form.status;
+        _updateWorkflowButtons(form.status);
+        const isLocked = ['pending_review', 'published', 'archived'].includes(form.status);
+        _setFormFieldsLocked(isLocked);
+
+        // Label the submit button based on status
+        const submitBtn = document.getElementById('submitBtn');
+        if (form.status === 'draft') {
+            if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-save"></i> Save draft';
+            document.querySelector('#createView h2').textContent = 'Edit Form';
+        } else {
+            if (submitBtn) submitBtn.style.display = 'none';
+            document.querySelector('#createView h2').textContent =
+                form.status === 'pending_review' ? 'Review Form' : 'View Form';
+        }
         document.getElementById('pageTitle').textContent = `Edit Form - ${form.title} - BC Gov`;
 
         document.getElementById('listView').style.display = 'none';
@@ -317,11 +538,23 @@ export function resetFormState() {
 
     setKeywords([]);
     _currentFormId = null;
+    _currentFormStatus = null;
     clearUploadState();
     _formNumberReservationId = null;
 
     const submitBtn = document.getElementById('submitBtn');
-    if (submitBtn) submitBtn.textContent = 'Create Form';
+    if (submitBtn) {
+        submitBtn.innerHTML = '<i class="fas fa-save"></i> Save draft';
+        submitBtn.style.display = '';
+    }
+
+    // Hide workflow action buttons — they are shown per-status in _updateWorkflowButtons
+    ['submitForReviewBtn', 'approvePublishBtn', 'rejectFormBtn', 'archiveFormBtn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+
+    _setFormFieldsLocked(false);
 
     const heading = document.querySelector('#createView h2');
     if (heading) heading.textContent = 'Add New Form';

@@ -344,7 +344,7 @@ class KeyCloakService:
             return []
 
     def generate_app_tokens(
-        self, user_id: str, email: str, name: str, roles: list
+        self, user_id: str, email: str, name: str, roles: list, permissions: list = None
     ) -> Dict[str, str]:
         """
         Generate our application JWT tokens after KeyCloak authentication.
@@ -354,12 +354,17 @@ class KeyCloakService:
             email: User email
             name: User display name
             roles: List of role names
+            permissions: Flat list of granular permission strings
 
         Returns:
             Dict with access_token and refresh_token
         """
         access_token = jwt_handler.generate_access_token(
-            user_id=user_id, email=email, name=name, roles=roles
+            user_id=user_id,
+            email=email,
+            name=name,
+            roles=roles,
+            permissions=permissions if permissions is not None else [],
         )
 
         refresh_token = jwt_handler.generate_refresh_token(user_id=user_id)

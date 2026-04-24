@@ -155,9 +155,7 @@ class BusinessArea(Base):
     )
 
     # Relationships
-    form_business_areas = relationship(
-        "FormBusinessArea", back_populates="business_area", cascade="all, delete-orphan"
-    )
+    forms = relationship("Form", back_populates="business_area")
     contacts = relationship(
         "BusinessAreaContact",
         back_populates="business_area",
@@ -187,6 +185,7 @@ class Form(Base):
     )  # Full-text search vector (tsvector)
     embedding = Column(String, nullable=True)  # Semantic embedding (vector)
     created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    business_area_id = Column(UUID(as_uuid=True), ForeignKey("business_areas.id"), nullable=True, index=True)
     effective_date = Column(DateTime, nullable=True)
     # TASK-110C: Form creation enhancement fields
     form_source = Column(String(50), nullable=True)  # 'URL' or 'Download'
@@ -221,9 +220,7 @@ class Form(Base):
     versions = relationship(
         "FormVersion", back_populates="form", cascade="all, delete-orphan"
     )
-    business_areas = relationship(
-        "FormBusinessArea", back_populates="form", cascade="all, delete-orphan"
-    )
+    business_area = relationship("BusinessArea", back_populates="forms")
     workflow_history = relationship(
         "FormWorkflow", back_populates="form", cascade="all, delete-orphan"
     )
@@ -273,39 +270,6 @@ class BusinessAreaContact(Base):
     # Relationships
     business_area = relationship("BusinessArea", back_populates="contacts")
     contact_user = relationship("User", foreign_keys=[contact_user_id])
-
-
-# ============================================================================
-# TABLE 6: form_business_areas (Junction Table)
-# ============================================================================
-class FormBusinessArea(Base):
-    __tablename__ = "form_business_areas"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    form_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("forms.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    business_area_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("business_areas.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    deleted_at = Column(DateTime, nullable=True, index=True)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    # Relationships
-    form = relationship("Form", back_populates="business_areas")
-    business_area = relationship("BusinessArea", back_populates="form_business_areas")
-
-    __table_args__ = (
-        UniqueConstraint(
-            "form_id", "business_area_id", name="unique_form_business_area"
-        ),
-    )
 
 
 # ============================================================================

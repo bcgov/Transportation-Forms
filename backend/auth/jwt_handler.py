@@ -19,13 +19,20 @@ class TokenData:
     """Represents decoded JWT token data."""
 
     def __init__(
-        self, sub: str, email: str, name: str, roles: list, token_type: str = "access"
+        self,
+        sub: str,
+        email: str,
+        name: str,
+        roles: list,
+        token_type: str = "access",
+        permissions: list = None,
     ):
         self.sub = sub  # Subject (user ID)
         self.email = email
         self.name = name
         self.roles = roles
         self.token_type = token_type
+        self.permissions: list = permissions if permissions is not None else []
 
 
 class JWTHandler:
@@ -38,6 +45,7 @@ class JWTHandler:
         name: str,
         roles: list,
         expires_delta: Optional[timedelta] = None,
+        permissions: list = None,
     ) -> str:
         """
         Generate an access token.
@@ -48,6 +56,7 @@ class JWTHandler:
             name: User display name
             roles: List of role IDs/names
             expires_delta: Custom expiry time (defaults to 30 minutes)
+            permissions: List of granular permission strings (e.g. 'form:approve')
 
         Returns:
             Encoded JWT token string
@@ -63,6 +72,7 @@ class JWTHandler:
             "email": email,
             "name": name,
             "roles": roles,
+            "permissions": permissions if permissions is not None else [],
             "iss": TOKEN_ISSUER,
             "aud": TOKEN_AUDIENCE,
             "exp": expire.timestamp(),
@@ -151,6 +161,7 @@ class JWTHandler:
                 email=payload.get("email"),
                 name=payload.get("name"),
                 roles=payload.get("roles", []),
+                permissions=payload.get("permissions", []),
                 token_type=token_type,
             )
 

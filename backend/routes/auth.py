@@ -316,11 +316,16 @@ async def auth_callback(
         from backend.routes.admin_users import _active_user_roles
 
         role_names = [ur.role.name for ur in _active_user_roles(user)]
+        all_permissions = list({
+            p for ur in _active_user_roles(user)
+            for p in (ur.role.permissions or [])
+        })
         app_tokens = keycloak_service.generate_app_tokens(
             user_id=str(user.id),
             email=user.email,
             name=user_full_name,
             roles=role_names,
+            permissions=all_permissions,
         )
         logger.info(f"Successfully authenticated user: {email}")
 
@@ -386,12 +391,15 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
         )
         from backend.routes.admin_users import _active_user_roles
 
-        role_names = [ur.role.name for ur in _active_user_roles(user)]
+        active_roles = _active_user_roles(user)
+        role_names = [ur.role.name for ur in active_roles]
+        all_permissions = list({p for ur in active_roles for p in (ur.role.permissions or [])})
         new_access_token = jwt_handler.generate_access_token(
             user_id=str(user.id),
             email=user.email,
             name=user_full_name,
             roles=role_names,
+            permissions=all_permissions,
         )
 
         logger.info(f"Refreshed access token for user: {user.email}")
@@ -497,11 +505,16 @@ async def get_current_user_info(
         from backend.routes.admin_users import _active_user_roles
 
         active_roles = _active_user_roles(user)
+        all_permissions = list({
+            p for ur in active_roles
+            for p in (ur.role.permissions or [])
+        })
         return {
             "id": str(user.id),
             "email": user.email,
             "name": user_full_name,
             "roles": [ur.role.name for ur in active_roles],
+            "permissions": all_permissions,
             "keycloak_id": user.keycloak_id,
             "is_active": user.is_active,
             "created_at": user.created_at.isoformat(),

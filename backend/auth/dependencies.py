@@ -36,11 +36,18 @@ async def get_current_user(
 
     # Development mode: allow demo token only when explicitly enabled
     if DEMO_AUTH_ENABLED and token == "demo-token":
+        from backend.auth.permissions import DEFAULT_ROLES
+
+        admin_permissions = [
+            p.value if hasattr(p, "value") else str(p)
+            for p in DEFAULT_ROLES["admin"]["permissions"]
+        ]
         return TokenData(
             sub="550e8400-e29b-41d4-a716-446655440000",  # Demo UUID
             email="demo@example.com",
             name="Demo User",
             roles=["admin"],
+            permissions=admin_permissions,
             token_type="access",
         )
 

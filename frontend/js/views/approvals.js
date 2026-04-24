@@ -1,5 +1,6 @@
 // frontend/js/views/approvals.js
-// Approvals queue view — reviewers/admins process pending reservation requests.
+// Approvals queue view — reviewers/admins process pending reservation requests
+// and pending form approval requests (FEAT-0001).
 import { API_BASE } from '../constants.js';
 import {
     escapeHtml,
@@ -15,6 +16,7 @@ import { getAuthToken } from '../auth.js';
 
 // Module-private state
 let _actionReservationId = null;
+let _actionFormId = null;  // FEAT-0001: tracks which form is being acted on
 
 // ─── Bootstrap Modal helper ───────────────────────────────────────────────────
 
@@ -62,6 +64,10 @@ function _ensureModalListeners() {
         ?.addEventListener('click', confirmRequestChanges);
     document.getElementById('confirmReleaseBtn')
         ?.addEventListener('click', confirmRelease);
+
+    // FEAT-0001: form approval/rejection from unified approvals page
+    document.getElementById('confirmFormApprovalsRejectBtn')
+        ?.addEventListener('click', _confirmFormApprovalsReject);
 }
 
 function _attachDelegatedListeners() {
@@ -103,6 +109,21 @@ function _attachDelegatedListeners() {
             if (releaseBtn) {
                 e.stopPropagation();
                 openReleaseModal(releaseBtn.dataset.id, releaseBtn.dataset.formNumber);
+                return;
+            }
+
+            // FEAT-0001: form approval actions
+            const formApproveBtn = e.target.closest('[data-action="form-approve"]');
+            if (formApproveBtn) {
+                e.stopPropagation();
+                _approveForm(formApproveBtn.dataset.formId);
+                return;
+            }
+
+            const formRejectBtn = e.target.closest('[data-action="form-reject"]');
+            if (formRejectBtn) {
+                e.stopPropagation();
+                _openFormRejectModal(formRejectBtn.dataset.formId);
             }
         });
     }
@@ -117,79 +138,146 @@ export async function loadPendingApprovals() {
     showSpinner('#pendingApprovalsList', true);
 
     try {
-        const response = await fetch(`${API_BASE}/reservations/pending?limit=50`, {
-            headers: { Authorization: `Bearer ${getAuthToken()}` },
-        });
+        // Fetch reservations and form approvals in parallel (FEAT-0001)
+        const [reservationResponse, formsResponse] = await Promise.all([
+            fetch(`${API_BASE}/reservations/pending?limit=50`, {
+                headers: { Authorization: `Bearer ${getAuthToken()}` },
+            }),
+            fetch(`${API_BASE}/staff/forms/pending-approvals`, {
+                headers: { Authorization: `Bearer ${getAuthToken()}` },
+            }),
+        ]);
 
-        if (!response.ok) {
-            const msg = await getErrorDetail(response, 'Failed to load pending approvals');
+        if (!reservationResponse.ok) {
+            const msg = await getErrorDetail(reservationResponse, 'Failed to load pending reservations');
             throw new Error(msg);
         }
 
-        const data = await response.json();
-        const items = data.items || [];
+        const reservationData = await reservationResponse.json();
+        const reservationItems = reservationData.items || [];
 
+        // Form approvals are optional — reviewer role required; gracefully skip on 403
+        let formItems = [];
+        if (formsResponse.ok) {
+            const formsData = await formsResponse.json();
+            formItems = formsData.items || [];
+        }
+
+        const totalCount = (reservationData.total ?? reservationItems.length) + formItems.length;
         document.getElementById('pendingCountLabel').textContent =
-            `${data.total ?? items.length} pending request(s)`;
+            `${totalCount} pending request(s)`;
 
-        if (items.length === 0) {
+        if (reservationItems.length === 0 && formItems.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-check-circle"></i>
                     <h4>No Pending Requests</h4>
-                    <p>There are no reservations waiting for your approval.</p>
+                    <p>No pending requests at this time.</p>
                 </div>
             `;
             return;
         }
 
-        container.innerHTML = items.map(r => `
-            <div class="card reservation-card pending-card"
-                 data-action="view-detail"
-                 data-id="${escapeHtml(r.id)}"
-                 style="cursor: pointer;">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-3">
-                            <h5 class="mb-1 fw-bold">${escapeHtml(r.full_form_number)}</h5>
-                            <small class="text-muted">${r.numbering_method === 'auto_generated' ? 'Auto-generated' : 'Custom'}</small>
-                        </div>
-                        <div class="col-md-2">
-                            <span class="badge reservation-status-badge status-${escapeHtml(r.status)}">
-                                ${formatReservationStatus(r.status)}
-                            </span>
-                        </div>
-                        <div class="col-md-3">
-                            <small class="text-muted">Submitted: ${new Date(r.created_at).toLocaleDateString()}</small>
-                            ${r.expires_at ? `<br><small class="text-muted">Expires: ${new Date(r.expires_at).toLocaleDateString()}</small>` : ''}
-                        </div>
-                        <div class="col-md-4 text-end">
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-success"
-                                        data-action="open-approve"
-                                        data-id="${escapeHtml(r.id)}"
-                                        data-form-number="${escapeHtml(r.full_form_number)}"
-                                        title="Approve">
-                                    <i class="fas fa-check"></i> Approve
-                                </button>
-                                <button class="btn btn-warning"
-                                        data-action="open-request-changes"
-                                        data-id="${escapeHtml(r.id)}"
-                                        title="Request Changes">
-                                    <i class="fas fa-edit"></i> Changes
-                                </button>
-                                <button class="btn btn-danger"
-                                        data-action="open-reject"
-                                        data-id="${escapeHtml(r.id)}"
-                                        title="Reject">
-                                    <i class="fas fa-times"></i> Reject
-                                </button>
+        let html = '';
+
+        // ── Reservation requests section ──────────────────────────────────
+        if (reservationItems.length > 0) {
+            html += `<h5 class="text-muted mt-2 mb-2"><i class="fas fa-hashtag"></i> Form Number Reservations</h5>`;
+            html += reservationItems.map(r => `
+                <div class="card reservation-card pending-card"
+                     data-action="view-detail"
+                     data-id="${escapeHtml(r.id)}"
+                     style="cursor: pointer;">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <h5 class="mb-1 fw-bold">${escapeHtml(r.full_form_number)}</h5>
+                                <small class="text-muted">${r.numbering_method === 'auto_generated' ? 'Auto-generated' : 'Custom'}</small>
+                            </div>
+                            <div class="col-md-2">
+                                <span class="badge reservation-status-badge status-${escapeHtml(r.status)}">
+                                    ${formatReservationStatus(r.status)}
+                                </span>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted">Submitted: ${new Date(r.created_at).toLocaleDateString()}</small>
+                                ${r.expires_at ? `<br><small class="text-muted">Expires: ${new Date(r.expires_at).toLocaleDateString()}</small>` : ''}
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-success"
+                                            data-action="open-approve"
+                                            data-id="${escapeHtml(r.id)}"
+                                            data-form-number="${escapeHtml(r.full_form_number)}"
+                                            title="Approve">
+                                        <i class="fas fa-check"></i> Approve
+                                    </button>
+                                    <button class="btn btn-warning"
+                                            data-action="open-request-changes"
+                                            data-id="${escapeHtml(r.id)}"
+                                            title="Request Changes">
+                                        <i class="fas fa-edit"></i> Changes
+                                    </button>
+                                    <button class="btn btn-danger"
+                                            data-action="open-reject"
+                                            data-id="${escapeHtml(r.id)}"
+                                            title="Reject">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `).join('');
+        }
+
+        // ── Form approval requests section (FEAT-0001) ────────────────────
+        if (formItems.length > 0) {
+            html += `<h5 class="text-muted mt-3 mb-2"><i class="fas fa-file-alt"></i> Form Approval Requests</h5>`;
+            html += formItems.map(f => `
+                <div class="card reservation-card pending-card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-2">
+                                <h5 class="mb-1 fw-bold">${escapeHtml(f.form_number || '—')}</h5>
+                                <small class="text-muted">Form #</small>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>${escapeHtml(f.title)}</strong>
+                            </div>
+                            <div class="col-md-2">
+                                <span class="badge bg-warning text-dark">Pending Review</span>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted">
+                                    ${f.submitted_at ? new Date(f.submitted_at).toLocaleDateString() : '—'}
+                                </small><br>
+                                <small class="text-muted">${escapeHtml(f.submitted_by || '—')}</small>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-success"
+                                            data-action="form-approve"
+                                            data-form-id="${escapeHtml(f.form_id)}"
+                                            title="Approve &amp; Publish">
+                                        <i class="fas fa-check"></i> Approve
+                                    </button>
+                                    <button class="btn btn-danger"
+                                            data-action="form-reject"
+                                            data-form-id="${escapeHtml(f.form_id)}"
+                                            title="Reject">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        container.innerHTML = html;
     } catch (error) {
         container.innerHTML = `
             <div class="alert alert-danger">
@@ -200,7 +288,75 @@ export async function loadPendingApprovals() {
     }
 }
 
-// ─── Modal openers ────────────────────────────────────────────────────────────
+// ─── FEAT-0001: Form approval/rejection actions ───────────────────────────────
+
+async function _approveForm(formId) {
+    if (!formId) return;
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${formId}/approve`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) {
+            const msg = await getErrorDetail(response, 'Failed to approve form');
+            throw new Error(msg);
+        }
+        showAlert('The form has been approved and published.', 'success');
+        _refreshAfterAction();
+    } catch (error) {
+        showAlert(`Error approving form: ${error.message}`, 'danger');
+    }
+}
+
+function _openFormRejectModal(formId) {
+    _ensureModalListeners();
+    _actionFormId = formId;
+    const reasonField = document.getElementById('approvalsFormRejectReason');
+    if (reasonField) {
+        reasonField.value = '';
+        reasonField.classList.remove('is-invalid');
+    }
+    _getModal('approvalsFormRejectModal').show();
+}
+
+async function _confirmFormApprovalsReject() {
+    const reasonField = document.getElementById('approvalsFormRejectReason');
+    const reason = reasonField?.value?.trim() || '';
+    if (!reason) {
+        reasonField?.classList.add('is-invalid');
+        return;
+    }
+    if (!_actionFormId) return;
+
+    const btn = document.getElementById('confirmFormApprovalsRejectBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Rejecting...';
+
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${_actionFormId}/reject`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${getAuthToken()}`,
+            },
+            body: JSON.stringify({ reason_notes: reason }),
+        });
+        if (!response.ok) {
+            const msg = await getErrorDetail(response, 'Failed to reject form');
+            throw new Error(msg);
+        }
+        _hideModal('approvalsFormRejectModal');
+        showAlert('Form rejected and returned to draft.', 'warning');
+        _refreshAfterAction();
+    } catch (error) {
+        showAlert(`Error rejecting form: ${error.message}`, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-times-circle"></i> Confirm Rejection';
+    }
+}
+
+// ─── Modal openers (reservations) ────────────────────────────────────────────
 
 export function openApproveModal(reservationId, formNumber) {
     _ensureModalListeners();
@@ -234,7 +390,7 @@ export function openReleaseModal(reservationId, formNumber) {
     _getModal('releaseModal').show();
 }
 
-// ─── Confirm actions ──────────────────────────────────────────────────────────
+// ─── Confirm actions (reservations) ──────────────────────────────────────────
 
 export async function confirmApprove() {
     if (!_actionReservationId) return;
@@ -396,8 +552,6 @@ export async function confirmRelease() {
 
 /**
  * After any approval action, reload whichever panel is currently visible.
- * The detail view and my-reservations view are handled by their own modules;
- * here we only own the approvals list.
  */
 function _refreshAfterAction() {
     const detailView = document.getElementById('reservationDetailView');
@@ -405,7 +559,6 @@ function _refreshAfterAction() {
     const myReservationsView = document.getElementById('myReservationsView');
 
     if (detailView?.style.display !== 'none') {
-        // Let the detail view module handle its own refresh via a custom event.
         document.dispatchEvent(new CustomEvent('approvals:action-complete'));
     } else if (approvalsView?.style.display !== 'none') {
         loadPendingApprovals();
