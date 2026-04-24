@@ -1,8 +1,8 @@
 apiVersion: v2
 name: app
-description: Transportation Forms — backend, frontend, and supporting resources
+description: Transportation Forms — umbrella chart (backend + frontend)
 type: application
-version: 0.2.0
+version: 0.3.0
 appVersion: "2.0.0"
 keywords:
   - transportation-forms
@@ -11,3 +11,10 @@ keywords:
 home: https://github.com/bcgov/transportation-forms
 maintainers:
   - name: BCGov Transportation Forms Team
+dependencies:
+  - name: backend
+    version: "1.0.0"
+    repository: "file://../backend"
+  - name: frontend
+    version: "1.0.0"
+    repository: "file://../frontend"

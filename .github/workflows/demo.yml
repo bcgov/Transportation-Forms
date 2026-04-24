@@ -35,8 +35,8 @@ jobs:
               oc patch route transportation-forms-demo \
                 --namespace "${{ vars.OC_NAMESPACE }}" \
                 --type merge \
-                -p "{\"spec\":{\"to\":{\"name\":\"${RELEASE}-app-frontend\"}}}" \
-                || oc expose svc "${RELEASE}-app-frontend" \
+                -p "{\"spec\":{\"to\":{\"name\":\"${RELEASE}-frontend\"}}}" \
+                || oc expose svc "${RELEASE}-frontend" \
                    --name=transportation-forms-demo \
                    --hostname="demo-transportation-forms.${DOMAIN}" \
                    --namespace "${{ vars.OC_NAMESPACE }}"
