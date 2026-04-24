@@ -22,6 +22,33 @@ from backend.config import settings
 logger = logging.getLogger(__name__)
 
 
+# ─── FEAT-0002: MIME-to-file-type mapping ─────────────────────────────────────
+
+MIME_TYPE_MAP: dict[str, str] = {
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "text/csv": "csv",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "application/zip": "zip",
+}
+
+
+def derive_file_type(content_type: str) -> str:
+    """Derive a short file-type label from a MIME content type.
+
+    Returns a lowercase extension string (e.g. ``"pdf"``, ``"docx"``).
+    Returns ``"unknown"`` for any MIME type not in the supported mapping.
+    """
+    normalized = (content_type or "").strip().lower().split(";")[0].strip()
+    return MIME_TYPE_MAP.get(normalized, "unknown")
+
+
 def _get_s3_client():
     """Return a boto3 S3 client pointed at the configured S3-compatible endpoint."""
     return boto3.client(

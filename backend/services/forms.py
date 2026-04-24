@@ -62,6 +62,7 @@ class FormService:
         form_source_url: Optional[str] = None,
         form_attachment_url: Optional[str] = None,
         form_attachment_filename: Optional[str] = None,
+        file_type: Optional[str] = None,
         form_number_reservation_id: Optional[UUID] = None,
         collects_personal_info: Optional[str] = None,
     ) -> Form:
@@ -81,6 +82,7 @@ class FormService:
             form_source_url: Source URL when form_source == 'URL'
             form_attachment_url: S3 object key when form_source == 'DOWNLOAD'
             form_attachment_filename: Original filename of uploaded attachment
+            file_type: Short file-type label derived from MIME (FEAT-0002)
             form_number_reservation_id: UUID of approved reservation (TASK-413)
             collects_personal_info: Whether form collects personal information
 
@@ -141,6 +143,7 @@ class FormService:
             form_source_url=form_source_url,
             form_attachment_url=form_attachment_url,
             form_attachment_filename=form_attachment_filename,
+            file_type=file_type,
             form_number_reservation_id=form_number_reservation_id,
             collects_personal_info=collects_personal_info or "No",
         )
@@ -155,6 +158,7 @@ class FormService:
             "title": title,
             "is_public": is_public,
             "form_source": form_source,
+            "file_type": file_type,
             "collects_personal_info": form.collects_personal_info,
         }
 
@@ -380,6 +384,9 @@ class FormService:
             form.form_attachment_url = new_url
         if "form_attachment_filename" in kwargs:
             form.form_attachment_filename = kwargs["form_attachment_filename"]
+        # FEAT-0002: file_type tracking
+        if "file_type" in kwargs:
+            form.file_type = kwargs["file_type"]
 
         # Handle business area updates
         if "business_area_id" in kwargs:
@@ -788,6 +795,8 @@ class FormService:
             "form_source_url": form.form_source_url,
             "form_attachment_url": form.form_attachment_url,
             "form_attachment_filename": form.form_attachment_filename,
+            # FEAT-0002: file type label
+            "file_type": form.file_type,
             # Personal information field
             "collects_personal_info": form.collects_personal_info,
             # TASK-413 fields

@@ -61,6 +61,12 @@ class FormCreateRequest(BaseModel):
     form_attachment_filename: Optional[str] = Field(
         None, max_length=255, description="Original filename of the uploaded attachment"
     )
+    # FEAT-0002: File type derived from MIME at upload time
+    file_type: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="Short file-type label derived from MIME type (e.g. 'pdf', 'docx', 'unknown')",
+    )
     # TASK-413: Form number reservation linkage
     form_number_reservation_id: Optional[str] = Field(
         None, description="UUID of approved form number reservation to link (optional)"
@@ -126,6 +132,12 @@ class FormUpdateRequest(BaseModel):
     form_attachment_filename: Optional[str] = Field(
         None, max_length=255, description="Original filename of the uploaded attachment"
     )
+    # FEAT-0002: File type derived from MIME at upload time
+    file_type: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="Short file-type label (e.g. 'pdf', 'docx', 'unknown')",
+    )
 
     @model_validator(mode="after")
     def validate_update_fields(self) -> "FormUpdateRequest":
@@ -161,6 +173,8 @@ class FormResponse(BaseModel):
     form_source_url: Optional[str]
     form_attachment_url: Optional[str]
     form_attachment_filename: Optional[str]
+    # FEAT-0002: file type label
+    file_type: Optional[str] = None
     # TASK-413: linked form number reservation display fields
     form_number_reservation_id: Optional[str]
     form_number: Optional[str]
@@ -226,6 +240,7 @@ class FileUploadResponse(BaseModel):
     url: str  # S3 object key (e.g. "uploads/<uuid>.pdf") — not a browser URL
     filename: str
     object_key: str
+    file_type: str  # FEAT-0002: derived file-type label (e.g. 'pdf', 'unknown')
 
 
 @router.post(
@@ -259,8 +274,13 @@ async def upload_form_attachment(
             original_filename=original_filename,
             content_type=content_type,
         )
+        # FEAT-0002: derive file type from MIME
+        file_type = s3_service.derive_file_type(content_type)
         return FileUploadResponse(
-            url=object_key_ref, filename=original_filename, object_key=object_key
+            url=object_key_ref,
+            filename=original_filename,
+            object_key=object_key,
+            file_type=file_type,
         )
     except Exception as exc:
         raise HTTPException(
@@ -313,6 +333,7 @@ async def create_form(
             form_source_url=request.form_source_url,
             form_attachment_url=request.form_attachment_url,
             form_attachment_filename=request.form_attachment_filename,
+            file_type=request.file_type if request.form_source == "Download" else None,
             form_number_reservation_id=form_number_reservation_id,
             collects_personal_info=request.collects_personal_info,
         )
@@ -416,6 +437,7 @@ async def update_form(
             "form_source_url",
             "form_attachment_url",
             "form_attachment_filename",
+            "file_type",
         ):
             if field in request.model_fields_set:
                 update_data[field] = getattr(request, field)
