@@ -7,8 +7,16 @@ on:
         description: "Target environment name (dev / test / prod / PR number)"
         required: true
         type: string
-      tag:
-        description: "Image tag to deploy"
+      backend_tag:
+        description: "Image tag for the backend container"
+        required: true
+        type: string
+      migrations_tag:
+        description: "Image tag for the migrations init container"
+        required: true
+        type: string
+      frontend_tag:
+        description: "Image tag for the frontend container"
         required: true
         type: string
       params:
@@ -84,7 +92,7 @@ jobs:
         id: meta
         shell: bash
         run: |
-          echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          echo "tag=${{ inputs.backend_tag }}" >> "$GITHUB_OUTPUT"
           echo "triggered=true"       >> "$GITHUB_OUTPUT"
 
       # ── Deploy Crunchy PostgreSQL ─────────────────────────────────────────
@@ -107,6 +115,15 @@ jobs:
           s3_endpoint: ${{ secrets.s3_endpoint_url }}
 
       # ── Deploy application via Helm ───────────────────────────────────────
+      - name: Update Helm dependencies
+        uses: bcgov/action-oc-runner@v1.4.1
+        with:
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_token: ${{ secrets.oc_token }}
+          oc_server: ${{ vars.OC_SERVER }}
+          commands: |
+            helm dependency update charts/app
+
       - name: Helm upgrade / install
         uses: bcgov/action-oc-runner@v1.4.1
         with:
@@ -115,10 +132,12 @@ jobs:
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
             set -euo pipefail
-
+            helm dependency update charts/app
             RELEASE_NAME="transportation-forms-${{ inputs.environment }}"
             CHART="charts/app"
-            TAG="${{ inputs.tag }}"
+            BACKEND_TAG="${{ inputs.backend_tag }}"
+            MIGRATIONS_TAG="${{ inputs.migrations_tag }}"
+            FRONTEND_TAG="${{ inputs.frontend_tag }}"
             ENV="${{ inputs.environment }}"
 
             # Determine values file override (test/prod have specific files)
@@ -133,21 +152,23 @@ jobs:
               --namespace "${{ vars.OC_NAMESPACE }}" \
               -f "${CHART}/values.yaml" \
               ${VALUES_OVERRIDE} \
-              --set-string global.tag="${TAG}" \
+              --set-string backend.image.tag="${BACKEND_TAG}" \
+              --set-string backend.image.migrationsTag="${MIGRATIONS_TAG}" \
+              --set-string frontend.image.tag="${FRONTEND_TAG}" \
               --set global.registry=ghcr.io \
               --set global.repository=bcgov/transportation-forms \
-              --set secrets.databaseUrl="${{ secrets.database_url }}" \
-              --set secrets.secretKey="${{ secrets.secret_key }}" \
-              --set secrets.s3EndpointUrl="${{ secrets.s3_endpoint_url }}" \
-              --set secrets.s3AccessKey="${{ secrets.s3_access_key }}" \
-              --set secrets.s3SecretKey="${{ secrets.s3_secret_key }}" \
-              --set secrets.s3Bucket="${{ secrets.s3_bucket }}" \
-              --set secrets.keycloakServerUrl="${{ secrets.keycloak_server_url }}" \
-              --set secrets.keycloakRealm="${{ secrets.keycloak_realm }}" \
-              --set secrets.keycloakClientId="${{ secrets.keycloak_client_id }}" \
-              --set secrets.keycloakClientSecret="${{ secrets.keycloak_client_secret }}" \
-              --set secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
-              --set secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
+              --set backend.secrets.databaseUrl="${{ secrets.database_url }}" \
+              --set backend.secrets.secretKey="${{ secrets.secret_key }}" \
+              --set backend.secrets.s3EndpointUrl="${{ secrets.s3_endpoint_url }}" \
+              --set backend.secrets.s3AccessKey="${{ secrets.s3_access_key }}" \
+              --set backend.secrets.s3SecretKey="${{ secrets.s3_secret_key }}" \
+              --set backend.secrets.s3Bucket="${{ secrets.s3_bucket }}" \
+              --set backend.secrets.keycloakServerUrl="${{ secrets.keycloak_server_url }}" \
+              --set backend.secrets.keycloakRealm="${{ secrets.keycloak_realm }}" \
+              --set backend.secrets.keycloakClientId="${{ secrets.keycloak_client_id }}" \
+              --set backend.secrets.keycloakClientSecret="${{ secrets.keycloak_client_secret }}" \
+              --set backend.secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
+              --set backend.secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
               ${{ inputs.params }} \
               --timeout 10m \
               --wait \

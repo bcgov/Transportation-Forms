@@ -2,13 +2,16 @@
 # Applied on top of values.yaml: helm upgrade ... -f values.yaml -f values-test.yaml
 
 global:
-  tag: test
   secrets:
     persist: true
 
 domain: apps.silver.devops.gov.bc.ca
 
 backend:
+  image:
+    tag: test
+    migrationsTag: test
+
   replicaCount: 2
 
   deploymentStrategy:
@@ -27,11 +30,14 @@ backend:
     environment: test
     sqlalchemyEcho: "false"
     logLevel: WARNING
-# ── Crunchy PostgreSQL ────────────────────────────────────────────────────────
+
   crunchy:
-    enabled: false  # or true, depending on your environment
+    enabled: false
 
 frontend:
+  image:
+    tag: test
+
   replicaCount: 2
 
   deploymentStrategy:

@@ -1,21 +1,24 @@
-# ── Global image settings (overridden per environment / PR) ───────────────────
+# ── Global image settings (registry/repo only; tags are per-component) ─────────
 global:
   registry: ghcr.io
   repository: bcgov/transportation-forms
-  tag: latest
   secrets:
     # false  → Helm will delete secrets when the release is removed (safe for PR envs)
     # true   → Helm will not delete secrets on release removal (safe for long-lived envs)
     persist: false
 
-# ── OpenShift domain (used to build route hostnames) ─────────────────────────
+# ── OpenShift domain ────────────────────────────────────────────────────────────
 domain: apps.silver.devops.gov.bc.ca
 
 nameOverride: ""
 fullnameOverride: ""
 
-# ── Backend ───────────────────────────────────────────────────────────────────
+# ── Backend subchart values ─────────────────────────────────────────────────────
 backend:
+  image:
+    tag: latest
+    migrationsTag: latest
+
   replicaCount: 1
 
   containerPort: 8000
@@ -82,12 +85,34 @@ backend:
               matchLabels:
                 app.kubernetes.io/component: backend
 
-# ── Crunchy PostgreSQL ────────────────────────────────────────────────────────
   crunchy:
-    enabled: true  # or true, depending on your environment
+    enabled: true
 
-# ── Frontend (Caddy + Coraza WAF) ─────────────────────────────────────────────
+  routes:
+    enabled: true
+
+  networkPolicy:
+    enabled: true
+
+  secrets:
+    databaseUrl: ""
+    secretKey: ""
+    s3EndpointUrl: ""
+    s3AccessKey: ""
+    s3SecretKey: ""
+    s3Bucket: ""
+    keycloakServerUrl: ""
+    keycloakRealm: ""
+    keycloakClientId: ""
+    keycloakClientSecret: ""
+    keycloakRedirectUri: ""
+    initialAdminEmail: ""
+
+# ── Frontend subchart values ────────────────────────────────────────────────────
 frontend:
+  image:
+    tag: latest
+
   replicaCount: 1
 
   containerPort: 3000
@@ -134,8 +159,7 @@ frontend:
     failureThreshold: 3
 
   # The frontend deployment constructs BACKEND_URL as:
-  #   http://<release-name>-app-backend:<backendPort>
-  # backendServiceName is resolved via the app.fullname template helper.
+  #   http://<release-name>-backend:<backendPort>
   backendPort: 8000
 
   affinity:
@@ -148,26 +172,8 @@ frontend:
               matchLabels:
                 app.kubernetes.io/component: frontend
 
-# ── OpenShift Routes (disable for local k8s / Rancher Desktop) ────────────────
-routes:
-  enabled: true
+  routes:
+    enabled: true
 
-# ── Network Policies ──────────────────────────────────────────────────────────
-networkPolicy:
-  enabled: true
-
-# ── Secret values (supply at deploy time via --set or CI/CD env vars) ─────────
-# These are empty defaults so `helm template` works without real credentials.
-secrets:
-  databaseUrl: ""
-  secretKey: ""
-  s3EndpointUrl: ""
-  s3AccessKey: ""
-  s3SecretKey: ""
-  s3Bucket: ""
-  keycloakServerUrl: ""
-  keycloakRealm: ""
-  keycloakClientId: ""
-  keycloakClientSecret: ""
-  keycloakRedirectUri: ""
-  initialAdminEmail: ""
+  networkPolicy:
+    enabled: true
