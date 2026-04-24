@@ -130,8 +130,6 @@ jobs:
     needs: [changes, build-backend, build-migrations, build-frontend]
     if: |
       always() &&
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/master' &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
     permissions:

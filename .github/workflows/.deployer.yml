@@ -132,7 +132,7 @@ jobs:
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
             set -euo pipefail
-
+            helm dependency update charts/app
             RELEASE_NAME="transportation-forms-${{ inputs.environment }}"
             CHART="charts/app"
             BACKEND_TAG="${{ inputs.backend_tag }}"
