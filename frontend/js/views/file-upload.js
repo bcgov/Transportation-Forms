@@ -10,16 +10,19 @@ import { getAuthToken } from '../auth.js';
 
 let _uploadedFileUrl = null;
 let _uploadedFileFilename = null;
+let _uploadedFileType = null;
 let _uploadListenerController = null;
 
 // ─── State accessors ─────────────────────────────────────────────────────────
 
 export function getUploadedFileUrl() { return _uploadedFileUrl; }
 export function getUploadedFileFilename() { return _uploadedFileFilename; }
+export function getUploadedFileType() { return _uploadedFileType; }
 
 export function clearUploadState() {
     _uploadedFileUrl = null;
     _uploadedFileFilename = null;
+    _uploadedFileType = null;
 }
 
 /**
@@ -27,10 +30,12 @@ export function clearUploadState() {
  * Sets internal state AND updates the DOM indicator.
  * @param {string} url       The already-stored file URL.
  * @param {string} filename  Human-readable filename to display.
+ * @param {string|null} [fileType]  Previously stored file type label.
  */
-export function restoreUploadState(url, filename) {
+export function restoreUploadState(url, filename, fileType) {
     _uploadedFileUrl = url;
     _uploadedFileFilename = filename;
+    _uploadedFileType = fileType || null;
     showUploadedFile(url, filename);
 }
 
@@ -121,6 +126,7 @@ export async function uploadFile(file) {
         const result = await response.json();
         _uploadedFileUrl = result.url;
         _uploadedFileFilename = result.filename;
+        _uploadedFileType = result.file_type || null;
         showUploadedFile(result.url, result.filename);
     } catch (error) {
         showFieldError('fileUpload', 'Upload failed: ' + error.message);
@@ -149,6 +155,7 @@ export function showUploadedFile(url, filename) {
 export function clearUploadedFile() {
     _uploadedFileUrl = null;
     _uploadedFileFilename = null;
+    _uploadedFileType = null;
     document.getElementById('uploadedFileInfo').style.display = 'none';
 }
 

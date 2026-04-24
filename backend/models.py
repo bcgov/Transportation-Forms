@@ -198,6 +198,10 @@ class Form(Base):
     form_attachment_filename = Column(
         String(255), nullable=True
     )  # Original uploaded filename
+    # FEAT-0002: File type derived from MIME type at upload time
+    file_type = Column(
+        String(20), nullable=True
+    )  # e.g. 'pdf', 'docx', 'unknown'; NULL when no attachment
     # TASK-413: Form number reservation linkage
     form_number_reservation_id = Column(
         UUID(as_uuid=True),

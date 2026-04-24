@@ -16,6 +16,7 @@ import {
     initFileUpload,
     getUploadedFileUrl,
     getUploadedFileFilename,
+    getUploadedFileType,
     clearUploadState,
     restoreUploadState,
 } from './file-upload.js';
@@ -364,6 +365,7 @@ async function _loadFormForEdit(formId) {
             restoreUploadState(
                 form.form_attachment_url,
                 form.form_attachment_filename || 'Attachment',
+                form.file_type || null,
             );
         }
         _onFormSourceChange();
@@ -464,6 +466,8 @@ export async function handleFormSubmit(event) {
             : null,
         form_attachment_url: effectiveFormSource === 'Download' ? uploadedFileUrl : null,
         form_attachment_filename: effectiveFormSource === 'Download' ? uploadedFileFilename : null,
+        // FEAT-0002: file type derived at upload time
+        file_type: effectiveFormSource === 'Download' ? (getUploadedFileType() || null) : null,
         // TASK-413: Reservation linkage on create only (TASK-415 locks it on edit)
         ...(!_currentFormId && { form_number_reservation_id: formNumberValue || null }),
     };

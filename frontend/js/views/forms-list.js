@@ -127,6 +127,7 @@ export function displayForms(forms) {
                                 ${form.is_public ? 'Public' : 'Private'}
                             </span>
                             <span class="badge bg-info">${escapeHtml(form.status)}</span>
+                            ${form.file_type ? `<span class="badge bg-secondary">${escapeHtml(form.file_type)}</span>` : ''}
                         </div>
                     </div>
                     <div class="col-md-4 text-end">
@@ -398,6 +399,11 @@ async function _viewForm(formId) {
                         ${escapeHtml(form.form_attachment_filename || 'Download')}
                     </a>
                 </dd>
+                ` : ''}
+
+                ${form.file_type ? `
+                <dt class="col-sm-3">File Type:</dt>
+                <dd class="col-sm-9">${escapeHtml(form.file_type)}</dd>
                 ` : ''}
 
                 <dt class="col-sm-3">Business Areas:</dt>
