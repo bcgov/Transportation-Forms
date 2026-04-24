@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy installed packages from the build stage
+# Copy installed packages from build stage
 COPY --from=build /install /usr/local
 
 # Copy application code
