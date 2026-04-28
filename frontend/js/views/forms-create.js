@@ -370,12 +370,12 @@ async function _loadFormForEdit(formId) {
         }
         _onFormSourceChange();
 
-        // TASK-418: Pre-select the saved business area once the dropdown has loaded
+        // FEAT-0003: Pre-select the saved business area once the dropdown has loaded
         loadBusinessAreas().then(() => {
             const options = getBusinessAreaOptions();
-            const firstArea = (form.business_areas || [])[0];
-            if (firstArea) {
-                const selected = options.find(o => o.id === firstArea.id);
+            const area = form.business_area || null;
+            if (area) {
+                const selected = options.find(o => o.id === area.id);
                 if (selected) {
                     document.getElementById('businessAreaInput').value = selected.label;
                     document.getElementById('businessAreaValue').value = selected.id;
@@ -453,9 +453,9 @@ export async function handleFormSubmit(event) {
         description: document.getElementById('description').value,
         is_public: document.getElementById('isPublic').checked,
         keywords: getKeywords(),
-        business_area_ids: (() => {
+        business_area_id: (() => {
             const v = document.getElementById('businessAreaValue').value;
-            return v ? [v] : [];
+            return v || null;
         })(),
         effective_date: document.getElementById('effectiveDate').value || null,
         collects_personal_info: document.getElementById('collectsPersonalInfo').value,

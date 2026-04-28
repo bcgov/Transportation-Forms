@@ -22,6 +22,8 @@ logger = logging.getLogger('alembic.env')
 
 # Set SQLAlchemy URL from environment
 sqlalchemy_url = os.getenv('DATABASE_URL')
+if sqlalchemy_url is None:
+    raise RuntimeError("DATABASE_URL environment variable is not set")
 # Escape % for configparser interpolation (Crunchy-generated passwords may
 # contain URL-encoded special characters like %29, %5D, etc.)
 config.set_main_option('sqlalchemy.url', sqlalchemy_url.replace('%', '%%'))
@@ -48,7 +50,8 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode"""
-    configuration = config.get_section(config.config_ini_section)
+    configuration = config.get_section(config.config_ini_section) or {}
+    assert sqlalchemy_url is not None
     configuration["sqlalchemy.url"] = sqlalchemy_url
     
     connectable = engine_from_config(

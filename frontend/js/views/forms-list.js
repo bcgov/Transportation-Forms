@@ -406,11 +406,11 @@ async function _viewForm(formId) {
                 <dd class="col-sm-9">${escapeHtml(form.file_type)}</dd>
                 ` : ''}
 
-                <dt class="col-sm-3">Business Areas:</dt>
+                <dt class="col-sm-3">Business Area:</dt>
                 <dd class="col-sm-9">
-                    ${form.business_areas?.map(
-                        ba => `<span class="badge bg-primary me-1">${escapeHtml(ba.name)}</span>`
-                    ).join('') || 'None'}
+                    ${form.business_area
+                        ? `<span class="badge bg-primary me-1">${escapeHtml(form.business_area.name)}</span>`
+                        : 'None'}
                 </dd>
 
                 <dt class="col-sm-3">Keywords:</dt>
