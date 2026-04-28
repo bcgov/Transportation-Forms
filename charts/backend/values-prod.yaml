@@ -1,0 +1,39 @@
+# ── PROD environment overrides ────────────────────────────────────────────────
+# Applied on top of values.yaml: helm upgrade ... -f values.yaml -f values-prod.yaml
+
+global:
+  secrets:
+    persist: true
+
+image:
+  tag: prod
+  migrationsTag: prod
+
+domain: apps.silver.devops.gov.bc.ca
+
+replicaCount: 3
+
+deploymentStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 7
+  targetCPUUtilizationPercentage: 80
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+env:
+  environment: production
+  sqlalchemyEcho: "false"
+  logLevel: WARNING
+
+# ── Crunchy PostgreSQL ────────────────────────────────────────────────────────
+crunchy:
+  enabled: false

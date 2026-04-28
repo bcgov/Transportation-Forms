@@ -1,0 +1,34 @@
+# ── Local / Rancher Desktop overrides ─────────────────────────────────────────
+# Layer on top of values.yaml to run the Helm chart on k3s (Rancher Desktop)
+# instead of OpenShift.
+#
+# Usage:
+#   helm install transportation-forms-local charts/frontend \
+#     -f charts/frontend/values.yaml \
+#     -f charts/frontend/values-local.yaml \
+#     --set image.tag=local
+
+# ── Pull from local image cache (no ghcr.io pull) ────────────────────────────
+global:
+  registry: ghcr.io
+  repository: bcgov/transportation-forms
+
+image:
+  tag: local
+
+# ── Disable OpenShift Routes (not available on k3s) ──────────────────────────
+routes:
+  enabled: false
+
+# ── Disable network policies (not needed on single-node dev cluster) ──────────
+networkPolicy:
+  enabled: false
+
+# ── Lighter resource limits for local dev ─────────────────────────────────────
+resources:
+  requests:
+    cpu: "10m"
+    memory: "32Mi"
+  limits:
+    cpu: "100m"
+    memory: "128Mi"
