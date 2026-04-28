@@ -25,6 +25,7 @@ router = APIRouter(prefix="/staff/forms", tags=["Form Workflow"])
 _PERM_SUBMIT = "form:submit_for_review"
 _PERM_APPROVE = "form:approve"
 _PERM_REVIEW = "form:review"
+_PERM_ARCHIVE = "form:archive"
 
 
 # ─── Pydantic models ──────────────────────────────────────────────────────────
@@ -176,10 +177,10 @@ async def list_pending_approvals(
         items.append(PendingFormItem(
             form_id=str(form.id),
             form_number=form_number,
-            title=form.title,
-            status=form.status,
+            title=str(form.title),
+            status=str(form.status),
             submitted_at=submitted_at,
-            submitted_by=submitted_by,
+            submitted_by=str(submitted_by) if submitted_by is not None else None,
         ))
 
     return PendingApprovalsResponse(total=len(items), items=items)
@@ -278,7 +279,7 @@ async def archive_form(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
-    _require_permissions(current_user, _PERM_APPROVE)
+    _require_permissions(current_user, _PERM_ARCHIVE)
 
     try:
         form = FormService.archive_form(

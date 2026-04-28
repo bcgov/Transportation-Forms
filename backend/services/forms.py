@@ -396,6 +396,11 @@ class FormService:
         db.refresh(form)
 
         # Audit log
+        # Convert UUID values to strings for JSON serialization (PortableJSON/JSONB)
+        audit_new_values = {
+            k: str(v) if isinstance(v, UUID) else v
+            for k, v in kwargs.items()
+        }
         FormService._audit_log(
             db=db,
             entity_type="forms",
@@ -403,7 +408,7 @@ class FormService:
             action="UPDATE",
             user_id=updated_by_id,
             old_values=old_values,
-            new_values=kwargs,
+            new_values=audit_new_values,
         )
 
         return form
