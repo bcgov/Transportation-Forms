@@ -1,0 +1,6 @@
+apiVersion: v2
+name: public-backend
+description: Transportation Forms — public read-only API (FastAPI + NGINX sidecar)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

@@ -1,0 +1,107 @@
+# ── Global image settings (overridden per environment / PR) ───────────────────
+global:
+  registry: ghcr.io
+  repository: bcgov/transportation-forms
+  secrets:
+    persist: false
+
+# ── Image tag ─────────────────────────────────────────────────────────────────
+image:
+  tag: latest
+
+# ── OpenShift domain (used to build route hostnames) ─────────────────────────
+domain: apps.silver.devops.gov.bc.ca
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Replica / scaling ─────────────────────────────────────────────────────────
+replicaCount: 1
+
+# NGINX sidecar listens on 8080 (external), FastAPI on 8000 (internal/localhost)
+containerPort: 8080
+servicePort: 8080
+
+deploymentStrategy:
+  type: Recreate
+
+resources:
+  # public-backend FastAPI container
+  app:
+    requests:
+      cpu: "25m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "256Mi"
+  # NGINX sidecar container
+  nginx:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "50m"
+      memory: "64Mi"
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+# ── NGINX sidecar ─────────────────────────────────────────────────────────────
+nginx:
+  image: nginx:1.27-alpine
+
+# ── Health probes (target the NGINX sidecar port 8080) ────────────────────────
+startupProbe:
+  failureThreshold: 15
+  periodSeconds: 2
+
+readinessProbe:
+  path: /readyz
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 5
+
+livenessProbe:
+  path: /healthz
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# ── Secret ────────────────────────────────────────────────────────────────────
+# Reuses the same shared secret as the main backend
+secretName: transportation-forms-secrets
+
+# ── Environment ──────────────────────────────────────────────────────────────
+env:
+  environment: development
+  logLevel: INFO
+  publicCorsOrigins: ""
+  cacheMaxAge: 300
+
+# ── Pod anti-affinity ─────────────────────────────────────────────────────────
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: public-backend
+
+# ── OpenShift Routes (disable for local k8s / Rancher Desktop) ────────────────
+routes:
+  enabled: true
+
+# ── Network Policies ──────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: true
