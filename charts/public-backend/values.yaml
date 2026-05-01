@@ -18,9 +18,11 @@ fullnameOverride: ""
 # ── Replica / scaling ─────────────────────────────────────────────────────────
 replicaCount: 1
 
-# NGINX sidecar listens on 8080 (external), FastAPI on 8000 (internal/localhost)
-containerPort: 8080
-servicePort: 8080
+# ── DPR-2: NGINX sidecar removed. FastAPI now serves the cluster Service
+#   directly on port 8000; the public-frontend NGINX edge owns rate-limiting,
+#   caching, WAF, and TLS-terminated edge controls.
+containerPort: 8000
+servicePort: 8000
 
 deploymentStrategy:
   type: Recreate
@@ -34,14 +36,6 @@ resources:
     limits:
       cpu: "100m"
       memory: "256Mi"
-  # NGINX sidecar container
-  nginx:
-    requests:
-      cpu: "10m"
-      memory: "32Mi"
-    limits:
-      cpu: "50m"
-      memory: "64Mi"
 
 autoscaling:
   enabled: false
@@ -53,11 +47,7 @@ pdb:
   enabled: false
   minAvailable: 1
 
-# ── NGINX sidecar ─────────────────────────────────────────────────────────────
-nginx:
-  image: nginx:1.27-alpine
-
-# ── Health probes (target the NGINX sidecar port 8080) ────────────────────────
+# ── Health probes (target FastAPI directly on port 8000) ────────────────────
 startupProbe:
   failureThreshold: 15
   periodSeconds: 2
@@ -98,9 +88,26 @@ affinity:
             matchLabels:
               app.kubernetes.io/component: public-backend
 
-# ── OpenShift Routes (disable for local k8s / Rancher Desktop) ────────────────
-routes:
-  enabled: true
+# ── OpenShift Route ──────────────────────────────────────────────────────────
+# DPR-1 cleared cutover gate D4 — public-frontend NGINX edge is the canonical
+# ingress path. This Route stays default OFF and exists only as an emergency
+# escape hatch. The legacy `routes.enabled` key was removed in DPR-2; only
+# `route.enabled` (singular) is honoured.
+route:
+  enabled: false
+
+# ── PUBLIC_BASE_URL — externally visible base URL for OG / sitemap ───────────
+# Set per environment from the umbrella chart so canonical URLs match the
+# public-frontend Route hostname.
+publicBaseUrl: ""
+
+# ── Internal-auth shared secret (managed by the public-frontend chart) ───────
+# The public-frontend chart creates the Secret with `helm.sh/resource-policy: keep`
+# and a generated `randAlphaNum 64` value. We mount it here by name so both
+# Pods see the same token. Default name pattern: "<release>-public-frontend-internal-auth".
+internalAuth:
+  existingSecret: ""
+  secretKey: secret
 
 # ── Network Policies ──────────────────────────────────────────────────────────
 networkPolicy:

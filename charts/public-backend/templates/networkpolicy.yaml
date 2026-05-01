@@ -1,0 +1,71 @@
+{{- if .Values.networkPolicy.enabled }}
+# ── Default deny ingress to public-backend Pods ───────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "public-backend.fullname" . }}-default-deny-ingress
+  labels:
+    {{- include "public-backend.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "public-backend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public-backend
+  policyTypes:
+    - Ingress
+  ingress: []
+---
+# ── Allow ingress only from public-frontend Pods → FastAPI :8000 ──────────────
+# DPR-1 note: while the legacy NGINX sidecar (port 8080) still ships in this
+# Pod, only port 8000 is opened to the public-frontend. The sidecar will be
+# removed in DPR-3 (US-016) once DPR-2's NGINX edge is in production.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "public-backend.fullname" . }}-allow-public-frontend
+  labels:
+    {{- include "public-backend.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "public-backend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public-backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: public-frontend
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# ── Egress: → Postgres (Crunchy) :5432 + DNS :53 ──────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "public-backend.fullname" . }}-allow-egress
+  labels:
+    {{- include "public-backend.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "public-backend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public-backend
+  policyTypes:
+    - Egress
+  egress:
+    # → Postgres (Crunchy) — selector kept loose; the pgo operator labels
+    #   the cluster Pod set with postgres-operator.crunchydata.com/cluster.
+    - ports:
+        - protocol: TCP
+          port: 5432
+    # → DNS
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- end }}

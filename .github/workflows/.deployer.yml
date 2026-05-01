@@ -39,6 +39,11 @@ on:
         required: false
         type: string
         default: app
+      public_forms_base_url:
+        description: "Externally visible base URL for public-frontend and public-backend routes (e.g. https://forms-public-{release}.{domain})"
+        required: false
+        type: string
+        default: ""
     outputs:
       tag:
         description: "Image tag that was deployed"
@@ -169,6 +174,9 @@ jobs:
               --set backend.secrets.keycloakClientSecret="${{ secrets.keycloak_client_secret }}" \
               --set backend.secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
               --set backend.secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
+              --set "public-frontend.s3.internalUpstream=${{ secrets.s3_endpoint_url }}" \
+              --set "public-frontend.publicBaseUrl=${{ inputs.public_forms_base_url }}" \
+              --set "public-backend.publicBaseUrl=${{ inputs.public_forms_base_url }}" \
               ${{ inputs.params }} \
               --timeout 10m \
               --wait \

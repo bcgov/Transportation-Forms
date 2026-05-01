@@ -53,3 +53,11 @@ Public-backend image reference.
 {{- define "public-backend.image" -}}
 {{- printf "%s/%s/public-backend:%s" .Values.global.registry .Values.global.repository .Values.image.tag }}
 {{- end }}
+
+{{/*
+Internal-auth Secret name. Defaults to the Secret created by the
+public-frontend subchart: "<release>-public-frontend-internal-auth".
+*/}}
+{{- define "public-backend.internalAuthSecretName" -}}
+{{- default (printf "%s-public-frontend-internal-auth" .Release.Name) .Values.internalAuth.existingSecret }}
+{{- end }}

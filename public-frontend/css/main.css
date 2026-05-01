@@ -1,0 +1,131 @@
+/*
+ * Public Forms Portal — site CSS.
+ * Bootstrap utility classes are expected to come from the vendored
+ * bootstrap-theme.min.css (see ../vendor/README.md). This file only adds
+ * the SPA-specific structural and accessibility styles.
+ */
+
+/* Skip-link (US-007 AC2 / US-003 AC13) */
+.skip-link {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1080;
+  background: #003366;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+  transform: translateY(-100%);
+  transition: transform 0.15s ease-in-out;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 3px solid #fcba19;
+  outline-offset: 2px;
+}
+
+/* Sticky-footer pattern (US-010 AC5) */
+html, body { height: 100%; }
+body { display: flex; flex-direction: column; min-height: 100vh; }
+main { flex: 1 0 auto; }
+.bcgov-footer { flex-shrink: 0; background: #003366; color: #fff; }
+.bcgov-footer a { color: #fff; text-decoration: underline; }
+.bcgov-footer a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
+
+/* Header */
+.bcgov-header { background: #003366; color: #fff; border-bottom: 2px solid #fcba19; }
+.bcgov-header a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
+.ministry-name { color: #fff; }
+
+/* Sticky search */
+.search-sticky { z-index: 1020; border-bottom: 1px solid #d1d1d1; }
+
+/* Results / cards (US-002) — single column at all breakpoints (AC7) */
+.results-region { min-height: 200px; }
+.results-region ol { display: grid; grid-template-columns: 1fr; gap: 1rem; max-width: 60rem; margin: 0 auto; }
+
+/* form-card custom-element layout */
+form-card {
+  display: block;
+  border: 1px solid #d1d1d1;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: #fff;
+}
+form-card .form-card__header { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
+form-card .form-card__num { font-weight: 700; color: #003366; }
+form-card .form-card__title {
+  margin: 0;
+  font-size: 1.125rem;
+  overflow-wrap: anywhere; /* US-007 AC16 — long titles reflow at 320px */
+  word-break: break-word;  /* fallback for browsers without overflow-wrap:anywhere */
+}
+form-card .form-card__desc {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+form-card .form-card__actions { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem; }
+form-card .badge { background: #e0e7ef; color: #003366; padding: 0.15rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; }
+form-card a:focus-visible,
+form-card button:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
+
+/* Skeleton placeholder shimmer — Bootstrap-compatible class names (US-006 AC1) */
+.skeleton-card {
+  height: 7rem;
+  border: 1px solid #e9ecef;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(90deg, #f3f3f3 0%, #ececec 50%, #f3f3f3 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s linear infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-card { animation: none; background: #f3f3f3; }
+}
+
+/* Bottom-center alert slot (US-006 AC5/AC6) */
+.alert-slot {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  width: min(40rem, calc(100vw - 2rem));
+  z-index: 1090;
+  pointer-events: none;
+}
+.alert-slot .alert {
+  pointer-events: auto;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Detail page heading reflow at 320px (US-007 AC16) */
+#detailContent h1 {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Detail page chips */
+.keyword-chip {
+  display: inline-block;
+  background: #e0e7ef;
+  color: #003366;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  margin-right: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Reduced-motion: respect the user setting throughout (US-003 AC11) */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

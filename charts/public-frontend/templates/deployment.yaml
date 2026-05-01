@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "public-frontend.fullname" . }}
+  labels:
+    {{- include "public-frontend.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public-frontend
+spec:
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "public-frontend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public-frontend
+  strategy:
+    {{- toYaml .Values.deploymentStrategy | nindent 4 }}
+  template:
+    metadata:
+      labels:
+        {{- include "public-frontend.labels" . | nindent 8 }}
+        app.kubernetes.io/component: public-frontend
+      annotations:
+        # Force rollout when nginx / bot-ua / robots ConfigMaps change.
+        checksum/nginx-config: {{ include (print $.Template.BasePath "/configmap-nginx.yaml") . | sha256sum }}
+        checksum/bot-ua-config: {{ include (print $.Template.BasePath "/configmap-bot-ua.yaml") . | sha256sum }}
+        checksum/robots: {{ include (print $.Template.BasePath "/configmap-robots.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "public-frontend.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        # ── ConfigMap-supplied templates (read-only) ────────────────────────
+        - name: nginx-templates
+          configMap:
+            name: {{ include "public-frontend.fullname" . }}-nginx
+        - name: bot-ua-templates
+          configMap:
+            name: {{ include "public-frontend.fullname" . }}-bot-ua
+        - name: robots-config
+          configMap:
+            name: {{ include "public-frontend.fullname" . }}-robots
+        # ── Writable scratch dirs (readOnlyRootFilesystem=true) ─────────────
+        # entrypoint.sh renders templates into conf.d/ + coraza/ at boot.
+        - name: nginx-confd
+          emptyDir: {}
+        - name: coraza-confdir
+          emptyDir: {}
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      containers:
+        - name: public-frontend
+          image: {{ include "public-frontend.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ .Values.healthPort }}
+              protocol: TCP
+          env:
+            # ── Shared internal-auth secret (matches public-backend) ─────────
+            - name: INTERNAL_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "public-frontend.internalAuthSecretName" . }}
+                  key: {{ .Values.internalAuth.secretKey }}
+            # ── Externally visible base URL (used for robots.txt sub_filter) ─
+            - name: PUBLIC_BASE_URL
+              value: {{ .Values.publicBaseUrl | quote }}
+            # ── Backend upstream (in-cluster Service) ────────────────────────
+            - name: BACKEND_UPSTREAM_HOST
+              value: {{ include "public-frontend.backendHost" . | quote }}
+            - name: BACKEND_UPSTREAM_PORT
+              value: {{ .Values.backendPort | quote }}
+            # ── Coraza WAF mode: DetectionOnly (DEV) or On (TEST/PROD) ──────
+            - name: CORAZA_RULE_ENGINE
+              value: {{ .Values.coraza.ruleEngine | quote }}
+            # ── S3 endpoint for X-Accel-Redirect /internal-s3/ proxying ─────
+            - name: S3_INTERNAL_UPSTREAM
+              value: {{ .Values.s3.internalUpstream | quote }}
+          volumeMounts:
+            # ConfigMap-supplied templates (entrypoint.sh reads from here)
+            - name: nginx-templates
+              mountPath: /etc/nginx/templates
+              readOnly: true
+            - name: bot-ua-templates
+              mountPath: /etc/nginx/templates/maps
+              readOnly: true
+            # robots.txt overlay onto the baked SPA tree (subPath = single file)
+            - name: robots-config
+              mountPath: /usr/share/nginx/html/robots.txt
+              subPath: robots.txt
+              readOnly: true
+            # Writable dirs required when readOnlyRootFilesystem=true
+            - name: nginx-confd
+              mountPath: /etc/nginx/conf.d
+            - name: coraza-confdir
+              mountPath: /etc/coraza
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
+          # ── Probes (use the isolated health port — no WAF overhead) ─────────
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: health
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: health
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

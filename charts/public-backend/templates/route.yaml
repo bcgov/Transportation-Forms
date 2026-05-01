@@ -1,5 +1,8 @@
-{{- if .Values.routes.enabled }}
+{{- if .Values.route.enabled }}
 # ── OpenShift Route: Public API ───────────────────────────────────────────────
+# DPR-1: gated and default OFF. The public-frontend NGINX edge (FEAT-0005) is
+# the canonical ingress path; this Route is retained only as an emergency
+# escape hatch and must remain disabled in normal operation.
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
