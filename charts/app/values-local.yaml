@@ -82,6 +82,14 @@ frontend:
       cpu: "100m"
       memory: "128Mi"
 
+# ── FEAT-0005 public portal — local k3s parity ───────────────────────────────
+# Condition gates (camelCase — read by Chart.yaml dep conditions)
+publicBackend:
+  enabled: true
+
+publicFrontend:
+  enabled: true
+
 # ── Public-backend local overrides ────────────────────────────────────────────
 public-backend:
   enabled: true
@@ -89,16 +97,13 @@ public-backend:
   image:
     tag: local
 
-  # Disable OpenShift Routes (not available on k3s)
-  routes:
+  # Disable OpenShift Route (not available on k3s)
+  route:
     enabled: false
 
   # Disable network policies (not needed on single-node dev cluster)
   networkPolicy:
     enabled: false
-
-  env:
-    publicCorsOrigins: "http://transportation-forms.local,http://localhost,http://127.0.0.1"
 
   # Lighter resource limits for local dev
   resources:
@@ -109,10 +114,32 @@ public-backend:
       limits:
         cpu: "100m"
         memory: "128Mi"
-    nginx:
-      requests:
-        cpu: "5m"
-        memory: "16Mi"
-      limits:
-        cpu: "50m"
-        memory: "64Mi"
+
+# ── Public-frontend subchart values (local) ──────────────────────────────────
+public-frontend:
+  image:
+    tag: local
+
+  route:
+    enabled: false
+
+  ingress:
+    enabled: true
+    className: ""         # traefik on k3s picks up no-className ingresses
+    host: forms-public.localhost
+    annotations: {}
+    tls: []
+
+  networkPolicy:
+    enabled: false
+
+  coraza:
+    ruleEngine: DetectionOnly
+
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "256Mi"

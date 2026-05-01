@@ -22,6 +22,7 @@
 #   task -d deploy/local build:frontend  # rebuild frontend image only
 #   task -d deploy/local build:migrations # rebuild migrations image only
 #   task -d deploy/local build:backend         # rebuild backend image only
+#   task -d deploy/local build:public-frontend  # rebuild public-frontend image only
 #   task -d deploy/local build:public-backend   # rebuild public-backend image only
 #   task -d deploy/local deploy                 # redeploy app only
 #   task -d deploy/local teardown:all    # remove everything
@@ -29,6 +30,7 @@
 # Frontend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-frontend -n default
 # Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-backend -n default
 # Public-Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-public-backend -n default
+# Public-Frontend Rollout: kubectl rollout restart deployment/transportation-forms-local-public-frontend -n default
 # ─────────────────────────────────────────────────────────────────────────────
 
 version: "3"
@@ -72,6 +74,12 @@ tasks:
     cmds:
       - docker build -f public-backend/Dockerfile -t ghcr.io/bcgov/transportation-forms/public-backend:{{.TAG}} .
 
+  build:public-frontend:
+    desc: Build the public-frontend Docker image (tagged local)
+    dir: ../..
+    cmds:
+      - docker build -f public-frontend/Dockerfile -t ghcr.io/bcgov/transportation-forms/public-frontend:{{.TAG}} .
+
   build:
     desc: Build all Docker images in parallel
     deps:
@@ -79,6 +87,7 @@ tasks:
       - build:frontend
       - build:migrations
       - build:public-backend
+      - build:public-frontend
 
   # ── Database tasks (mirror Crunchy deployment in .deployer.yml) ────────────
 
@@ -179,6 +188,9 @@ tasks:
           --set backend.secrets.keycloakClientSecret="${KEYCLOAK_CLIENT_SECRET}" \
           --set backend.secrets.keycloakRedirectUri="${KEYCLOAK_REDIRECT_URI}" \
           --set backend.secrets.initialAdminEmail="${INITIAL_ADMIN_EMAIL}" \
+          --set "public-frontend.s3.internalUpstream=${S3_ENDPOINT_URL}" \
+          --set "public-frontend.publicBaseUrl=http://forms-public.localhost" \
+          --set "public-backend.publicBaseUrl=http://forms-public.localhost" \
           --timeout 10m \
           --wait
 
