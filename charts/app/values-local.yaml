@@ -81,3 +81,38 @@ frontend:
     limits:
       cpu: "100m"
       memory: "128Mi"
+
+# ── Public-backend local overrides ────────────────────────────────────────────
+public-backend:
+  enabled: true
+
+  image:
+    tag: local
+
+  # Disable OpenShift Routes (not available on k3s)
+  routes:
+    enabled: false
+
+  # Disable network policies (not needed on single-node dev cluster)
+  networkPolicy:
+    enabled: false
+
+  env:
+    publicCorsOrigins: "http://transportation-forms.local,http://localhost,http://127.0.0.1"
+
+  # Lighter resource limits for local dev
+  resources:
+    app:
+      requests:
+        cpu: "10m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+    nginx:
+      requests:
+        cpu: "5m"
+        memory: "16Mi"
+      limits:
+        cpu: "50m"
+        memory: "64Mi"

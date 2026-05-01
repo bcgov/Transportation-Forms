@@ -1,0 +1,38 @@
+# ── Local / Rancher Desktop overrides ─────────────────────────────────────────
+# Layer on top of values.yaml to run the chart on k3s instead of OpenShift.
+#
+# DPR-4 will refine this; for DPR-1 we just disable OpenShift-only features and
+# turn on a plain Ingress.
+
+global:
+  registry: ghcr.io
+  repository: bcgov/transportation-forms
+
+image:
+  tag: local
+  pullPolicy: IfNotPresent
+
+# ── Disable OpenShift Routes (not available on k3s) ──────────────────────────
+route:
+  enabled: false
+
+# ── Plain Ingress for local dev ──────────────────────────────────────────────
+ingress:
+  enabled: true
+  host: forms-public.localhost
+  annotations: {}
+
+# ── Disable network policies (not needed on single-node dev cluster) ─────────
+networkPolicy:
+  enabled: false
+
+# ── Lighter resource limits for local dev ────────────────────────────────────
+resources:
+  requests:
+    cpu: "10m"
+    memory: "32Mi"
+  limits:
+    cpu: "100m"
+    memory: "128Mi"
+
+publicBaseUrl: "http://forms-public.localhost"

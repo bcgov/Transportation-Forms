@@ -20,12 +20,15 @@
 #   task -d deploy/local all             # from repo root
 #   task -d deploy/local build           # rebuild images only
 #   task -d deploy/local build:frontend  # rebuild frontend image only
-#   task -d deploy/local build:backend   # rebuild backend image only
-#   task -d deploy/local deploy          # redeploy app only
+#   task -d deploy/local build:migrations # rebuild migrations image only
+#   task -d deploy/local build:backend         # rebuild backend image only
+#   task -d deploy/local build:public-backend   # rebuild public-backend image only
+#   task -d deploy/local deploy                 # redeploy app only
 #   task -d deploy/local teardown:all    # remove everything
 # Run rollout if it doesn't get deployed:
 # Frontend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-frontend -n default
 # Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-backend -n default
+# Public-Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-public-backend -n default
 # ─────────────────────────────────────────────────────────────────────────────
 
 version: "3"
@@ -63,12 +66,19 @@ tasks:
     cmds:
       - docker build -f migrations/Dockerfile -t ghcr.io/bcgov/transportation-forms/migrations:{{.TAG}} .
 
+  build:public-backend:
+    desc: Build the public-backend Docker image (tagged local)
+    dir: ../..
+    cmds:
+      - docker build -f public-backend/Dockerfile -t ghcr.io/bcgov/transportation-forms/public-backend:{{.TAG}} .
+
   build:
     desc: Build all Docker images in parallel
     deps:
       - build:backend
       - build:frontend
       - build:migrations
+      - build:public-backend
 
   # ── Database tasks (mirror Crunchy deployment in .deployer.yml) ────────────
 
@@ -157,18 +167,18 @@ tasks:
           -f "{{.CHART}}/values.yaml" \
           -f "{{.CHART}}/values-local.yaml" \
           --set-string global.tag="{{.TAG}}" \
-          --set-string secrets.databaseUrl="${PRIMARY_DB_URI}" \
-          --set secrets.secretKey="${SECRET_KEY}" \
-          --set secrets.s3EndpointUrl="${S3_ENDPOINT_URL}" \
-          --set secrets.s3AccessKey="${S3_ACCESS_KEY}" \
-          --set secrets.s3SecretKey="${S3_SECRET_KEY}" \
-          --set secrets.s3Bucket="${S3_BUCKET}" \
-          --set secrets.keycloakServerUrl="${KEYCLOAK_SERVER_URL}" \
-          --set secrets.keycloakRealm="${KEYCLOAK_REALM}" \
-          --set secrets.keycloakClientId="${KEYCLOAK_CLIENT_ID}" \
-          --set secrets.keycloakClientSecret="${KEYCLOAK_CLIENT_SECRET}" \
-          --set secrets.keycloakRedirectUri="${KEYCLOAK_REDIRECT_URI}" \
-          --set secrets.initialAdminEmail="${INITIAL_ADMIN_EMAIL}" \
+          --set-string backend.secrets.databaseUrl="${PRIMARY_DB_URI}" \
+          --set backend.secrets.secretKey="${SECRET_KEY}" \
+          --set backend.secrets.s3EndpointUrl="${S3_ENDPOINT_URL}" \
+          --set backend.secrets.s3AccessKey="${S3_ACCESS_KEY}" \
+          --set backend.secrets.s3SecretKey="${S3_SECRET_KEY}" \
+          --set backend.secrets.s3Bucket="${S3_BUCKET}" \
+          --set backend.secrets.keycloakServerUrl="${KEYCLOAK_SERVER_URL}" \
+          --set backend.secrets.keycloakRealm="${KEYCLOAK_REALM}" \
+          --set backend.secrets.keycloakClientId="${KEYCLOAK_CLIENT_ID}" \
+          --set backend.secrets.keycloakClientSecret="${KEYCLOAK_CLIENT_SECRET}" \
+          --set backend.secrets.keycloakRedirectUri="${KEYCLOAK_REDIRECT_URI}" \
+          --set backend.secrets.initialAdminEmail="${INITIAL_ADMIN_EMAIL}" \
           --timeout 10m \
           --wait
 

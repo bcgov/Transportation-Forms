@@ -20,40 +20,47 @@ spec:
       labels:
         {{- include "public-backend.labels" . | nindent 8 }}
         app.kubernetes.io/component: public-backend
-      annotations:
-        # Force rollout when nginx.conf ConfigMap changes
-        checksum/nginx-config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       volumes:
-        - name: nginx-config
-          configMap:
-            name: {{ include "public-backend.fullname" . }}-nginx
-        - name: nginx-cache
-          emptyDir: {}
-        - name: nginx-tmp
-          emptyDir: {}
-        - name: nginx-run
+        # ── DPR-2: NGINX sidecar removed; only FastAPI scratch tmp remains ──
+        - name: app-tmp
           emptyDir: {}
       containers:
-        # ── NGINX sidecar (edge controls: rate limit, cache, method restrict) ──
-        - name: nginx
-          image: {{ .Values.nginx.image }}
+        # ── FastAPI public-backend (read-only API; now the sole container) ─
+        - name: public-backend
+          image: {{ include "public-backend.image" . }}
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
+          env:
+            - name: ENVIRONMENT
+              value: {{ .Values.env.environment | quote }}
+            - name: DATABASE_URL_READONLY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: database-url
+            - name: LOG_LEVEL
+              value: {{ .Values.env.logLevel | quote }}
+            - name: PUBLIC_CORS_ORIGINS
+              value: {{ .Values.env.publicCorsOrigins | quote }}
+            - name: CACHE_MAX_AGE
+              value: {{ .Values.env.cacheMaxAge | quote }}
+            # ── Shared internal-auth token (FE injects, BE validates) ──────
+            - name: INTERNAL_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "public-backend.internalAuthSecretName" . }}
+                  key: {{ .Values.internalAuth.secretKey }}
+            # ── Externally visible base URL (used for OG / sitemap) ────────
+            - name: PUBLIC_BASE_URL
+              value: {{ .Values.publicBaseUrl | quote }}
           volumeMounts:
-            - name: nginx-config
-              mountPath: /etc/nginx/conf.d/default.conf
-              subPath: nginx.conf
-              readOnly: true
-            - name: nginx-cache
-              mountPath: /tmp/nginx-cache
-            - name: nginx-tmp
-              mountPath: /var/cache/nginx
-            - name: nginx-run
-              mountPath: /run
+            - name: app-tmp
+              mountPath: /tmp
+          # ── DPR-2: probes target FastAPI directly (sidecar removed) ────
           startupProbe:
             httpGet:
               path: /healthz
@@ -77,36 +84,13 @@ spec:
             timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
             failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
           resources:
-            {{- toYaml .Values.resources.nginx | nindent 12 }}
-          securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            runAsUser: 101
-            capabilities:
-              drop: ["ALL"]
-        # ── FastAPI public-backend (read-only API) ─────────────────────────────
-        - name: public-backend
-          image: {{ include "public-backend.image" . }}
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: ENVIRONMENT
-              value: {{ .Values.env.environment | quote }}
-            - name: DATABASE_URL_READONLY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.secretName }}
-                  key: database-url
-            - name: LOG_LEVEL
-              value: {{ .Values.env.logLevel | quote }}
-            - name: PUBLIC_CORS_ORIGINS
-              value: {{ .Values.env.publicCorsOrigins | quote }}
-            - name: CACHE_MAX_AGE
-              value: {{ .Values.env.cacheMaxAge | quote }}
-          resources:
             {{- toYaml .Values.resources.app | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 0
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
       {{- with .Values.affinity }}

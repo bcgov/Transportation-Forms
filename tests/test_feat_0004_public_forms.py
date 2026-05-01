@@ -33,13 +33,19 @@ from backend.models import BusinessArea, Form, FormNumberReservation, FormNumber
 _VIEW_DDL = """\
 CREATE OR REPLACE VIEW public_forms_v AS
 SELECT
+    f.id                  AS form_id,
     fnr.full_form_number  AS form_number,
     f.title,
     f.description,
+    ba.id                 AS business_area_id,
     ba.name               AS business_area,
     f.keywords,
     f.file_type,
-    f.effective_date
+    f.effective_date,
+    f.updated_at,
+    fv.s3_key             AS s3_key,
+    fv.file_name          AS file_name,
+    fv.file_size          AS file_size
 FROM forms f
 LEFT JOIN form_number_reservations fnr
     ON f.form_number_reservation_id = fnr.id
@@ -47,6 +53,10 @@ LEFT JOIN business_areas ba
     ON f.business_area_id = ba.id
    AND ba.deleted_at IS NULL
    AND ba.is_active = True
+LEFT JOIN form_versions fv
+    ON fv.form_id = f.id
+   AND fv.is_current = True
+   AND fv.deleted_at IS NULL
 WHERE f.status     = 'published'
   AND f.is_public  = True
   AND f.deleted_at IS NULL;
@@ -73,7 +83,9 @@ def public_client(db: Session, _public_view, monkeypatch):
     transactional test session.
     """
     monkeypatch.setenv("DATABASE_URL_READONLY", "postgresql://x@localhost/x")
-    monkeypatch.setenv("PUBLIC_CORS_ORIGINS", "https://forms.example.gov,http://localhost:3000")
+    # FEAT-0005: CORS removed; INTERNAL_AUTH_SECRET left empty so the
+    # middleware degrades to a no-op for these legacy FEAT-0004 tests.
+    monkeypatch.setenv("INTERNAL_AUTH_SECRET", "")
     monkeypatch.setenv("CACHE_MAX_AGE", "300")
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
 
@@ -269,7 +281,9 @@ class TestListPublicForms:
 
         resp = public_client.get("/api/public/v1/forms?q=xyznonexistent")
         assert resp.status_code == 200
-        assert resp.json() == {"total": 0, "items": []}
+        body = resp.json()
+        assert body["total"] == 0
+        assert body["items"] == []
 
     # TC-1.7
     def test_filter_by_business_area(self, public_client, db, _creator):
@@ -361,21 +375,25 @@ class TestListPublicForms:
         assert items[0]["title"] == "Permit Alpha"
         assert items[1]["title"] == "Permit Beta"
 
-    # TC-1.14
+    # TC-1.14 — FEAT-0005: validation errors return 400 problem+json
+    # (US-014 AC13) instead of FastAPI's default 422.
     def test_invalid_sort_field(self, public_client):
         resp = public_client.get("/api/public/v1/forms?s=created_by")
-        assert resp.status_code == 422  # FastAPI enum validation
+        assert resp.status_code == 400
+        assert resp.headers["content-type"].startswith("application/problem+json")
 
     # TC-1.15
     def test_invalid_sort_order(self, public_client):
         resp = public_client.get("/api/public/v1/forms?o=random")
-        assert resp.status_code == 422
+        assert resp.status_code == 400
+        assert resp.headers["content-type"].startswith("application/problem+json")
 
     # TC-1.16
     def test_q_exceeds_max_length(self, public_client):
         long_q = "x" * 101
         resp = public_client.get(f"/api/public/v1/forms?q={long_q}")
-        assert resp.status_code == 422
+        assert resp.status_code == 400
+        assert resp.headers["content-type"].startswith("application/problem+json")
 
     # TC-1.17
     def test_draft_forms_excluded(self, public_client, db, _creator):
@@ -425,7 +443,9 @@ class TestListPublicForms:
     def test_empty_result(self, public_client):
         resp = public_client.get("/api/public/v1/forms")
         assert resp.status_code == 200
-        assert resp.json() == {"total": 0, "items": []}
+        body = resp.json()
+        assert body["total"] == 0
+        assert body["items"] == []
 
     # TC-1.23
     def test_excludes_internal_identifiers(self, public_client, db, _creator):
@@ -433,12 +453,15 @@ class TestListPublicForms:
 
         resp = public_client.get("/api/public/v1/forms")
         item = resp.json()["items"][0]
+        # FEAT-0005: ``updated_at`` IS now exposed (powers the recently
+        # updated feed); everything else internal stays hidden.
         forbidden = [
-            "id", "created_by_id", "form_number_reservation_id",
+            "id", "form_id", "created_by_id", "form_number_reservation_id",
             "business_area_id", "is_public", "status", "deleted_at",
-            "created_at", "updated_at", "form_source", "form_source_url",
+            "created_at", "form_source", "form_source_url",
             "form_attachment_url", "form_attachment_filename",
             "collects_personal_info",
+            "s3_key",
         ]
         for key in forbidden:
             assert key not in item, f"Internal field '{key}' found in response"
@@ -449,7 +472,9 @@ class TestListPublicForms:
 
         resp = public_client.get("/api/public/v1/forms?f=Nonexistent%20Division")
         assert resp.status_code == 200
-        assert resp.json() == {"total": 0, "items": []}
+        body = resp.json()
+        assert body["total"] == 0
+        assert body["items"] == []
 
     def test_form_without_reservation_has_null_form_number(
         self, public_client, db, _creator
@@ -482,10 +507,13 @@ class TestListPublicForms:
         assert item["business_area"] is None
 
     def test_default_sort_title_asc(self, public_client, db, _creator):
+        # FEAT-0005: default sort is now ``updated_at desc``; explicitly
+        # request title-asc so this regression test keeps its original
+        # intent (alphabetical ordering when asked for).
         for t in ["Zeta", "Alpha", "Mu"]:
             _make_form(db, creator=_creator, title=t)
 
-        resp = public_client.get("/api/public/v1/forms")
+        resp = public_client.get("/api/public/v1/forms?s=title&o=asc")
         titles = [i["title"] for i in resp.json()["items"]]
         assert titles == ["Alpha", "Mu", "Zeta"]
 
@@ -498,72 +526,29 @@ class TestListPublicForms:
 
 
 # ===================================================================
-# US-002 — CORS allowlist
+# US-013 (FEAT-0005) — CORS removed; same-origin only
+# (replaces former US-002 CORS allowlist tests)
 # ===================================================================
 
-class TestCORS:
-    """TC-US-002 test cases."""
+class TestNoCORS:
+    """FEAT-0005: ``CORSMiddleware`` was removed; verify no CORS headers
+    are emitted regardless of Origin."""
 
-    # TC-2.1
-    def test_preflight_allowed_origin(self, public_client):
-        resp = public_client.options(
-            "/api/public/v1/forms",
-            headers={
-                "Origin": "https://forms.example.gov",
-                "Access-Control-Request-Method": "GET",
-            },
-        )
-        assert resp.status_code == 200
-        assert resp.headers["access-control-allow-origin"] == "https://forms.example.gov"
-
-    # TC-2.2
-    def test_get_includes_cors_headers(self, public_client):
+    def test_get_emits_no_cors_headers(self, public_client):
         resp = public_client.get(
             "/api/public/v1/forms",
             headers={"Origin": "https://forms.example.gov"},
         )
-        assert resp.headers["access-control-allow-origin"] == "https://forms.example.gov"
+        assert "access-control-allow-origin" not in resp.headers
+        assert "access-control-allow-credentials" not in resp.headers
+        assert "access-control-allow-methods" not in resp.headers
 
-    # TC-2.3
-    def test_non_allowlisted_origin_rejected(self, public_client):
+    def test_evil_origin_emits_no_cors_headers(self, public_client):
         resp = public_client.get(
             "/api/public/v1/forms",
             headers={"Origin": "https://evil.example.com"},
         )
         assert "access-control-allow-origin" not in resp.headers
-
-    # TC-2.4
-    def test_no_wildcard_origin(self, public_client):
-        resp = public_client.get(
-            "/api/public/v1/forms",
-            headers={"Origin": "https://forms.example.gov"},
-        )
-        assert resp.headers.get("access-control-allow-origin") != "*"
-
-    # TC-2.5
-    def test_no_credentials(self, public_client):
-        resp = public_client.get(
-            "/api/public/v1/forms",
-            headers={"Origin": "https://forms.example.gov"},
-        )
-        # access-control-allow-credentials should be absent or "false"
-        cred = resp.headers.get("access-control-allow-credentials", "false")
-        assert cred.lower() != "true"
-
-    # TC-2.6
-    def test_allowed_methods_restricted(self, public_client):
-        resp = public_client.options(
-            "/api/public/v1/forms",
-            headers={
-                "Origin": "https://forms.example.gov",
-                "Access-Control-Request-Method": "GET",
-            },
-        )
-        methods = resp.headers.get("access-control-allow-methods", "")
-        assert "GET" in methods
-        assert "POST" not in methods
-        assert "PUT" not in methods
-        assert "DELETE" not in methods
 
 
 # ===================================================================
@@ -658,16 +643,12 @@ class TestInfrastructure:
         resp = public_client.get("/api/public/v1/forms")
         assert resp.status_code != 405
 
-    # TC-4.11
-    def test_options_allowed(self, public_client):
-        resp = public_client.options(
-            "/api/public/v1/forms",
-            headers={
-                "Origin": "https://forms.example.gov",
-                "Access-Control-Request-Method": "GET",
-            },
-        )
-        assert resp.status_code != 405
+    # TC-4.11 — FEAT-0005: CORS removed → no preflight handler; OPTIONS
+    # on a GET-only route returns 405 from the router.  This is correct
+    # for a same-origin-only public surface.
+    def test_options_returns_405(self, public_client):
+        resp = public_client.options("/api/public/v1/forms")
+        assert resp.status_code == 405
 
     # TC-4.12
     def test_post_returns_405(self, public_client):
@@ -744,8 +725,11 @@ class TestDatabaseView:
 
         resp = public_client.get("/api/public/v1/forms")
         item = resp.json()["items"][0]
+        # FEAT-0005 added ``updated_at`` to the public projection;
+        # internal columns (form_id, business_area_id, s3_key, file_name,
+        # file_size) MUST remain hidden from clients.
         expected_keys = {"form_number", "title", "description", "business_area",
-                         "keywords", "file_type", "effective_date"}
+                         "keywords", "file_type", "effective_date", "updated_at"}
         assert set(item.keys()) == expected_keys
 
     def test_view_left_join_no_reservation(self, public_client, db, _creator):
