@@ -37,13 +37,18 @@ main { flex: 1 0 auto; }
 .bcgov-header { background: #003366; color: #fff; border-bottom: 2px solid #fcba19; }
 .bcgov-header a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
 .ministry-name { color: #fff; }
+.bcgov-header-logo {
+    height: 60px;
+    margin-right: 2rem;
+    flex-shrink: 0;
+}
 
 /* Sticky search */
 .search-sticky { z-index: 1020; border-bottom: 1px solid #d1d1d1; }
 
 /* Results / cards (US-002) — single column at all breakpoints (AC7) */
 .results-region { min-height: 200px; }
-.results-region ol { display: grid; grid-template-columns: 1fr; gap: 1rem; max-width: 60rem; margin: 0 auto; }
+.results-region ol { display: grid; grid-template-columns: 1fr; gap: 1rem; margin: 0 auto; }
 
 /* form-card custom-element layout */
 form-card {

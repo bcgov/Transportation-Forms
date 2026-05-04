@@ -7,16 +7,12 @@
   <meta name="description" content="Browse and download BC Government transportation forms.">
   <link rel="canonical" href="/">
 
-  <!--
-    Vendored BC Gov Bootstrap v5 theme + BC Sans font.
-    See ./vendor/README.md for the exact files DevOps must drop in.
-    All assets are same-origin only (no CDN) — CSP enforces default-src 'self'.
-  -->
-  <link rel="stylesheet" href="/vendor/bootstrap-theme.min.css">
-  <link rel="stylesheet" href="/vendor/bc-sans.css">
+  <!-- BC Gov Bootstrap v5 theme + BC Sans font (baked into image at build time). -->
+  <link rel="stylesheet" href="/css/bootstrap-theme.min.css">
+  <link rel="stylesheet" href="/css/bc-sans.css">
   <link rel="stylesheet" href="/css/main.css">
 
-  <link rel="icon" type="image/svg+xml" href="/vendor/bc-gov-logo.svg">
+  <link rel="icon" type="image/png" href="/assets/bc-gov-transportation-logo.png">
 
   <!-- Default OG / Twitter meta for home view (US-008 AC6).
        detail.js overrides these; home.js restores them on back-navigation. -->
@@ -40,10 +36,10 @@
   <header id="siteHeader" role="banner" class="bcgov-header">
     <div class="container d-flex align-items-center py-2">
       <a href="/" class="d-flex align-items-center text-decoration-none" aria-label="BC Government — home">
-        <img src="/vendor/bc-gov-logo.svg" alt="" width="155" height="42" class="me-3">
-        <span class="visually-hidden">BC Government</span>
+        <img src="/assets/bc-gov-transportation-logo.png" alt="BC Ministry of Transportation and Transit Logo" class="bcgov-header-logo">
+        <span class="visually-hidden">BC Transportation and Transit</span>
       </a>
-      <span class="ms-3 fs-5 ministry-name d-none d-sm-inline">Public Forms</span>
+      <h4 class="text-white m-0">Transportation Forms</h4>
     </div>
   </header>
 
@@ -61,40 +57,34 @@
         <!-- Sticky search row (US-001 AC5) -->
         <div class="search-sticky bg-body sticky-top py-2" id="searchSticky">
           <form id="searchForm" role="search" autocomplete="off" onsubmit="return false;">
-            <div class="row g-2 align-items-end">
-              <div class="col-12 col-md-6">
+            
+              <div class="col-12 col-md-12">
                 <label for="searchInput" class="form-label">Search forms</label>
-                <input
-                  id="searchInput"
-                  type="search"
-                  class="form-control form-control-lg"
-                  placeholder="Search forms…"
-                  aria-describedby="searchHelp"
-                  maxlength="100">
-                <div id="searchHelp" class="form-text">Search for forms here</div>
-              </div>
-              <div class="col-6 col-md-3">
-                <label for="filterBA" class="form-label">Business area</label>
-                <select id="filterBA" class="form-select" aria-label="Filter by business area">
-                  <option value="">All business areas</option>
-                </select>
-              </div>
-              <div class="col-3 col-md-2">
-                <label for="sortField" class="form-label">Sort by</label>
-                <select id="sortField" class="form-select">
-                  <option value="updated_at">Updated</option>
-                  <option value="title">Title</option>
-                  <option value="form_number">Form #</option>
-                  <option value="effective_date">Effective</option>
-                </select>
-              </div>
-              <div class="col-3 col-md-1">
-                <label for="sortOrder" class="form-label">Order</label>
-                <select id="sortOrder" class="form-select" aria-label="Sort order">
-                  <option value="desc">Desc</option>
-                  <option value="asc">Asc</option>
-                </select>
-              </div>
+                <input id="searchInput" type="search" class="form-control form-control-lg" placeholder="Search forms…" aria-describedby="searchHelp" maxlength="100" autofocus>
+              </div>                
+              <div class="row col-12 col-md-12">
+                <div class="col-6 col-md-3">
+                  <label for="filterBA" class="form-label">Business area</label>
+                  <select id="filterBA" class="form-select" aria-label="Filter by business area">
+                    <option value="">All business areas</option>
+                  <option value="Licensing">Licensing</option></select>
+                </div>
+                <div class="col-3 col-md-2">
+                  <label for="sortField" class="form-label">Sort by</label>
+                  <select id="sortField" class="form-select">
+                    <option value="updated_at">Updated</option>
+                    <option value="title">Title</option>
+                    <option value="form_number">Form #</option>
+                    <option value="effective_date">Effective</option>
+                  </select>
+                </div>
+                <div class="col-3 col-md-2">
+                  <label for="sortOrder" class="form-label">Order</label>
+                  <select id="sortOrder" class="form-select" aria-label="Sort order">
+                    <option value="desc">Desc</option>
+                    <option value="asc">Asc</option>
+                  </select>
+                </div>
             </div>
           </form>
         </div>

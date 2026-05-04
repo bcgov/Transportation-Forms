@@ -42,10 +42,8 @@ spec:
           configMap:
             name: {{ include "public-frontend.fullname" . }}-robots
         # ── Writable scratch dirs (readOnlyRootFilesystem=true) ─────────────
-        # entrypoint.sh renders templates into conf.d/ + coraza/ at boot.
+        # entrypoint.sh renders templates into conf.d/ at boot.
         - name: nginx-confd
-          emptyDir: {}
-        - name: coraza-confdir
           emptyDir: {}
         - name: nginx-cache
           emptyDir: {}
@@ -79,9 +77,6 @@ spec:
               value: {{ include "public-frontend.backendHost" . | quote }}
             - name: BACKEND_UPSTREAM_PORT
               value: {{ .Values.backendPort | quote }}
-            # ── Coraza WAF mode: DetectionOnly (DEV) or On (TEST/PROD) ──────
-            - name: CORAZA_RULE_ENGINE
-              value: {{ .Values.coraza.ruleEngine | quote }}
             # ── S3 endpoint for X-Accel-Redirect /internal-s3/ proxying ─────
             - name: S3_INTERNAL_UPSTREAM
               value: {{ .Values.s3.internalUpstream | quote }}
@@ -101,15 +96,13 @@ spec:
             # Writable dirs required when readOnlyRootFilesystem=true
             - name: nginx-confd
               mountPath: /etc/nginx/conf.d
-            - name: coraza-confdir
-              mountPath: /etc/coraza
             - name: nginx-cache
               mountPath: /var/cache/nginx
             - name: nginx-run
               mountPath: /var/run
             - name: tmp
               mountPath: /tmp
-          # ── Probes (use the isolated health port — no WAF overhead) ─────────
+          # ── Probes (use the isolated health port) ─────────
           startupProbe:
             httpGet:
               path: /healthz

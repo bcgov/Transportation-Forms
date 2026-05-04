@@ -7,7 +7,7 @@ global:
     # true   → Helm will not delete secrets on release removal (safe for long-lived envs)
     persist: false
 
-# ── Image (single-NGINX edge with Coraza WAF + SPA assets) ────────────────────
+# ── Image (single-NGINX edge with SPA assets) ────────────────────
 image:
   repository: ghcr.io/bcgov/transportation-forms/public-frontend
   tag: latest
@@ -56,7 +56,7 @@ podDisruptionBudget:
   enabled: false
   minAvailable: 1
 
-# ── Health probes (target the dedicated health port — no WAF overhead) ───────
+# ── Health probes (target the dedicated health port) ───────
 startupProbe:
   failureThreshold: 15
   periodSeconds: 2
@@ -139,12 +139,6 @@ internalAuth:
   secretName: ""
   # Key inside the Secret holding the 64-char alphanumeric token.
   secretKey: secret
-
-# ── Coraza WAF mode (DPR-2) ──────────────────────────────────────────────────
-# DEV runs DetectionOnly so we observe rule hits without breaking traffic;
-# TEST/PROD overlay flips this to "On" (block mode).
-coraza:
-  ruleEngine: DetectionOnly
 
 # ── S3 internal upstream for X-Accel-Redirect /internal-s3/ ──────────────────
 # Empty in DEV (no S3 binding); TEST/PROD must set this to the in-cluster /

@@ -24,12 +24,14 @@
 #   task -d deploy/local build:backend         # rebuild backend image only
 #   task -d deploy/local build:public-frontend  # rebuild public-frontend image only
 #   task -d deploy/local build:public-backend   # rebuild public-backend image only
+#   task -d deploy/local deploy:db                 # Deploy db only
 #   task -d deploy/local deploy                 # redeploy app only
+#   task -d deploy/local teardown    # Remove app only (keeps database)
 #   task -d deploy/local teardown:all    # remove everything
 # Run rollout if it doesn't get deployed:
-# Frontend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-frontend -n default
-# Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-backend -n default
-# Public-Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-app-public-backend -n default
+# Frontend Rollout: kubectl rollout restart deployment/transportation-forms-local-frontend -n default
+# Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-backend -n default
+# Public-Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-public-backend -n default
 # Public-Frontend Rollout: kubectl rollout restart deployment/transportation-forms-local-public-frontend -n default
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -191,6 +193,8 @@ tasks:
           --set "public-frontend.s3.internalUpstream=${S3_ENDPOINT_URL}" \
           --set "public-frontend.publicBaseUrl=http://forms-public.localhost" \
           --set "public-backend.publicBaseUrl=http://forms-public.localhost" \
+          --set "public-backend.resources.app.limits.memory=512Mi" \
+          --set "public-frontend.resources.limits.memory=512Mi" \
           --timeout 10m \
           --wait
 
