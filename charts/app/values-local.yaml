@@ -119,6 +119,7 @@ public-backend:
 public-frontend:
   image:
     tag: local
+    pullPolicy: IfNotPresent
 
   route:
     enabled: false
