@@ -29,6 +29,7 @@ class Permission(str, Enum):
     FORM_SUBMIT_FOR_REVIEW = "form:submit_for_review"
     FORM_REVIEW = "form:review"
     FORM_APPROVE = "form:approve"
+    FORM_APPROVE_SELF = "form:approve-self"  # FEAT-0007: allows a creator to approve their own submission
     FORM_PUBLISH = "form:publish"
 
     # Business Area Permissions
@@ -96,6 +97,7 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.FORM_SUBMIT_FOR_REVIEW,
             Permission.FORM_REVIEW,
             Permission.FORM_APPROVE,
+            Permission.FORM_APPROVE_SELF,  # FEAT-0007
             Permission.FORM_PUBLISH,
             # All business area permissions
             Permission.BUSINESS_AREA_CREATE,
