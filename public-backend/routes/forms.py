@@ -399,6 +399,7 @@ def get_form_og(
     form_number: str,
     db: Session = Depends(get_db),
 ):
+    form_number = html.escape(form_number, quote=True)
     # AC5 — return minimal HTML 404 (not problem+json) so bots get the
     # correct content-type even on error, and noindex is set.
     try:

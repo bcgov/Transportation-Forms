@@ -382,6 +382,7 @@ def get_form_og(
     form_number: str,
     db: Session = Depends(get_db),
 ):
+    form_number = html.escape(form_number, quote=True)
     row = _get_form_or_404(db, form_number)
 
     canonical = f"{_public_origin(request)}/forms/{quote(form_number, safe='')}"
