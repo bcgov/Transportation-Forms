@@ -451,7 +451,7 @@ class TestSecurityHardening:
     def test_no_inline_scripts_in_index(self, index_html):
         # CSP-friendly: zero inline <script> tags except the module entrypoint.
         # We allow exactly one <script type="module" src="…">.
-        scripts = re.findall(r"<script\b[^>]*>", index_html)
+        scripts = re.findall(r"<script\b[^>]*>", index_html, flags=re.IGNORECASE)
         assert len(scripts) == 1, f"expected 1 script tag, got {len(scripts)}"
         assert 'type="module"' in scripts[0]
         assert "src=" in scripts[0]
