@@ -17,8 +17,10 @@ import importlib
 import sys
 import time
 import uuid
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -765,7 +767,12 @@ class TestSitemap:
         body = resp.text
         assert body.startswith('<?xml')
         assert "<urlset" in body
-        assert "https://forms-public.example.gov/" in body
+        root = ET.fromstring(body)
+        loc_values = [loc.text for loc in root.findall(".//{*}loc") if loc.text]
+        assert any(
+            (parsed.scheme == "https" and parsed.hostname == "forms-public.example.gov")
+            for parsed in (urlparse(loc) for loc in loc_values)
+        )
         for fn in ("H0001", "H0002", "H0003"):
             assert f"/forms/{fn}" in body
 
