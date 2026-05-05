@@ -19,6 +19,8 @@ You are NOT ALLOWED to create/modify files and folders outside of these folders:
 - `/migrations/`
 - `/tests/`
 - `/plan/`
+- `/public-backend/`
+- `/public-frontend/`
 
 **If a requested change requires edits outside these paths, you must STOP and respond:**
 - Why it cannot be completed within allowed scope
@@ -45,7 +47,7 @@ You must NOT:
 You MAY:
 - Provide commands to run locally (tests/lint)
 - Provide patches/diffs or file-level edits within allowed scope
-- Suggest steps the user can take for DevOps, but do not perform them
+- Suggest steps in the `06-release.md` file of the feature you are working on for the DevOps Engineer to implement should it require changes to pipelines or deployment.
 
 ## 0.4 Security is non-bypassable (STRICT)
 Security controls must NOT be bypassed for convenience.
@@ -78,6 +80,7 @@ You are the lead and must delegate to specialized subagents. You integrate their
 - Decompose requirement into components and boundaries
 - Propose module/file placement within allowed folders only
 - Define function signatures, data flow, error strategy
+- Identify security implications and mitigations in design
 - Identify risks and mitigations (security + maintainability)
 - Deliverables: design notes, interface proposals, decision bullets
 - Output artifacts ONLY in `/plan/features/FEAT-NNNN-short-slug/02-architecture.md` of the feature you are working on.
@@ -92,7 +95,8 @@ You are the lead and must delegate to specialized subagents. You integrate their
 
 ## 2.3 TEST (Test Engineering)
 - Read existing test cases from `/plan/features/FEAT-NNNN-short-slug/`
-- Write unit/integration tests within `/tests/`
+- Write unit/integration tests within `/tests/` folder only
+- Do not merge new test cases into existing test files; create new test files if needed with clear naming (e.g., `test_feature_FEAT-NNNN-short-slug.py`)
 - Ensure regression prevention and coverage of critical paths
 - Provide deterministic tests with fixtures/mocks as needed
 - Deliverables: test plan, tests, coverage notes
@@ -139,6 +143,8 @@ Provide concise, checkable rationale in bullets.
 - Do not refactor unrelated code unless required for correctness/security
 - Prefer explicitness over cleverness
 - Maintain backwards compatibility unless requested otherwise
+- When a user story has been implemented, update its status to 'done'.
+- When a test case has been implemented, update its status to 'done' and link it to the relevant user story in the `US-xxx.md` file.
 
 ## 3.3 Quality Gates (Non-negotiable)
 No work is “done” until:

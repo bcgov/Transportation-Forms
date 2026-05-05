@@ -177,3 +177,116 @@ frontend:
 
   networkPolicy:
     enabled: true
+
+# ── Public-backend subchart values ──────────────────────────────────────────────
+# Disabled by default. Enable per-environment when ready to deploy.
+#
+# DPR-1 (FEAT-0005): the umbrella now gates this subchart on
+# `publicBackend.enabled` (camelCase top-level toggle below) instead of the
+# legacy `public-backend.enabled` flag. Default remains false so DEV/TEST/PROD
+# behaviour is unchanged.
+publicBackend:
+  enabled: true
+
+publicFrontend:
+  enabled: true
+
+public-backend:
+  enabled: true
+
+  image:
+    tag: latest
+
+  replicaCount: 1
+
+  deploymentStrategy:
+    type: Recreate
+
+  resources:
+    app:
+      requests:
+        cpu: "25m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "256Mi"
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+
+  pdb:
+    enabled: false
+    minAvailable: 1
+
+  startupProbe:
+    failureThreshold: 15
+    periodSeconds: 2
+
+  readinessProbe:
+    path: /readyz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+
+  livenessProbe:
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  secretName: transportation-forms-secrets
+
+  env:
+    environment: development
+    logLevel: INFO
+    publicCorsOrigins: ""
+    cacheMaxAge: 300
+
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: public-backend
+
+  # DPR-1 (FEAT-0005) — legacy Route gate; default off (cutover gate cleared)
+  route:
+    enabled: true
+
+  networkPolicy:
+    enabled: true
+
+# ── Public-frontend subchart values ─────────────────────────────────────────────
+# Disabled by default. Enable per-environment alongside `publicFrontend.enabled`
+# once DPR-2 ships the NGINX + Coraza WAF config.
+public-frontend:
+  image:
+    tag: latest
+
+  replicaCount: 1
+
+  route:
+    enabled: true
+
+  ingress:
+    enabled: false
+
+  networkPolicy:
+    enabled: true
+
+  publicBaseUrl: ""
+
+  s3:
+    internalUpstream: ""
+
+  coraza:
+    ruleEngine: DetectionOnly
+

@@ -52,7 +52,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        component: [backend, frontend, migrations]
+        component: [backend, frontend, migrations, public-backend, public-frontend]
     steps:
       - name: Retag ${{ matrix.component }} PR image as latest
         uses: bcgov/action-builder-ghcr@v4.2.1

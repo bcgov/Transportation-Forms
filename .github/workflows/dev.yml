@@ -10,6 +10,8 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'migrations/**'
+      - 'public-backend/**'
+      - 'public-frontend/**'
       - 'requirements.txt'
       - 'entrypoint.sh'
   workflow_dispatch:
@@ -23,6 +25,8 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       migrations: ${{ steps.filter.outputs.migrations }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      public-backend: ${{ steps.filter.outputs.public-backend }}
+      public-frontend: ${{ steps.filter.outputs.public-frontend }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.1
@@ -42,6 +46,13 @@ jobs:
               - 'migrations/**'
             frontend:
               - 'frontend/**'
+            public-backend:
+              - 'public-backend/**'
+              - 'charts/public-backend/**'
+            public-frontend:
+              - 'public-frontend/**'
+              - 'charts/public-frontend/**'
+              - 'charts/public-frontend/files/**'
 
   # ── Build backend image ──────────────────────────────────────────────────────
   build-backend:
@@ -124,10 +135,64 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── Build public-backend image ───────────────────────────────────────────────
+  build-public-backend:
+    name: Build public-backend image
+    needs: changes
+    if: needs.changes.outputs['public-backend'] == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Build and push public-backend image
+        uses: bcgov/action-builder-ghcr@v4.2.1
+        with:
+          package: public-backend
+          tags: |
+            latest
+            ${{ github.sha }}
+          tag_fallback: latest
+          build_file: public-backend/Dockerfile
+          build_context: .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Build public-frontend image ──────────────────────────────────────────────
+  build-public-frontend:
+    name: Build public-frontend image
+    needs: changes
+    if: needs.changes.outputs['public-frontend'] == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.1
+
+      - name: Build and push public-frontend image
+        uses: bcgov/action-builder-ghcr@v4.2.1
+        with:
+          package: public-frontend
+          tags: |
+            latest
+            ${{ github.sha }}
+          tag_fallback: latest
+          build_file: public-frontend/Dockerfile
+          build_context: .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # ── Deploy to DEV ────────────────────────────────────────────────────────────
   deploy-dev:
     name: Deploy to DEV
-    needs: [changes, build-backend, build-migrations, build-frontend]
+    needs: [changes, build-backend, build-migrations, build-frontend, build-public-backend, build-public-frontend]
     if: |
       always() &&
       !contains(needs.*.result, 'failure') &&
@@ -140,9 +205,12 @@ jobs:
       backend_tag: ${{ needs.build-backend.result == 'success' && github.sha || 'latest' }}
       migrations_tag: ${{ needs.build-migrations.result == 'success' && github.sha || 'latest' }}
       frontend_tag: ${{ needs.build-frontend.result == 'success' && github.sha || 'latest' }}
+      public_forms_base_url: https://forms-public-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
       params: >-
         --set global.secrets.persist=false
         --set backend.env.corsOrigins=https://frontend-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
+        --set-string "public-backend.image.tag=${{ needs.build-public-backend.result == 'success' && github.sha || 'latest' }}"
+        --set-string "public-frontend.image.tag=${{ needs.build-public-frontend.result == 'success' && github.sha || 'latest' }}"
     secrets:
       oc_token: ${{ secrets.OC_TOKEN }}
       database_url: ${{ secrets.DATABASE_URL }}
