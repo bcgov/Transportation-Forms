@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#003366">
+  <meta name="description" content="Browse and download BC Government transportation forms.">
+  <link rel="canonical" href="/">
+
+  <!-- BC Gov Bootstrap v5 theme + BC Sans font (baked into image at build time). -->
+  <link rel="stylesheet" href="/css/bootstrap-theme.min.css">
+  <link rel="stylesheet" href="/css/bc-sans.css">
+  <link rel="stylesheet" href="/css/main.css">
+
+  <link rel="icon" type="image/png" href="/assets/bc-gov-transportation-logo.png">
+
+  <!-- Default OG / Twitter meta for home view (US-008 AC6).
+       detail.js overrides these; home.js restores them on back-navigation. -->
+  <meta property="og:type"        content="website">
+  <meta property="og:title"       content="Public Forms — BC Government">
+  <meta property="og:description" content="Browse and download BC Government transportation forms.">
+  <meta property="og:url"         content="/">
+  <meta property="og:site_name"   content="BC Government Public Forms">
+  <meta name="twitter:card"        content="summary">
+  <meta name="twitter:title"       content="Public Forms — BC Government">
+  <meta name="twitter:description" content="Browse and download BC Government transportation forms.">
+
+  <title>Public Forms — BC Government</title>
+</head>
+<body>
+  <!-- Skip-to-main link (US-007 AC2 / US-003 AC13) -->
+  <a class="visually-hidden-focusable skip-link" href="#mainContent">Skip to main content</a>
+
+  <!-- Shared header (US-010). Rendered by ./js/shared/chrome.js when JS is on;
+       static markup below is a progressive-enhancement fallback (US-010 AC11). -->
+  <header id="siteHeader" role="banner" class="bcgov-header">
+    <div class="container d-flex align-items-center py-2">
+      <a href="/" class="d-flex align-items-center text-decoration-none" aria-label="BC Government — home">
+        <img src="/assets/bc-gov-transportation-logo.png" alt="BC Ministry of Transportation and Transit Logo" class="bcgov-header-logo">
+        <span class="visually-hidden">BC Transportation and Transit</span>
+      </a>
+      <h4 class="text-white m-0">Transportation Forms</h4>
+    </div>
+  </header>
+
+  <main id="mainContent" tabindex="-1">
+    <!-- HOME view (US-001 / US-005 / US-006) -->
+    <section id="homeView" class="view" aria-labelledby="homeHeading">
+      <div class="container py-4">
+        <h1 id="homeHeading" class="visually-hidden">Public Forms</h1>
+
+        <div class="hero text-center mb-4">
+          <h2 class="display-6">Find a transportation form</h2>
+          <p class="lead">Search the public catalogue or browse the most-recently-updated forms.</p>
+        </div>
+
+        <!-- Sticky search row (US-001 AC5) -->
+        <div class="search-sticky bg-body sticky-top py-2" id="searchSticky">
+          <form id="searchForm" role="search" autocomplete="off" onsubmit="return false;">
+            
+              <div class="col-12 col-md-12">
+                <label for="searchInput" class="form-label">Search forms</label>
+                <input id="searchInput" type="search" class="form-control form-control-lg" placeholder="Search forms…" aria-describedby="searchHelp" maxlength="100" autofocus>
+              </div>                
+              <div class="row col-12 col-md-12">
+                <div class="col-6 col-md-3">
+                  <label for="filterBA" class="form-label">Business area</label>
+                  <select id="filterBA" class="form-select" aria-label="Filter by business area">
+                    <option value="">All business areas</option>
+                  <option value="Licensing">Licensing</option></select>
+                </div>
+                <div class="col-3 col-md-2">
+                  <label for="sortField" class="form-label">Sort by</label>
+                  <select id="sortField" class="form-select">
+                    <option value="updated_at">Updated</option>
+                    <option value="title">Title</option>
+                    <option value="form_number">Form #</option>
+                    <option value="effective_date">Effective</option>
+                  </select>
+                </div>
+                <div class="col-3 col-md-2">
+                  <label for="sortOrder" class="form-label">Order</label>
+                  <select id="sortOrder" class="form-select" aria-label="Sort order">
+                    <option value="desc">Desc</option>
+                    <option value="asc">Asc</option>
+                  </select>
+                </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Result count line + aria-live (US-001 AC3, US-005 AC14) -->
+        <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
+          <p id="resultsCount" class="mb-0 text-muted" aria-live="polite" aria-atomic="true">&nbsp;</p>
+          <button type="button" id="viewAllToggle" class="btn btn-link p-0" aria-pressed="false">View all</button>
+        </div>
+
+        <!-- Results region (US-001 AC1, US-006 AC11) -->
+        <div id="resultsRegion" class="results-region" aria-busy="false" aria-live="polite">
+          <ol id="resultsList" class="list-unstyled" aria-label="Forms"></ol>
+        </div>
+
+        <!-- Empty state (US-006 AC3, AC4) -->
+        <div id="emptyState" class="text-center py-5" hidden>
+          <div class="display-1" aria-hidden="true">📭</div>
+          <h3>No forms match your search</h3>
+          <p class="text-muted">Try clearing filters or broadening your search terms.</p>
+          <button type="button" class="btn btn-outline-primary" id="clearFiltersBtn">Clear filters</button>
+        </div>
+
+        <!-- Paginator (US-005 AC6, AC7) -->
+        <nav id="paginator" class="mt-4" aria-label="Forms pagination" hidden>
+          <ul class="pagination justify-content-center mb-0" id="pagerList"></ul>
+        </nav>
+
+        <!-- View-all overflow notice (US-005 AC10) -->
+        <p id="viewAllNotice" class="text-center text-muted small mt-2" hidden></p>
+      </div>
+    </section>
+
+    <!-- DETAIL view (US-003) -->
+    <section id="detailView" class="view" hidden aria-labelledby="detailHeading">
+      <div class="container py-4">
+        <p class="mb-3"><a id="backLink" href="/">&larr; Back to results</a></p>
+        <article id="detailContent" aria-busy="false"></article>
+      </div>
+    </section>
+
+    <!-- 404 view (US-006 AC8/AC9) -->
+    <section id="notFoundView" class="view" hidden aria-labelledby="notFoundHeading">
+      <div class="container py-5 text-center">
+        <h1 id="notFoundHeading">Form not found</h1>
+        <p class="lead">We couldn’t find what you were looking for.</p>
+        <p><a href="/" class="btn btn-primary">&larr; Back to all forms</a></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Bottom-pinned alert area (US-006 AC5/AC6/AC7) -->
+  <div id="alertSlot" class="alert-slot" aria-live="assertive" aria-atomic="true"></div>
+
+  <!-- Footer (US-010) -->
+  <footer role="contentinfo" class="bcgov-footer mt-5">
+    <nav aria-label="Footer" class="container py-3">
+      <ul class="list-inline mb-2">
+        <li class="list-inline-item"><a href="/">Home</a></li>
+        <li class="list-inline-item"><a href="https://www2.gov.bc.ca/gov/content/home/disclaimer">Disclaimer</a></li>
+        <li class="list-inline-item"><a href="https://www2.gov.bc.ca/gov/content/home/privacy">Privacy</a></li>
+        <li class="list-inline-item"><a href="https://www2.gov.bc.ca/gov/content/home/accessibility">Accessibility</a></li>
+        <li class="list-inline-item"><a href="https://www2.gov.bc.ca/gov/content/home/copyright">Copyright</a></li>
+      </ul>
+      <p class="small mb-0" id="copyright">&copy; Government of British Columbia</p>
+    </nav>
+  </footer>
+
+  <noscript>
+    <div class="container py-5">
+      <h2>JavaScript is required</h2>
+      <p>This site requires JavaScript to browse and search forms. If you need
+        assistance accessing transportation forms, please contact the ministry at
+        <a href="mailto:tran.formsadmin@gov.bc.ca">tran.formsadmin@gov.bc.ca</a>.</p>
+    </div>
+  </noscript>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

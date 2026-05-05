@@ -77,6 +77,10 @@ def _test_engine():
 
     # Build the engine for the test database.
     engine = create_engine(TEST_DATABASE_URL, echo=False)
+    # Drop views that depend on tables before dropping tables themselves.
+    with engine.connect() as conn:
+        conn.execute(text("DROP VIEW IF EXISTS public_forms_v CASCADE"))
+        conn.commit()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield engine

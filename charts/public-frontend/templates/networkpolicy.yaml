@@ -1,0 +1,59 @@
+{{- if .Values.networkPolicy.enabled }}
+# ── Allow ingress from openshift-ingress namespace + same-app pods → :3000 ───
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "public-frontend.fullname" . }}-allow-ingress
+  labels:
+    {{- include "public-frontend.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "public-frontend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public-frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-ingress
+        - podSelector:
+            matchLabels:
+              {{- include "public-frontend.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: public-frontend
+      ports:
+        - protocol: TCP
+          port: {{ .Values.containerPort }}
+---
+# ── Allow egress: → public-backend :8000, DNS :53 ─────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "public-frontend.fullname" . }}-allow-egress
+  labels:
+    {{- include "public-frontend.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "public-frontend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public-frontend
+  policyTypes:
+    - Egress
+  egress:
+    # → public-backend Pods on 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: public-backend
+      ports:
+        - protocol: TCP
+          port: {{ .Values.backendPort }}
+    # → DNS (CoreDNS / kube-dns)
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- end }}
