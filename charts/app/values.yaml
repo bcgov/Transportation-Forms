@@ -186,13 +186,13 @@ frontend:
 # legacy `public-backend.enabled` flag. Default remains false so DEV/TEST/PROD
 # behaviour is unchanged.
 publicBackend:
-  enabled: false
+  enabled: true
 
 publicFrontend:
-  enabled: false
+  enabled: true
 
 public-backend:
-  enabled: false
+  enabled: true
 
   image:
     tag: latest
@@ -259,7 +259,7 @@ public-backend:
 
   # DPR-1 (FEAT-0005) — legacy Route gate; default off (cutover gate cleared)
   route:
-    enabled: false
+    enabled: true
 
   networkPolicy:
     enabled: true
@@ -274,7 +274,7 @@ public-frontend:
   replicaCount: 1
 
   route:
-    enabled: false
+    enabled: true
 
   ingress:
     enabled: false
