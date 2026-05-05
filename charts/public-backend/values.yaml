@@ -1,0 +1,114 @@
+# ── Global image settings (overridden per environment / PR) ───────────────────
+global:
+  registry: ghcr.io
+  repository: bcgov/transportation-forms
+  secrets:
+    persist: false
+
+# ── Image tag ─────────────────────────────────────────────────────────────────
+image:
+  tag: latest
+
+# ── OpenShift domain (used to build route hostnames) ─────────────────────────
+domain: apps.silver.devops.gov.bc.ca
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Replica / scaling ─────────────────────────────────────────────────────────
+replicaCount: 1
+
+# ── DPR-2: NGINX sidecar removed. FastAPI now serves the cluster Service
+#   directly on port 8000; the public-frontend NGINX edge owns rate-limiting,
+#   caching, WAF, and TLS-terminated edge controls.
+containerPort: 8000
+servicePort: 8000
+
+deploymentStrategy:
+  type: Recreate
+
+resources:
+  # public-backend FastAPI container
+  app:
+    requests:
+      cpu: "25m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "256Mi"
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+# ── Health probes (target FastAPI directly on port 8000) ────────────────────
+startupProbe:
+  failureThreshold: 15
+  periodSeconds: 2
+
+readinessProbe:
+  path: /readyz
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 5
+
+livenessProbe:
+  path: /healthz
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# ── Secret ────────────────────────────────────────────────────────────────────
+# Reuses the same shared secret as the main backend
+secretName: transportation-forms-secrets
+
+# ── Environment ──────────────────────────────────────────────────────────────
+env:
+  environment: development
+  logLevel: INFO
+  publicCorsOrigins: ""
+  cacheMaxAge: 300
+
+# ── Pod anti-affinity ─────────────────────────────────────────────────────────
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: public-backend
+
+# ── OpenShift Route ──────────────────────────────────────────────────────────
+# DPR-1 cleared cutover gate D4 — public-frontend NGINX edge is the canonical
+# ingress path. This Route stays default OFF and exists only as an emergency
+# escape hatch. The legacy `routes.enabled` key was removed in DPR-2; only
+# `route.enabled` (singular) is honoured.
+route:
+  enabled: false
+
+# ── PUBLIC_BASE_URL — externally visible base URL for OG / sitemap ───────────
+# Set per environment from the umbrella chart so canonical URLs match the
+# public-frontend Route hostname.
+publicBaseUrl: ""
+
+# ── Internal-auth shared secret (managed by the public-frontend chart) ───────
+# The public-frontend chart creates the Secret with `helm.sh/resource-policy: keep`
+# and a generated `randAlphaNum 64` value. We mount it here by name so both
+# Pods see the same token. Default name pattern: "<release>-public-frontend-internal-auth".
+internalAuth:
+  existingSecret: ""
+  secretKey: secret
+
+# ── Network Policies ──────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: true

@@ -1,0 +1,69 @@
+{{- if .Values.networkPolicy.enabled }}
+# ── Network Policy: allow ingress from openshift-ingress → public-backend ─────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "public-backend.fullname" . }}-allow-ingress
+  labels:
+    {{- include "public-backend.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "public-backend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public-backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: ingress
+      ports:
+        - protocol: TCP
+          port: {{ .Values.containerPort }}
+---
+# ── Network Policy: deny all other ingress to public-backend ─────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "public-backend.fullname" . }}-deny-other-ingress
+  labels:
+    {{- include "public-backend.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "public-backend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public-backend
+  policyTypes:
+    - Ingress
+  ingress: []
+---
+# ── Network Policy: allow public-backend → database (read-only) ──────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "public-backend.fullname" . }}-allow-db-egress
+  labels:
+    {{- include "public-backend.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "public-backend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public-backend
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 5432
+    # Allow DNS resolution
+    - ports:
+        - protocol: UDP
+          port: 5353
+        - protocol: TCP
+          port: 5353
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+{{- end }}

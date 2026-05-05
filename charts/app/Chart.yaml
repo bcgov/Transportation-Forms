@@ -1,8 +1,8 @@
 apiVersion: v2
 name: app
-description: Transportation Forms — umbrella chart (backend + frontend)
+description: Transportation Forms — umbrella chart (backend + frontend + public API)
 type: application
-version: 0.3.0
+version: 0.4.0
 appVersion: "2.0.0"
 keywords:
   - transportation-forms
@@ -18,3 +18,15 @@ dependencies:
   - name: frontend
     version: "1.0.0"
     repository: "file://../frontend"
+  # ── FEAT-0005 public-forms portal ──────────────────────────────────────────
+  # Both subcharts are conditionally enabled. Default OFF in DPR-1 so this
+  # umbrella bump is a no-op for existing DEV/TEST/PROD releases until DPR-2
+  # ships the NGINX edge config.
+  - name: public-backend
+    version: "1.2.0"
+    repository: "file://../public-backend"
+    condition: publicBackend.enabled
+  - name: public-frontend
+    version: "0.1.0"
+    repository: "file://../public-frontend"
+    condition: publicFrontend.enabled

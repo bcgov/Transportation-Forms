@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "public-frontend.fullname" . }}-bot-ua
+  labels:
+    {{- include "public-frontend.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public-frontend
+data:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Recognised social/search crawlers that should receive server-rendered OG
+  # HTML instead of the SPA shell when hitting /forms/{slug} (US-009 AC1/2/7).
+  # Maintained as a separate ConfigMap so the platform team can iterate on
+  # the UA list without a chart bump — kubelet reloads on edit, the
+  # checksum/bot-ua-config annotation in deployment.yaml triggers rollout.
+  # Included at http{} level via /etc/nginx/nginx.conf
+  # (`include /etc/nginx/conf.d/maps/*.conf;`).
+  # ─────────────────────────────────────────────────────────────────────────
+  bot_ua_map.conf: |
+    map $http_user_agent $is_bot {
+        default 0;
+        "~*googlebot"            1;
+        "~*bingbot"              1;
+        "~*yandexbot"            1;
+        "~*duckduckbot"          1;
+        "~*twitterbot"           1;
+        "~*facebookexternalhit"  1;
+        "~*linkedinbot"          1;
+        "~*slackbot"             1;
+        "~*slack-imgproxy"       1;
+        "~*discordbot"           1;
+        "~*whatsapp"             1;
+        "~*pinterestbot"         1;
+        "~*telegrambot"          1;
+        "~*vkshare"              1;
+        "~*w3c_validator"        1;
+        "~*applebot"             1;
+    }
