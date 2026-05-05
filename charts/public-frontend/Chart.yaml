@@ -1,0 +1,14 @@
+apiVersion: v2
+name: public-frontend
+description: Transportation Forms — public frontend (NGINX edge + Coraza WAF + SPA)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - transportation-forms
+  - bcgov
+  - openshift
+  - public
+home: https://github.com/bcgov/transportation-forms
+maintainers:
+  - name: BCGov Transportation Forms Team

@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "public-backend.fullname" . }}
+  labels:
+    {{- include "public-backend.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public-backend
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "public-backend.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: public-backend
+  strategy:
+    {{- toYaml .Values.deploymentStrategy | nindent 4 }}
+  template:
+    metadata:
+      labels:
+        {{- include "public-backend.labels" . | nindent 8 }}
+        app.kubernetes.io/component: public-backend
+    spec:
+      volumes:
+        # ── DPR-2: NGINX sidecar removed; only FastAPI scratch tmp remains ──
+        - name: app-tmp
+          emptyDir: {}
+      containers:
+        # ── FastAPI public-backend (read-only API; now the sole container) ─
+        - name: public-backend
+          image: {{ include "public-backend.image" . }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          env:
+            - name: ENVIRONMENT
+              value: {{ .Values.env.environment | quote }}
+            - name: DATABASE_URL_READONLY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: database-url
+            - name: LOG_LEVEL
+              value: {{ .Values.env.logLevel | quote }}
+            - name: PUBLIC_CORS_ORIGINS
+              value: {{ .Values.env.publicCorsOrigins | quote }}
+            - name: CACHE_MAX_AGE
+              value: {{ .Values.env.cacheMaxAge | quote }}
+            # ── Shared internal-auth token (FE injects, BE validates) ──────
+            - name: INTERNAL_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "public-backend.internalAuthSecretName" . }}
+                  key: {{ .Values.internalAuth.secretKey }}
+            # ── Externally visible base URL (used for OG / sitemap) ────────
+            - name: PUBLIC_BASE_URL
+              value: {{ .Values.publicBaseUrl | quote }}
+          volumeMounts:
+            - name: app-tmp
+              mountPath: /tmp
+          # ── DPR-2: probes target FastAPI directly (sidecar removed) ────
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          resources:
+            {{- toYaml .Values.resources.app | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 0
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

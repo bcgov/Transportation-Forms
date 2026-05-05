@@ -1,0 +1,232 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "public-frontend.fullname" . }}-nginx
+  labels:
+    {{- include "public-frontend.labels" . | nindent 4 }}
+    app.kubernetes.io/component: public-frontend
+data:
+  # ───────────────────────────────────────────────────────────────────────────
+  # default.conf.template — rendered by /entrypoint.sh into
+  # /etc/nginx/conf.d/00-default.conf.  Owns:
+  #   • upstream upstream_public_backend  (FastAPI, in-cluste  #   • server :3000 — public traffic (Coraza WAF rate limit + cache)
+  #   • server :3001 — health-only (it)
+  # All ${VAR} placeholders are filled from env at container start.
+  # ───────────────────────────────────────────────────────────────────────────
+  default.conf.template: |
+    upstream upstream_public_backend {
+        server ${BACKEND_UPSTREAM_HOST}:${BACKEND_UPSTREAM_PORT};
+        keepalive 32;
+    }
+
+    # The shared X-Internal-Auth token is injected on every proxied request.
+    # Held in a map so the secret value is not re-evaluated per request.
+    map $request_method $internal_auth_value {
+        default "${INTERNAL_AUTH_SECRET}";
+    }
+
+    # ── :3000 — public edge (WAF + rate limit + cache + SPA shell) ───────────
+    server {
+        listen 3000 default_server;
+        server_name _;
+
+        # Coraza WAF — directive identical to ModSecurity v3.
+        modsecurity on;
+        modsecurity_rules_file /etc/coraza/main.conf;
+
+        # Method allow-list (defence-in-depth — read-only public API).
+        if ($request_method !~ ^(GET|HEAD|OPTIONS)$) {
+            return 405;
+        }
+
+        # SPA static root — assets baked into the image.
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # ── Global security headers (US-009 AC4) ─────────────────────────────
+        # OpenShift Route terminates TLS upstream of us, so emit unconditionally.
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), camera=(), microphone=(), payment=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+
+        # ── robots.txt — substitute PUBLIC_BASE_URL placeholder per-env ──────
+        location = /robots.txt {
+            sub_filter "PUBLIC_BASE_URL_PLACEHOLDER" "${PUBLIC_BASE_URL}";
+            sub_filter_once on;
+            sub_filter_types text/plain;
+            try_files /robots.txt =404;
+        }
+
+        # ── Bot-UA → server-rendered OG re-route (US-009 AC1/AC2/AC7) ────────
+        # If a recognised crawler hits /forms/{slug}, transparently serve the
+        # OG endpoint instead of the SPA shell so previews get real metadata.
+        location ~ ^/forms/[^/]+/?$ {
+            if ($is_bot) {
+                rewrite ^/forms/([^/]+)/?$ /api/public/v1/forms/$1/og last;
+            }
+            try_files $uri /index.html;
+        }
+
+        # ── Public read-only API — proxied to FastAPI ────────────────────────────
+        location /api/public/v1/ {
+            limit_req         zone=public burst=20 nodelay;
+            limit_req_status  429;
+        {{- if .Values.cache.enabled }}
+            proxy_cache             public_cache;
+            proxy_cache_key         "$scheme$request_method$host$request_uri";
+            proxy_cache_valid       200 5m;
+            proxy_cache_use_stale   error timeout updating http_500 http_502 http_503 http_504;
+            proxy_cache_lock        on;
+        {{- end }}
+            proxy_set_header  Host              $host;
+            proxy_set_header  X-Real-IP         $remote_addr;
+            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-Proto $scheme;
+            proxy_set_header  X-Request-ID      $request_id;
+            proxy_set_header  X-Internal-Auth   $internal_auth_value;
+
+            proxy_hide_header Set-Cookie;
+            proxy_hide_header X-Powered-By;
+            proxy_hide_header Server;
+
+            proxy_http_version 1.1;
+            proxy_pass http://upstream_public_backend;
+        }
+
+        # Sitemap-specific cache override (1h).
+        location = /api/public/v1/sitemap.xml {
+            limit_req         zone=public burst=20 nodelay;
+            limit_req_status  429;
+
+            proxy_cache             public_cache;
+            proxy_cache_key         "$scheme$request_method$host$request_uri";
+            proxy_cache_valid       200 1h;
+            proxy_cache_use_stale   error timeout updating http_500 http_502 http_503 http_504;
+
+            proxy_set_header  Host              $host;
+            proxy_set_header  X-Real-IP         $remote_addr;
+            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-Proto $scheme;
+            proxy_set_header  X-Request-ID      $request_id;
+            proxy_set_header  X-Internal-Auth   $internal_auth_value;
+
+            proxy_hide_header Set-Cookie;
+            proxy_hide_header X-Powered-By;
+            proxy_hide_header Server;
+
+            proxy_http_version 1.1;
+            proxy_pass http://upstream_public_backend;
+        }
+
+        # OG endpoint cache override (10m — slower-moving than the list).
+        location ~ ^/api/public/v1/forms/[^/]+/og$ {
+            limit_req         zone=public burst=20 nodelay;
+            limit_req_status  429;
+
+            proxy_cache             public_cache;
+            proxy_cache_key         "$scheme$request_method$host$request_uri";
+            proxy_cache_valid       200 10m;
+
+            proxy_set_header  Host              $host;
+            proxy_set_header  X-Real-IP         $remote_addr;
+            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-Proto $scheme;
+            proxy_set_header  X-Request-ID      $request_id;
+            proxy_set_header  X-Internal-Auth   $internal_auth_value;
+
+            proxy_hide_header Set-Cookie;
+            proxy_hide_header X-Powered-By;
+            proxy_hide_header Server;
+
+            proxy_http_version 1.1;
+            proxy_pass http://upstream_public_backend;
+        }
+
+        # ── Internal-only S3 X-Accel-Redirect target ─────────────────────────
+        # Marked `internal;` so external clients cannot hit it directly; only
+        # public-backend's X-Accel-Redirect responses can pivot here.
+        location /internal-s3/ {
+            internal;
+
+            # Strip the /internal-s3/ prefix and proxy to the configured S3
+            # endpoint. Rendered at boot from S3_INTERNAL_UPSTREAM.
+            rewrite ^/internal-s3/(.*)$ /$1 break;
+            proxy_pass ${S3_INTERNAL_UPSTREAM};
+
+            proxy_set_header  Host  $proxy_host;
+            proxy_hide_header x-amz-id-2;
+            proxy_hide_header x-amz-request-id;
+            proxy_hide_header x-amz-meta-server-side-encryption;
+            proxy_hide_header x-amz-server-side-encryption;
+            proxy_hide_header x-amz-version-id;
+            proxy_hide_header Server;
+            proxy_hide_header Set-Cookie;
+
+            proxy_http_version 1.1;
+        }
+
+        # ── SPA shell fallback — serve index.html for any unknown route ──────
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
+
+    # ── :3001 — health probe port (no WAF, no rate limit, no auth) ───────────
+    server {
+        listen 3001 default_server;
+        server_name _;
+        access_log off;
+
+        location = /healthz {
+            return 200 "ok\n";
+            add_header Content-Type text/plain;
+        }
+
+        location / {
+            return 404;
+        }
+    }
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # coraza.conf.template — rendered into /etc/coraza/main.conf at boot.
+  # SecRuleEngine is per-env: DetectionOnly (DEV) vs. On (TEST/PROD).
+  # ───────────────────────────────────────────────────────────────────────────
+  coraza.conf.template: |
+    # ── Engine ───────────────────────────────────────────────────────────────
+    SecRuleEngine ${CORAZA_RULE_ENGINE}
+
+    # ── Request body inspection (1 MB cap; we only accept GET/HEAD/OPTIONS) ──
+    SecRequestBodyAccess On
+    SecRequestBodyLimit 1048576
+    SecRequestBodyNoFilesLimit 131072
+    SecRequestBodyLimitAction Reject
+
+    # ── Response body inspection: OFF (saves CPU; FastAPI sanitises already) ──
+    SecResponseBodyAccess Off
+
+    # ── Misc engine config ───────────────────────────────────────────────────
+    SecTmpDir /tmp
+    SecDataDir /tmp
+    SecAuditEngine RelevantOnly
+    SecAuditLogRelevantStatus "^(?:5|4(?!04))"
+    SecAuditLogParts ABIJDEFHZ
+    SecAuditLogType Serial
+    SecAuditLog /dev/stdout
+
+    SecPcreMatchLimit 100000
+    SecPcreMatchLimitRecursion 100000
+    SecArgumentSeparator &
+    SecCookieFormat 0
+    SecUnicodeMapFile unicode.mapping 20127
+
+    # ── Default action (block w/ 403 in On mode; logged in DetectionOnly) ────
+    SecDefaultAction "phase:1,log,auditlog,pass"
+    SecDefaultAction "phase:2,log,auditlog,pass"
+
+    # ── OWASP CRS v4 (shipped at /etc/coraza/coreruleset/ in upstream image) ──
+    # If the image relocates CRS, update this Include path.
+    Include /etc/coraza/coreruleset/crs-setup.conf.example
+    Include /etc/coraza/coreruleset/rules/*.conf
