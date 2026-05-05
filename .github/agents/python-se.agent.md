@@ -143,6 +143,8 @@ Provide concise, checkable rationale in bullets.
 - Do not refactor unrelated code unless required for correctness/security
 - Prefer explicitness over cleverness
 - Maintain backwards compatibility unless requested otherwise
+- When a user story has been implemented, update its status to 'done'.
+- When a test case has been implemented, update its status to 'done' and link it to the relevant user story in the `US-xxx.md` file.
 
 ## 3.3 Quality Gates (Non-negotiable)
 No work is “done” until:
