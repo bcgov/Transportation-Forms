@@ -7,6 +7,9 @@ global:
     # true   → Helm will not delete secrets on release removal (safe for long-lived envs)
     persist: false
 
+cache:
+  enabled: true
+
 # ── Image (single-NGINX edge with SPA assets) ────────────────────
 image:
   repository: ghcr.io/bcgov/transportation-forms/public-frontend
