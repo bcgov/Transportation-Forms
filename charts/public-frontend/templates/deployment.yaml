@@ -28,8 +28,6 @@ spec:
         checksum/robots: {{ include (print $.Template.BasePath "/configmap-robots.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "public-frontend.serviceAccountName" . }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       volumes:
         # ── ConfigMap-supplied templates (read-only) ────────────────────────
         - name: nginx-templates
@@ -128,7 +126,10 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
-            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

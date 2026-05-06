@@ -30,6 +30,12 @@ data:
         listen 3000 default_server;
         server_name _;
 
+<<<<<<< HEAD
+=======
+        # Coraza WAF — directive identical to ModSecurity v3.
+        # modsecurity on;
+        # modsecurity_rules_file /etc/coraza/main.conf;
+>>>>>>> f840b5faa984f7cc0eb6d3df3ce577417d064118
 
         # Method allow-list (defence-in-depth — read-only public API).
         if ($request_method !~ ^(GET|HEAD|OPTIONS)$) {
@@ -186,5 +192,8 @@ data:
             return 404;
         }
     }
+<<<<<<< HEAD
 
   
+=======
+>>>>>>> f840b5faa984f7cc0eb6d3df3ce577417d064118
