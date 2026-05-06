@@ -3,7 +3,7 @@ services:
   migrations:
     build:
       context: .
-      dockerfile: migrations/Dockerfile
+      dockerfile: apps/backend/migrations/Dockerfile
     container_name: transportation-forms-migrations
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
@@ -17,7 +17,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: apps/backend/Dockerfile
     container_name: transportation-forms-app
     ports:
       - "8000:8000"
@@ -42,7 +42,7 @@ services:
       - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
       - KEYCLOAK_REDIRECT_URI=${KEYCLOAK_REDIRECT_URI}
     volumes:
-      - ./backend:/app/backend
+      - ./apps/backend:/app/backend
     depends_on:
       migrations:
         condition: service_completed_successfully
@@ -54,7 +54,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: frontend/Dockerfile
+      dockerfile: apps/frontend/Dockerfile
     container_name: transportation-forms-frontend
     ports:
       - "3000:3000"

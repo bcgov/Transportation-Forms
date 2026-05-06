@@ -34,7 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=build /install /usr/local
 
 # Copy application code
-COPY backend/ ./backend/
+COPY apps/backend/ ./backend/
 COPY entrypoint.sh .
 
 # OpenShift compatibility: UID 1001, root group (GID 0)

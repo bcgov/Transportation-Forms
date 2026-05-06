@@ -110,9 +110,9 @@ jobs:
           environment: ${{ inputs.environment }}
           values_file: >-
             ${{
-              inputs.environment == 'prod' && 'charts/crunchy/values-prod.yml' ||
-              inputs.environment == 'test' && 'charts/crunchy/values-test.yml' ||
-              'charts/crunchy/values.yml'
+              inputs.environment == 'prod' && 'infra/charts/crunchy/values-prod.yml' ||
+              inputs.environment == 'test' && 'infra/charts/crunchy/values-test.yml' ||
+              'infra/charts/crunchy/values.yml'
             }}
           s3_access_key: ${{ secrets.s3_access_key }}
           s3_secret_key: ${{ secrets.s3_secret_key }}
@@ -127,7 +127,7 @@ jobs:
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
-            helm dependency update charts/app
+            helm dependency update infra/charts/app
 
       - name: Helm upgrade / install
         uses: bcgov/action-oc-runner@v1.4.1
@@ -137,9 +137,9 @@ jobs:
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
             set -euo pipefail
-            helm dependency update charts/app
+            helm dependency update infra/charts/app
             RELEASE_NAME="transportation-forms-${{ inputs.environment }}"
-            CHART="charts/app"
+            CHART="infra/charts/app"
             BACKEND_TAG="${{ inputs.backend_tag }}"
             MIGRATIONS_TAG="${{ inputs.migrations_tag }}"
             FRONTEND_TAG="${{ inputs.frontend_tag }}"
