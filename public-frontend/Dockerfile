@@ -26,7 +26,7 @@ COPY --chown=1001:0 public-frontend/index.html      /usr/share/nginx/html/index.
 COPY --chown=1001:0 public-frontend/css/            /usr/share/nginx/html/css/
 COPY --chown=1001:0 public-frontend/js/             /usr/share/nginx/html/js/
 COPY --chown=1001:0 public-frontend/fonts/          /usr/share/nginx/html/fonts/
-# COPY --chown=1001:0 public-frontend/assets/         /usr/share/nginx/html/assets/
+COPY --chown=1001:0 public-frontend/assets/         /usr/share/nginx/html/assets/
 COPY --chown=1001:0 public-frontend/robots.txt      /usr/share/nginx/html/robots.txt
 
 # Custom main nginx.conf (http{}-level zones + map includes)
