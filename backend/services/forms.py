@@ -573,11 +573,17 @@ class FormService:
         )
 
     @staticmethod
-    def approve_form(db: Session, form_id: UUID, approver_id: UUID) -> Form:
+    def approve_form(
+        db: Session,
+        form_id: UUID,
+        approver_id: UUID,
+        allow_self_approve: bool = False,
+    ) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
 
-        # BR-002: Separation of duties — always enforced
-        if str(form.created_by_id) == str(approver_id):
+        # BR-002: Separation of duties.
+        # Bypassed only when the caller explicitly holds form:approve-self (FEAT-0007).
+        if str(form.created_by_id) == str(approver_id) and not allow_self_approve:
             raise FormWorkflowValidationError(
                 "You cannot approve your own form submission."
             )

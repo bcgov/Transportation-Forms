@@ -30,9 +30,6 @@ data:
         listen 3000 default_server;
         server_name _;
 
-        # Coraza WAF — directive identical to ModSecurity v3.
-        modsecurity on;
-        modsecurity_rules_file /etc/coraza/main.conf;
 
         # Method allow-list (defence-in-depth — read-only public API).
         if ($request_method !~ ^(GET|HEAD|OPTIONS)$) {
@@ -190,43 +187,4 @@ data:
         }
     }
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # coraza.conf.template — rendered into /etc/coraza/main.conf at boot.
-  # SecRuleEngine is per-env: DetectionOnly (DEV) vs. On (TEST/PROD).
-  # ───────────────────────────────────────────────────────────────────────────
-  coraza.conf.template: |
-    # ── Engine ───────────────────────────────────────────────────────────────
-    SecRuleEngine ${CORAZA_RULE_ENGINE}
-
-    # ── Request body inspection (1 MB cap; we only accept GET/HEAD/OPTIONS) ──
-    SecRequestBodyAccess On
-    SecRequestBodyLimit 1048576
-    SecRequestBodyNoFilesLimit 131072
-    SecRequestBodyLimitAction Reject
-
-    # ── Response body inspection: OFF (saves CPU; FastAPI sanitises already) ──
-    SecResponseBodyAccess Off
-
-    # ── Misc engine config ───────────────────────────────────────────────────
-    SecTmpDir /tmp
-    SecDataDir /tmp
-    SecAuditEngine RelevantOnly
-    SecAuditLogRelevantStatus "^(?:5|4(?!04))"
-    SecAuditLogParts ABIJDEFHZ
-    SecAuditLogType Serial
-    SecAuditLog /dev/stdout
-
-    SecPcreMatchLimit 100000
-    SecPcreMatchLimitRecursion 100000
-    SecArgumentSeparator &
-    SecCookieFormat 0
-    SecUnicodeMapFile unicode.mapping 20127
-
-    # ── Default action (block w/ 403 in On mode; logged in DetectionOnly) ────
-    SecDefaultAction "phase:1,log,auditlog,pass"
-    SecDefaultAction "phase:2,log,auditlog,pass"
-
-    # ── OWASP CRS v4 (shipped at /etc/coraza/coreruleset/ in upstream image) ──
-    # If the image relocates CRS, update this Include path.
-    Include /etc/coraza/coreruleset/crs-setup.conf.example
-    Include /etc/coraza/coreruleset/rules/*.conf
+  

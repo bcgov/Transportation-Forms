@@ -24,6 +24,7 @@ router = APIRouter(prefix="/staff/forms", tags=["Form Workflow"])
 
 _PERM_SUBMIT = "form:submit_for_review"
 _PERM_APPROVE = "form:approve"
+_PERM_APPROVE_SELF = "form:approve-self"  # FEAT-0007
 _PERM_REVIEW = "form:review"
 _PERM_ARCHIVE = "form:archive"
 
@@ -210,9 +211,16 @@ async def approve_form(
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
     _require_permissions(current_user, _PERM_APPROVE, _PERM_REVIEW)
+    # FEAT-0007: permit self-approval only when the token carries form:approve-self
+    allow_self_approve = _PERM_APPROVE_SELF in set(current_user.permissions or [])
 
     try:
-        form = FormService.approve_form(db, UUID(form_id), UUID(current_user.sub))
+        form = FormService.approve_form(
+            db,
+            UUID(form_id),
+            UUID(current_user.sub),
+            allow_self_approve=allow_self_approve,
+        )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
         _handle_workflow_error(exc)
