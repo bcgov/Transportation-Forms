@@ -88,6 +88,7 @@ title: <title>
 owner: Business Analyst
 status: stub
 created: YYYY-MM-DD
+updated: YYYY-MM-DD
 depends_on: []
 ---
 
@@ -117,6 +118,7 @@ title: <title>
 owner: Solution Architect
 status: stub
 created: YYYY-MM-DD
+updated: YYYY-MM-DD
 depends_on: []
 ---
 
@@ -145,6 +147,7 @@ title: <title>
 owner: Security Reviewer
 status: stub
 created: YYYY-MM-DD
+updated: YYYY-MM-DD
 depends_on: []
 ---
 
@@ -170,6 +173,7 @@ title: <title>
 owner: Quality Analyst
 status: stub
 created: YYYY-MM-DD
+updated: YYYY-MM-DD
 depends_on: []
 ---
 
@@ -192,6 +196,7 @@ title: <title>
 owner: Software Engineer
 status: stub
 created: YYYY-MM-DD
+updated: YYYY-MM-DD
 depends_on: []
 ---
 # Implementation Notes (TBD by Software Engineer)
