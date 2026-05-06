@@ -3,9 +3,9 @@
 # instead of OpenShift.
 #
 # Usage:
-#   helm install transportation-forms-local charts/frontend \
-#     -f charts/frontend/values.yaml \
-#     -f charts/frontend/values-local.yaml \
+#   helm install transportation-forms-local infra/charts/frontend \
+#     -f infra/charts/frontend/values.yaml \
+#     -f infra/charts/frontend/values-local.yaml \
 #     --set image.tag=local
 
 # ── Pull from local image cache (no ghcr.io pull) ────────────────────────────

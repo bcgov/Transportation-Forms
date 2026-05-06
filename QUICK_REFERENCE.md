@@ -96,23 +96,23 @@ SELECT * FROM forms WHERE category = 'permits' AND deleted_at IS NULL;
 # Run all tests
 docker compose exec \
   -e DATABASE_URL='postgresql://transportation:password@db:5432/transportation_forms' \
-  app python -m pytest tests/ -v
+  app python -m pytest apps/backend/tests/ -v
 
 # Run specific test
 docker compose exec \
   -e DATABASE_URL='postgresql://transportation:password@db:5432/transportation_forms' \
-  app python -m pytest tests/test_forms.py -v
+  app python -m pytest apps/backend/tests/test_forms.py -v
 ```
 
 ## File Locations
-- **Backend Service:** `backend/services/forms.py`
-- **API Routes:** `backend/routes/forms.py`
-- **Frontend UI:** `frontend/index.html`
-- **Frontend Caddy Config:** `frontend/Caddyfile`
-- **WAF Config:** `frontend/coraza.conf`
-- **Tests:** `tests/`
+- **Backend Service:** `apps/backend/services/forms.py`
+- **API Routes:** `apps/backend/routes/forms.py`
+- **Frontend UI:** `apps/frontend/index.html`
+- **Frontend Caddy Config:** `apps/frontend/Caddyfile`
+- **WAF Config:** `apps/frontend/coraza.conf`
+- **Tests:** `apps/backend/tests/`
 - **Container Config:** `docker-compose.yml`
-- **Helm Chart:** `charts/app/`
+- **Helm Chart:** `infra/charts/app/`
 - **CI/CD Workflows:** `.github/workflows/`
 
 ## Status

@@ -22,16 +22,16 @@ You are ONLY allowed to create/modify files in these paths:
 - `/.github/workflows/`
 - `/.github/trivy.yaml`
 - `/.github/trivy-secret.yaml`
-- `/charts/`
-- `/deploy/`
-- `/backend/Dockerfile`
-- `/frontend/Dockerfile`
-- `/migrations/Dockerfile`
+- `/infra/charts/`
+- `/infra/local/`
+- `/apps/backend/Dockerfile`
+- `/apps/frontend/Dockerfile`
+- `/apps/backend/migrations/Dockerfile`
+- `/apps/public-backend/Dockerfile`
+- `/apps/public-frontend/Dockerfile`
 - `/docker-compose.yml`
 - `/entrypoint.sh`
 - `/plan/`
-- `/public-backend/Dockerfile`
-- `/public-frontend/Dockerfile`
 
 **If a requested change requires edits outside these paths, STOP and:**
 - Explain why it cannot be completed within allowed scope
@@ -149,14 +149,14 @@ This repo builds 3 separate container images:
   - TEST / PROD: tagged `test` / `prod`
   - On PR merge: PR images re-tagged as `latest`
 
-Important: The migrations image is separate from the backend image. Changes to `alembic/` require rebuilding migrations, not backend.
+Important: The migrations image is separate from the backend image. Changes to `apps/backend/alembic/` require rebuilding migrations, not backend.
 
 ---
 
 # 6) HELM CHART TOPOLOGY
 
 ```
-charts/
+infra/charts/
 ├── app/           ← Umbrella chart (depends on backend + frontend via file://)
 │   ├── values.yaml          ← Base / DEV defaults
 │   ├── values-prod.yaml     ← Production overrides
@@ -223,10 +223,10 @@ PR environments are ephemeral: deployed to DEV namespace with `persist=false`, c
 
 | Tool | Target | Output | Status |
 |------|--------|--------|--------|
-| Bandit | `backend/` | JSON report | Active |
+| Bandit | `apps/backend/` | JSON report | Active |
 | Trivy | Filesystem | SARIF → GitHub Security | Active |
 | OWASP ZAP | Deployed env | Weekly scheduled scan | Active |
-| SonarCloud | `backend/` | Coverage + quality gate | Configured but test job disabled |
+| SonarCloud | `apps/backend/` | Coverage + quality gate | Configured but test job disabled |
 | CodeQL | — | — | Commented out |
 
 Trivy config: `.github/trivy.yaml` (scanners: vuln, secret, misconfig; severity: CRITICAL, HIGH)
@@ -271,15 +271,15 @@ The `.deployer.yml` reusable workflow expects these secrets:
 2. Secret name `transportation-forms-secrets` is hardcoded, not release-scoped
 3. Test job in `analysis.yml` is disabled (`if: false`)
 4. Frontend health probes MUST hit port 3001 to bypass the Coraza WAF — do not change probe ports
-5. Migrations image is separate from backend — `alembic/` changes require rebuilding migrations, not backend
-6. `public-backend/` exists as a separate read-only API component (NGINX sidecar) — not yet integrated into main Helm charts
+5. Migrations image is separate from backend — `apps/backend/alembic/` changes require rebuilding migrations, not backend
+6. `apps/public-backend/` exists as a separate read-only API component (NGINX sidecar) — not yet integrated into main Helm charts
 7. `dorny/paths-filter@v3` is used for conditional builds on master push; path patterns are defined in `dev.yml`
 
 ---
 
 # 13) LOCAL DEVELOPMENT
 
-- Taskfile-based (`deploy/local/Taskfile.yml`) for Rancher Desktop / k3s
+- Taskfile-based (`infra/local/Taskfile.yml`) for Rancher Desktop / k3s
 - Uses standard Kubernetes Ingress (not OpenShift Routes), disables NetworkPolicy
 - `values-local.yaml` overlay; Crunchy PGO operator installed locally
 - Crunchy chart patched to replace `openshift: true` → `false` for k3s compatibility

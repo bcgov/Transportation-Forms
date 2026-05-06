@@ -22,18 +22,18 @@ RUN set -eux; \
 # Bake SPA static assets
 # Build context = repo root. readOnlyRootFilesystem=true at runtime, so the
 # SPA tree must be present in the image layer (not a runtime volume).
-COPY --chown=1001:0 public-frontend/index.html      /usr/share/nginx/html/index.html
-COPY --chown=1001:0 public-frontend/css/            /usr/share/nginx/html/css/
-COPY --chown=1001:0 public-frontend/js/             /usr/share/nginx/html/js/
-COPY --chown=1001:0 public-frontend/fonts/          /usr/share/nginx/html/fonts/
-COPY --chown=1001:0 public-frontend/assets/         /usr/share/nginx/html/assets/
-COPY --chown=1001:0 public-frontend/robots.txt      /usr/share/nginx/html/robots.txt
+COPY --chown=1001:0 apps/public-frontend/index.html      /usr/share/nginx/html/index.html
+COPY --chown=1001:0 apps/public-frontend/css/            /usr/share/nginx/html/css/
+COPY --chown=1001:0 apps/public-frontend/js/             /usr/share/nginx/html/js/
+COPY --chown=1001:0 apps/public-frontend/fonts/          /usr/share/nginx/html/fonts/
+COPY --chown=1001:0 apps/public-frontend/assets/         /usr/share/nginx/html/assets/
+COPY --chown=1001:0 apps/public-frontend/robots.txt      /usr/share/nginx/html/robots.txt
 
 # Custom main nginx.conf (http{}-level zones + map includes)
-COPY --chown=1001:0 charts/public-frontend/files/nginx.conf      /etc/nginx/nginx.conf
+COPY --chown=1001:0 infra/charts/public-frontend/files/nginx.conf      /etc/nginx/nginx.conf
 
 # Entrypoint: render conf.d templates from envsubst, then exec
-COPY --chown=1001:0 charts/public-frontend/files/entrypoint.sh   /entrypoint.sh
+COPY --chown=1001:0 infra/charts/public-frontend/files/entrypoint.sh   /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod g+rx /entrypoint.sh
 
 # Drop back to a non-root UID; OpenShift will override at runtime, but this
