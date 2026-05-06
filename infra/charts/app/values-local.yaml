@@ -3,9 +3,9 @@
 # instead of OpenShift.
 #
 # Usage:
-#   helm install transportation-forms-local charts/app \
-#     -f charts/app/values.yaml \
-#     -f charts/app/values-local.yaml \
+#   helm install transportation-forms-local infra/charts/app \
+#     -f infra/charts/app/values.yaml \
+#     -f infra/charts/app/values-local.yaml \
 #     --set backend.secrets.databaseUrl="..." \
 #     --set backend.secrets.secretKey="..."
 

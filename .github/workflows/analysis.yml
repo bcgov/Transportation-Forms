@@ -62,8 +62,8 @@ jobs:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
         run: |
-          pytest tests/ \
-            --cov=backend \
+          pytest apps/backend/tests/ \
+            --cov=apps/backend \
             --cov-report=xml \
             --cov-report=html \
             --cov-report=term \
@@ -97,8 +97,8 @@ jobs:
             -Dsonar.organization=bcgov
             -Dsonar.projectKey=bcgov_transportation-forms
             -Dsonar.python.coverage.reportPaths=coverage.xml
-            -Dsonar.sources=backend
-            -Dsonar.tests=tests
+            -Dsonar.sources=apps/backend
+            -Dsonar.tests=apps/backend/tests
         continue-on-error: true   # SonarCloud not yet configured — will pass once SONAR_TOKEN is set
 
       - name: Upload test results
@@ -129,8 +129,8 @@ jobs:
 
       - name: Run Bandit
         run: |
-          bandit -r backend/ -c .bandit -ll -f json -o bandit-report.json
-          bandit -r backend/ -c .bandit -ll
+          bandit -r apps/backend/ -c .bandit -ll -f json -o bandit-report.json
+          bandit -r apps/backend/ -c .bandit -ll
 
       - name: Upload Bandit report
         if: always()

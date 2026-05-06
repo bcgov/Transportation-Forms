@@ -30,7 +30,7 @@ repos:
     hooks:
       - id: bandit
         args: [-c, .bandit]
-        exclude: ^tests/
+        exclude: ^apps/backend/tests/
 
 ci:
   autofix_commit_msg: |
