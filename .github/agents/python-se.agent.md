@@ -145,6 +145,7 @@ Provide concise, checkable rationale in bullets.
 - Maintain backwards compatibility unless requested otherwise
 - When a user story has been implemented, update its status to 'done'.
 - When a test case has been implemented, update its status to 'done' and link it to the relevant user story in the `US-xxx.md` file.
+- Include implementation date in the imeplementation notes for traceability for each user story implemented.
 
 ## 3.3 Quality Gates (Non-negotiable)
 No work is “done” until:
