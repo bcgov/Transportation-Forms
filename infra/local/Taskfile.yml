@@ -16,18 +16,18 @@
 #   - On Windows: C:\Program Files\Git\bin must be in PATH (provides sh.exe for Task)
 #
 # Usage:
-#   cd deploy/local && task all          # full pipeline
-#   task -d deploy/local all             # from repo root
-#   task -d deploy/local build           # rebuild images only
-#   task -d deploy/local build:frontend  # rebuild frontend image only
-#   task -d deploy/local build:migrations # rebuild migrations image only
-#   task -d deploy/local build:backend         # rebuild backend image only
-#   task -d deploy/local build:public-frontend  # rebuild public-frontend image only
-#   task -d deploy/local build:public-backend   # rebuild public-backend image only
-#   task -d deploy/local deploy:db                 # Deploy db only
-#   task -d deploy/local deploy                 # redeploy app only
-#   task -d deploy/local teardown    # Remove app only (keeps database)
-#   task -d deploy/local teardown:all    # remove everything
+#   cd infra/local && task all          # full pipeline
+#   task -d infra/local all             # from repo root
+#   task -d infra/local build           # rebuild images only
+#   task -d infra/local build:frontend  # rebuild frontend image only
+#   task -d infra/local build:migrations # rebuild migrations image only
+#   task -d infra/local build:backend         # rebuild backend image only
+#   task -d infra/local build:public-frontend  # rebuild public-frontend image only
+#   task -d infra/local build:public-backend   # rebuild public-backend image only
+#   task -d infra/local deploy:db                 # Deploy db only
+#   task -d infra/local deploy                 # redeploy app only
+#   task -d infra/local teardown    # Remove app only (keeps database)
+#   task -d infra/local teardown:all    # remove everything
 # Run rollout if it doesn't get deployed:
 # Frontend Rollout: kubectl rollout restart deployment/transportation-forms-local-frontend -n default
 # Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-backend -n default
@@ -44,8 +44,8 @@ vars:
   ENV: local
   RELEASE_NAME: transportation-forms-local
   CRUNCHY_RELEASE: transportation-forms-local-crunchy
-  CHART: charts/app
-  CRUNCHY_CACHE: deploy/local/.action-crunchy
+  CHART: infra/charts/app
+  CRUNCHY_CACHE: infra/local/.action-crunchy
 
 set: [errexit, pipefail]
 
@@ -56,31 +56,31 @@ tasks:
     desc: Build the backend Docker image (tagged local)
     dir: ../..
     cmds:
-      - docker build -f backend/Dockerfile -t ghcr.io/bcgov/transportation-forms/backend:{{.TAG}} .
+      - docker build -f apps/backend/Dockerfile -t ghcr.io/bcgov/transportation-forms/backend:{{.TAG}} .
 
   build:frontend:
     desc: Build the frontend Docker image (tagged local)
     dir: ../..
     cmds:
-      - docker build -f frontend/Dockerfile -t ghcr.io/bcgov/transportation-forms/frontend:{{.TAG}} .
+      - docker build -f apps/frontend/Dockerfile -t ghcr.io/bcgov/transportation-forms/frontend:{{.TAG}} .
 
   build:migrations:
     desc: Build the migrations Docker image (tagged local)
     dir: ../..
     cmds:
-      - docker build -f migrations/Dockerfile -t ghcr.io/bcgov/transportation-forms/migrations:{{.TAG}} .
+      - docker build -f apps/backend/migrations/Dockerfile -t ghcr.io/bcgov/transportation-forms/migrations:{{.TAG}} .
 
   build:public-backend:
     desc: Build the public-backend Docker image (tagged local)
     dir: ../..
     cmds:
-      - docker build -f public-backend/Dockerfile -t ghcr.io/bcgov/transportation-forms/public-backend:{{.TAG}} .
+      - docker build -f apps/public-backend/Dockerfile -t ghcr.io/bcgov/transportation-forms/public-backend:{{.TAG}} .
 
   build:public-frontend:
     desc: Build the public-frontend Docker image (tagged local)
     dir: ../..
     cmds:
-      - docker build -f public-frontend/Dockerfile -t ghcr.io/bcgov/transportation-forms/public-frontend:{{.TAG}} .
+      - docker build -f apps/public-frontend/Dockerfile -t ghcr.io/bcgov/transportation-forms/public-frontend:{{.TAG}} .
 
   build:
     desc: Build all Docker images in parallel
@@ -139,8 +139,8 @@ tasks:
       - |
         helm upgrade --install "{{.CRUNCHY_RELEASE}}" \
           "{{.CRUNCHY_CACHE}}/charts/crunchy" \
-          -f charts/crunchy/values.yml \
-          -f deploy/local/crunchy-overrides.yaml \
+          -f infra/charts/crunchy/values.yml \
+          -f infra/local/crunchy-overrides.yaml \
           --timeout 5m
       # Wait for the PostgresCluster primary to become ready
       - |
@@ -202,7 +202,7 @@ tasks:
       # to expose the frontend and backend locally on Rancher Desktop's default port 80.
       - |
         echo "Applying local ingress..."
-        kubectl apply -f deploy/local/ingress.yaml
+        kubectl apply -f infra/local/ingress.yaml
 
   # ── Orchestration tasks ────────────────────────────────────────────────────
 
@@ -223,13 +223,13 @@ tasks:
     desc: Uninstall the application Helm release (keeps database)
     dir: ../..
     cmds:
-      - kubectl delete -f deploy/local/ingress.yaml --ignore-not-found || true
+      - kubectl delete -f infra/local/ingress.yaml --ignore-not-found || true
       - helm uninstall {{.RELEASE_NAME}} || true
 
   teardown:all:
     desc: Uninstall both the application and Crunchy PostgreSQL releases
     dir: ../..
     cmds:
-      - kubectl delete -f deploy/local/ingress.yaml --ignore-not-found || true
+      - kubectl delete -f infra/local/ingress.yaml --ignore-not-found || true
       - helm uninstall {{.RELEASE_NAME}} || true
       - helm uninstall {{.CRUNCHY_RELEASE}} || true

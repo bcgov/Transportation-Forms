@@ -5,13 +5,11 @@ on:
     branches:
       - master
     paths:
-      - 'alembic/**'
-      - 'charts/**'
-      - 'backend/**'
-      - 'frontend/**'
-      - 'migrations/**'
-      - 'public-backend/**'
-      - 'public-frontend/**'
+      - 'apps/backend/**'
+      - 'apps/frontend/**'
+      - 'apps/public-backend/**'
+      - 'apps/public-frontend/**'
+      - 'infra/charts/**'
       - 'requirements.txt'
       - 'entrypoint.sh'
   workflow_dispatch:
@@ -37,22 +35,22 @@ jobs:
         with:
           filters: |
             backend:
-              - 'backend/**'
+              - 'apps/backend/**'
               - 'requirements.txt'
               - 'entrypoint.sh'
             migrations:
-              - 'alembic/**'
-              - 'alembic.ini'
-              - 'migrations/**'
+              - 'apps/backend/alembic/**'
+              - 'apps/backend/alembic.ini'
+              - 'apps/backend/migrations/**'
             frontend:
-              - 'frontend/**'
+              - 'apps/frontend/**'
             public-backend:
-              - 'public-backend/**'
-              - 'charts/public-backend/**'
+              - 'apps/public-backend/**'
+              - 'infra/charts/public-backend/**'
             public-frontend:
-              - 'public-frontend/**'
-              - 'charts/public-frontend/**'
-              - 'charts/public-frontend/files/**'
+              - 'apps/public-frontend/**'
+              - 'infra/charts/public-frontend/**'
+              - 'infra/charts/public-frontend/files/**'
 
   # ── Build backend image ──────────────────────────────────────────────────────
   build-backend:
@@ -76,7 +74,7 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          build_file: backend/Dockerfile
+          build_file: apps/backend/Dockerfile
           build_context: .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -103,7 +101,7 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          build_file: migrations/Dockerfile
+          build_file: apps/backend/migrations/Dockerfile
           build_context: .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -130,7 +128,7 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          build_file: frontend/Dockerfile
+          build_file: apps/frontend/Dockerfile
           build_context: .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -157,7 +155,7 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          build_file: public-backend/Dockerfile
+          build_file: apps/public-backend/Dockerfile
           build_context: .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -184,7 +182,7 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          build_file: public-frontend/Dockerfile
+          build_file: apps/public-frontend/Dockerfile
           build_context: .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

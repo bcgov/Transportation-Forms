@@ -2,7 +2,7 @@
 # Entrypoint script for the FastAPI backend container.
 #
 # Migrations are no longer run here — they are executed by the migrations
-# init container (see charts/app/templates/backend/deployment.yaml) before
+# init container (see infra/charts/app/templates/backend/deployment.yaml) before
 # this container starts.  Seeding is a one-time administrative task and
 # must be run manually or via a separate Job in non-production environments.
 

@@ -47,14 +47,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=build /install /usr/local
 
 # Copy Alembic configuration and migration scripts
-COPY alembic/ ./alembic/
-COPY alembic.ini .
+COPY apps/backend/alembic/ ./alembic/
+COPY apps/backend/alembic.ini .
+# Patch paths for the container context: alembic/ is at /app/alembic, backend is at /app/backend
+RUN sed -i \
+      -e 's|^script_location = apps/backend/alembic|script_location = alembic|' \
+      -e 's|^prepend_sys_path = \. apps|prepend_sys_path = .|' \
+      alembic.ini
 
 # Copy backend package so alembic/env.py can import backend.database / backend.models
-COPY backend/ ./backend/
+COPY apps/backend/ ./backend/
 
 # Copy migrations entrypoint (runs migrations + reference data seeds + optional admin seed)
-COPY migrations/entrypoint.sh ./entrypoint.sh
+COPY apps/backend/migrations/entrypoint.sh ./entrypoint.sh
 
 # OpenShift compatibility: UID 1001, root group (GID 0)
 RUN chown -R 1001:0 /app && \

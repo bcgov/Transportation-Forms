@@ -76,16 +76,16 @@ docker compose down
 
 ```bash
 # Lint
-helm lint charts/app
+helm lint infra/charts/app
 
 # Dry-run render (DEV defaults)
-helm template transportation-forms charts/app
+helm template transportation-forms infra/charts/app
 
 # Render with TEST values
-helm template transportation-forms charts/app -f charts/app/values.yaml -f charts/app/values-test.yaml
+helm template transportation-forms infra/charts/app -f infra/charts/app/values.yaml -f infra/charts/app/values-test.yaml
 
 # Deploy (CI/CD does this automatically)
-helm upgrade --install transportation-forms-dev charts/app --namespace <ns>
+helm upgrade --install transportation-forms-dev infra/charts/app --namespace <ns>
 ```
 
 ## Verify Deployment in OpenShift

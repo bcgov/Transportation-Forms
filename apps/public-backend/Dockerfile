@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /install /usr/local
-COPY public-backend/ ./
+COPY apps/public-backend/ ./
 
 # OpenShift compatibility: UID 1001, root group (GID 0)
 RUN chown -R 1001:0 /app && \

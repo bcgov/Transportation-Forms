@@ -15,14 +15,14 @@ FROM caddy:2-alpine AS runtime
 COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
 
 # Copy static web assets
-COPY frontend/index.html      /srv/index.html
-COPY frontend/css/            /srv/static/css/
-COPY frontend/assets/         /srv/static/assets/
-COPY frontend/js/             /srv/static/js/
+COPY apps/frontend/index.html      /srv/index.html
+COPY apps/frontend/css/            /srv/static/css/
+COPY apps/frontend/assets/         /srv/static/assets/
+COPY apps/frontend/js/             /srv/static/js/
 
 # Copy Caddy and WAF configuration
-COPY frontend/Caddyfile       /etc/caddy/Caddyfile
-COPY frontend/coraza.conf     /etc/caddy/coraza.conf
+COPY apps/frontend/Caddyfile       /etc/caddy/Caddyfile
+COPY apps/frontend/coraza.conf     /etc/caddy/coraza.conf
 
 # OpenShift compatibility: UID 1001, root group (GID 0).
 # Caddy data/config dirs must be writable by the container user.
