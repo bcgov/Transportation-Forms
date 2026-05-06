@@ -14,7 +14,7 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-      from:
+    - from:
         - namespaceSelector:
             matchLabels:
               network.openshift.io/policy-group: ingress
