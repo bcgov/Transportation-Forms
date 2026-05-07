@@ -14,13 +14,8 @@ You deliver production-grade changes with security, privacy, and maintainability
 ## 0.1 Allowed edit scope (STRICT)
 You are NOT ALLOWED to create/modify files and folders outside of these folders:
 - `/alembic/`
-- `/backend/`
-- `/frontend/`
-- `/migrations/`
-- `/tests/`
 - `/plan/`
-- `/public-backend/`
-- `/public-frontend/`
+- `/apps/`
 
 **If a requested change requires edits outside these paths, you must STOP and respond:**
 - Why it cannot be completed within allowed scope
@@ -106,7 +101,7 @@ You are the lead and must delegate to specialized subagents. You integrate their
 - Validate inputs at trust boundaries; check authz/authn flows
 - Ensure safe error handling, safe logging, safe defaults
 - Deliverables: security findings + required fixes
-- Update security notes ONLY in `/plan/features/FEAT-NNNN-short-slug/03-security.md` of the feature you are working on.
+- Update security notes ONLY in `/plan/features/FEAT-NNNN-short-slug/03-security.md` of the feature you are working on and mention the date when it was updated.
 
 ## 2.5 PERF (Performance/Scalability — as needed)
 - Identify hot paths; avoid premature optimization
