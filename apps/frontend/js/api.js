@@ -13,13 +13,13 @@ window.addEventListener('auth:session-started', () => {
 });
 
 function _getAccessToken() {
-  return sessionStorage.getItem(AUTH_STORAGE_ACCESS) || '';
+  return localStorage.getItem(AUTH_STORAGE_ACCESS) || '';
 }
 
 function _clearAuthSession() {
-  sessionStorage.removeItem(AUTH_STORAGE_ACCESS);
-  sessionStorage.removeItem(AUTH_STORAGE_REFRESH);
-  sessionStorage.removeItem(AUTH_STORAGE_USER);
+  localStorage.removeItem(AUTH_STORAGE_ACCESS);
+  localStorage.removeItem(AUTH_STORAGE_REFRESH);
+  localStorage.removeItem(AUTH_STORAGE_USER);
   setCurrentUser(null);
   // Notify the rest of the app that the session was cleared
   window.dispatchEvent(new CustomEvent('auth:session-cleared'));
