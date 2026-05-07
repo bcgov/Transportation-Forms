@@ -106,3 +106,5 @@ plan
 infra/charts/app/charts/
 .agents/
 form-approval.md
+backend/
+QUICK_REFERENCE.md
