@@ -5,7 +5,7 @@
 //   When the backend is started with AUTH_DEMO_MODE=true, it accepts
 //   "Authorization: Bearer demo-token" and returns a pre-built admin TokenData.
 //   To use it in the browser, run in the console BEFORE page load:
-//     sessionStorage.setItem('tf_access_token', 'demo-token');
+//     localStorage.setItem('tf_access_token', 'demo-token');
 //   initializeAuth() will then call /auth/me with that token and receive a
 //   real user object back — no special frontend branching required.
 
@@ -21,6 +21,12 @@ export { tryRefreshToken };
 // refresh. Listen here to ensure signOut() clears state and navigates home.
 window.addEventListener('auth:session-expired', () => {
   _clearAuthSession();
+
+  const currentPath = window.location.pathname + window.location.search;
+  if (currentPath !== ROUTES.HOME && currentPath !== ROUTES.CALLBACK) {
+    sessionStorage.setItem('tf_return_url', currentPath);
+  }
+
   showAlert('Your session has expired. Please sign in again.', 'warning');
   if (window.location.pathname !== ROUTES.HOME) {
     window.history.replaceState({}, '', ROUTES.HOME);
@@ -29,25 +35,43 @@ window.addEventListener('auth:session-expired', () => {
   }
 });
 
+// ─── Cross-tab storage event ──────────────────────────────────────────────────
+window.addEventListener('storage', (event) => {
+  if (event.key === AUTH_STORAGE_ACCESS) {
+    if (!event.newValue && event.oldValue) {
+      // The token was removed in another tab.
+      _clearAuthSession();
+      if (window.location.pathname !== ROUTES.HOME) {
+        showAlert('You have been signed out in another tab.', 'info');
+        window.history.replaceState({}, '', ROUTES.HOME);
+        window.dispatchEvent(new CustomEvent('auth:navigate-home'));
+      }
+    } else if (event.newValue && !event.oldValue) {
+      // User logged in from another tab, reload to fetch correct state and context
+      window.location.reload();
+    }
+  }
+});
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 function _getRefreshToken() {
-  return sessionStorage.getItem(AUTH_STORAGE_REFRESH) || '';
+  return localStorage.getItem(AUTH_STORAGE_REFRESH) || '';
 }
 
 function _saveAuthSession(accessToken, refreshToken, user) {
-  sessionStorage.setItem(AUTH_STORAGE_ACCESS, accessToken);
-  sessionStorage.setItem(AUTH_STORAGE_REFRESH, refreshToken);
-  sessionStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(user || {}));
+  localStorage.setItem(AUTH_STORAGE_ACCESS, accessToken);
+  localStorage.setItem(AUTH_STORAGE_REFRESH, refreshToken);
+  localStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(user || {}));
   setCurrentUser(user || null);
   window.dispatchEvent(new CustomEvent('auth:session-started'));
   updateAuthUi();
 }
 
 function _clearAuthSession() {
-  sessionStorage.removeItem(AUTH_STORAGE_ACCESS);
-  sessionStorage.removeItem(AUTH_STORAGE_REFRESH);
-  sessionStorage.removeItem(AUTH_STORAGE_USER);
+  localStorage.removeItem(AUTH_STORAGE_ACCESS);
+  localStorage.removeItem(AUTH_STORAGE_REFRESH);
+  localStorage.removeItem(AUTH_STORAGE_USER);
   setCurrentUser(null);
   updateAuthUi();
 }
@@ -58,11 +82,11 @@ function _clearAuthSession() {
  * Returns the stored access token, or an empty string if none exists.
  */
 export function getAuthToken() {
-  return sessionStorage.getItem(AUTH_STORAGE_ACCESS) || '';
+  return localStorage.getItem(AUTH_STORAGE_ACCESS) || '';
 }
 
 /**
- * Returns true when an access token is present in sessionStorage.
+ * Returns true when an access token is present in localStorage.
  */
 export function isAuthenticated() {
   return Boolean(getAuthToken());
@@ -127,7 +151,7 @@ export async function initializeAuth() {
     if (response.ok) {
       const user = await response.json();
       setCurrentUser(user);
-      sessionStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(user));
+      localStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(user));
       setAuthInitialized(true);
       return;
     }
@@ -142,7 +166,7 @@ export async function initializeAuth() {
         if (meResponse.ok) {
           const user = await meResponse.json();
           setCurrentUser(user);
-          sessionStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(user));
+          localStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(user));
           setAuthInitialized(true);
           return;
         }
@@ -223,7 +247,15 @@ export async function handleAuthCallback() {
     _saveAuthSession(payload.access_token, payload.refresh_token, payload.user);
     showAlert('Signed in successfully.', 'success');
 
-    const dest = hasPortalRoles() ? ROUTES.DASHBOARD : ROUTES.HOME;
+    let dest = hasPortalRoles() ? ROUTES.DASHBOARD : ROUTES.HOME;
+    const returnUrl = sessionStorage.getItem('tf_return_url');
+    if (returnUrl) {
+      sessionStorage.removeItem('tf_return_url');
+      if (hasPortalRoles()) {
+        dest = returnUrl;
+      }
+    }
+
     window.history.replaceState({}, '', dest);
     window.dispatchEvent(new CustomEvent('auth:callback-complete'));
   } catch (error) {
