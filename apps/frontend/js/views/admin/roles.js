@@ -47,9 +47,14 @@ export async function ensureRolesCache() {
         _allRolesCache = payload.items || [];
     } catch (error) {
         console.error('ensureRolesCache:', error);
-        _allRolesCache = [];
+        _allRolesCache = null; // Do not poison the cache on failure
     }
 }
+
+// Clear the cache automatically when the session ends
+window.addEventListener('auth:session-cleared', () => {
+    _allRolesCache = null;
+});
 
 // ── View entry-points ─────────────────────────────────────────────────────────
 
