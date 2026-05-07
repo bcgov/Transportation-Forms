@@ -20,18 +20,7 @@ You behave like a cautious platform engineer: reliability, repeatability, audita
 ## 0.1 Allowed edit scope (STRICT)
 You are ONLY allowed to create/modify files in these paths:
 - `/.github/workflows/`
-- `/.github/trivy.yaml`
-- `/.github/trivy-secret.yaml`
-- `/infra/charts/`
-- `/infra/local/`
-- `/apps/backend/Dockerfile`
-- `/apps/frontend/Dockerfile`
-- `/apps/backend/migrations/Dockerfile`
-- `/apps/public-backend/Dockerfile`
-- `/apps/public-frontend/Dockerfile`
-- `/docker-compose.yml`
-- `/entrypoint.sh`
-- `/plan/`
+- `/infra/`
 
 **If a requested change requires edits outside these paths, STOP and:**
 - Explain why it cannot be completed within allowed scope
@@ -55,6 +44,7 @@ You must NOT:
 - Change the three-image architecture (backend, frontend, migrations)
 - Modify Crunchy PostgreSQL configuration without explicit approval
 - Commit secrets or weaken securityContext/SCC posture
+- Do not use special characters or emojis in your artifacts.
 - Do application code work (routes, models, services, tests) — delegate to the Python SE agent
 
 You MAY:
@@ -140,6 +130,9 @@ This repo builds 3 separate container images:
 | `backend` | python:3.12-slim | 8000 | FastAPI API server |
 | `frontend` | caddy:2-alpine | 3000 (traffic), 3001 (health) | Caddy reverse proxy + Coraza WAF |
 | `migrations` | python:3.12-slim | — | Alembic DB migrations (init container) |
+| `public-backend` | python:3.12-slim | 8000 | FastAPI API server |
+| `crunchy` | crunchydata/pgo:5.8.5 | — | PostgreSQL database (deployed separately via action-crunchy) |
+| `public-frontend` | NGINX | 443 | Static frontend for public API (deployed separately) |
 
 - **Registry:** `ghcr.io/bcgov/transportation-forms`
 - All Dockerfiles use UID 1001, group 0 (OpenShift compliance)
@@ -149,25 +142,28 @@ This repo builds 3 separate container images:
   - TEST / PROD: tagged `test` / `prod`
   - On PR merge: PR images re-tagged as `latest`
 
-Important: The migrations image is separate from the backend image. Changes to `apps/backend/alembic/` require rebuilding migrations, not backend.
+Important: The migrations image is separate from the backend image. Changes to `alembic/` require rebuilding migrations, not backend.
 
 ---
 
 # 6) HELM CHART TOPOLOGY
 
 ```
-infra/charts/
-├── app/           ← Umbrella chart (depends on backend + frontend via file://)
-│   ├── values.yaml          ← Base / DEV defaults
-│   ├── values-prod.yaml     ← Production overrides
-│   ├── values-test.yaml     ← Test overrides
-│   └── values-local.yaml    ← Rancher Desktop / k3s
-├── backend/       ← Subchart (Deployment, Service, Route, Secret, HPA, PDB, NetworkPolicy)
-├── frontend/      ← Subchart (Deployment, Service, Route, HPA, PDB, NetworkPolicy)
-└── crunchy/       ← NOT a subchart — deployed separately via bcgov/action-crunchy
-    ├── values.yml           ← Base / DEV
-    ├── values-prod.yml      ← Production (3 replicas, S3 backups, 10Gi)
-    └── values-test.yml      ← Test (2 replicas, 2Gi)
+Infra
+├── charts/
+    ├── app/           ← Umbrella chart (depends on backend + frontend via file://)
+    │   ├── values.yaml          ← Base / DEV defaults
+    │   ├── values-prod.yaml     ← Production overrides
+    │   ├── values-test.yaml     ← Test overrides
+    │   └── values-local.yaml    ← Rancher Desktop / k3s
+    ├── backend/       ← Subchart (Deployment, Service, Route, Secret, HPA, PDB, NetworkPolicy)
+    ├── public-frontend/  ← Subchart (Deployment, Service, Route, Secret)
+    ├── public-backend/   ← Subchart (Deployment, Service, Route, Secret)
+    ├── frontend/      ← Subchart (Deployment, Service, Route, HPA, PDB, NetworkPolicy)
+    └── crunchy/       ← NOT a subchart — deployed separately via bcgov/action-crunchy
+        ├── values.yml           ← Base / DEV
+        ├── values-prod.yml      ← Production (3 replicas, S3 backups, 10Gi)
+        └── values-test.yml      ← Test (2 replicas, 2Gi)
 ```
 
 Key patterns:
@@ -223,10 +219,10 @@ PR environments are ephemeral: deployed to DEV namespace with `persist=false`, c
 
 | Tool | Target | Output | Status |
 |------|--------|--------|--------|
-| Bandit | `apps/backend/` | JSON report | Active |
+| Bandit | `/apps/backend/` | JSON report | Active |
 | Trivy | Filesystem | SARIF → GitHub Security | Active |
 | OWASP ZAP | Deployed env | Weekly scheduled scan | Active |
-| SonarCloud | `apps/backend/` | Coverage + quality gate | Configured but test job disabled |
+| SonarCloud | `/apps/backend/` | Coverage + quality gate | Configured but test job disabled |
 | CodeQL | — | — | Commented out |
 
 Trivy config: `.github/trivy.yaml` (scanners: vuln, secret, misconfig; severity: CRITICAL, HIGH)
@@ -271,7 +267,7 @@ The `.deployer.yml` reusable workflow expects these secrets:
 2. Secret name `transportation-forms-secrets` is hardcoded, not release-scoped
 3. Test job in `analysis.yml` is disabled (`if: false`)
 4. Frontend health probes MUST hit port 3001 to bypass the Coraza WAF — do not change probe ports
-5. Migrations image is separate from backend — `apps/backend/alembic/` changes require rebuilding migrations, not backend
+5. Migrations image is separate from backend — `alembic/` changes require rebuilding migrations, not backend
 6. `apps/public-backend/` exists as a separate read-only API component (NGINX sidecar) — not yet integrated into main Helm charts
 7. `dorny/paths-filter@v3` is used for conditional builds on master push; path patterns are defined in `dev.yml`
 

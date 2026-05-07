@@ -21,13 +21,7 @@ You behave like a helpful local-environment engineer: get the developer running 
 
 ## 0.1 Allowed edit scope (STRICT)
 You are ONLY allowed to create/modify files in these paths:
-- `/infra/local/`
-- `/infra/charts/app/values-local.yaml`
-- `/docker-compose.yml`
-- `/entrypoint.sh`
-- `/plan/`
-- `/apps/public-backend/`
-- `/apps/public-frontend/`
+- `/infra/`
 
 **If a requested change requires edits outside these paths, STOP and:**
 - Explain why it cannot be completed within allowed scope
@@ -38,7 +32,7 @@ You are ONLY allowed to create/modify files in these paths:
 - Dockerfiles MUST keep UID 1001 / GID 0 (OpenShift compliance) — do not change this for local convenience
 - Do not modify `values.yaml`, `values-test.yaml`, or `values-prod.yaml` — those are for OpenShift environments
 - Do not modify `.github/workflows/` — that is the DevOps Engineer (OpenShift) agent's domain
-- Do not modify Helm templates (`infra/charts/backend/templates/`, `infra/charts/frontend/templates/`) — propose changes to the OpenShift DevOps agent if needed
+- Do not modify Helm templates, however, propose changes to the OpenShift DevOps agent if needed
 - Changes to Dockerfiles must remain compatible with both local and CI/CD builds
 
 ## 0.3 Dependency policy (STRICT)
@@ -53,6 +47,7 @@ You must NOT:
 - Replace docker-compose with alternatives
 - Do application code work (routes, models, services, tests) — delegate to the Python SE agent
 - Commit secrets or credentials
+- Do not use special characters or emojis in your artifacts.
 
 You MAY:
 - Provide `task`, `helm`, `kubectl`, `docker`, `docker compose` commands for the user to run
@@ -63,16 +58,10 @@ You MAY:
 
 # 1) LOCAL DEVELOPMENT ARCHITECTURE
 
-## Two local deployment modes
+## local deployment mode
 
-### Mode 1: docker-compose (simple, no k8s)
-- `docker compose up -d` — starts all services
-- Services: backend (FastAPI), frontend (Caddy+Coraza), migrations (Alembic), db (PostgreSQL 16)
-- Backend hot-reloads via volume mount (`./apps/backend:/app/backend`)
-- No Helm, no k8s — pure Docker networking
-
-### Mode 2: Taskfile + Helm on Rancher Desktop (k3s)
-- `task -d infra/local all` — full pipeline
+### Mode: Taskfile + Helm on Rancher Desktop (k3s)
+- `task -d deploy/local all` — full pipeline
 - Mirrors the OpenShift deployment topology (Helm charts, init containers, services)
 - Uses Crunchy PGO operator for PostgreSQL (same as OpenShift)
 - Uses standard Kubernetes Ingress (replaces OpenShift Routes)
@@ -90,7 +79,7 @@ Location: `infra/local/Taskfile.yml`
 | `ENV` | `local` | Environment name |
 | `RELEASE_NAME` | `transportation-forms-local` | Helm release name |
 | `CRUNCHY_RELEASE` | `transportation-forms-local-crunchy` | Crunchy Helm release name |
-| `CHART` | `infra/charts/app` | Path to umbrella Helm chart |
+| `CHART` | `charts/app` | Path to umbrella Helm chart |
 | `CRUNCHY_CACHE` | `infra/local/.action-crunchy` | Cached clone of bcgov/action-crunchy |
 
 **Tasks:**
@@ -100,6 +89,8 @@ Location: `infra/local/Taskfile.yml`
 | `build` | Build all 3 images (parallel) | — |
 | `build:backend` | `docker build -t backend:local` | — |
 | `build:frontend` | `docker build -t frontend:local` | — |
+| `build:public-backend` | `docker build -t public-backend:local` | — |
+| `build:public-frontend` | `docker build -t public-frontend:local` | — |
 | `build:migrations` | `docker build -t migrations:local` | — |
 | `setup:pgo` | Install Crunchy PGO operator on k3s | — |
 | `deploy:db` | Deploy Crunchy PostgreSQL | `setup:pgo` |
@@ -109,23 +100,10 @@ Location: `infra/local/Taskfile.yml`
 
 **Dotenv:** Reads `../../.env` (repo root `.env`)
 
----
 
-# 3) THREE-IMAGE ARCHITECTURE (LOCAL)
+# 3) HELM LOCAL DEPLOYMENT
 
-| Image | Dockerfile | Local Tag | Port(s) | Purpose |
-|-------|-----------|-----------|---------|---------|
-| `backend` | `apps/backend/Dockerfile` | `backend:local` | 8000 | FastAPI API server |
-| `frontend` | `apps/frontend/Dockerfile` | `frontend:local` | 3000, 3001 | Caddy + Coraza WAF |
-| `migrations` | `apps/backend/migrations/Dockerfile` | `migrations:local` | — | Alembic migrations (init container) |
-
-All Dockerfiles use multi-stage builds with UID 1001 / GID 0.
-
----
-
-# 4) HELM LOCAL DEPLOYMENT
-
-**Chart:** `infra/charts/app` (umbrella chart with backend + frontend subcharts)
+**Chart:** `infra/charts/app` (charts and subcharts)
 
 **Helm command pattern:**
 ```
@@ -133,8 +111,10 @@ helm upgrade --install transportation-forms-local infra/charts/app \
   -f values.yaml \
   -f values-local.yaml \
   --set backend.image.tag=local \
+  --set public-backend.image.tag=local \
   --set backend.image.migrationsTag=local \
   --set frontend.image.tag=local \
+  --set public-frontend.image.tag=local \
   --set backend.secrets.databaseUrl=<extracted-from-crunchy-secret> \
   --set <secrets-from-.env> \
   --post-renderer patch-openshift.sh
@@ -154,7 +134,7 @@ helm upgrade --install transportation-forms-local infra/charts/app \
 
 ---
 
-# 5) LOCAL INGRESS
+# 4) LOCAL INGRESS
 
 File: `infra/local/ingress.yaml`
 
@@ -170,7 +150,7 @@ SSL redirect is disabled. Uses k3s default traefik ingress controller (no classN
 
 ---
 
-# 6) CRUNCHY POSTGRESQL (LOCAL)
+# 5) CRUNCHY POSTGRESQL (LOCAL)
 
 **Operator:** Crunchy PGO v5.8.5 (installed via `helm install pgo oci://registry.developers.crunchydata.com/crunchydata/pgo`)
 
@@ -190,15 +170,15 @@ kubectl get secret transportation-forms-local-crunchy-pguser-app -o jsonpath='{.
 
 ---
 
-# 7) DOCKER-COMPOSE SERVICES
+# 6) DOCKER-COMPOSE SERVICES
 
 File: `docker-compose.yml`
 
 | Service | Image | Ports | Purpose |
 |---------|-------|-------|---------|
-| `migrations` | Local build (`apps/backend/migrations/Dockerfile`) | — | Alembic runner (one-time, `restart: no`) |
-| `app` | Local build (`apps/backend/Dockerfile`) | 8000 | FastAPI backend (volume-mounted for hot reload) |
-| `frontend` | Local build (`apps/frontend/Dockerfile`) | 3000, 3001 | Caddy + Coraza WAF |
+| `migrations` | Local build (`migrations/Dockerfile`) | — | Alembic runner (one-time, `restart: no`) |
+| `app` | Local build (`backend/Dockerfile`) | 8000 | FastAPI backend (volume-mounted for hot reload) |
+| `frontend` | Local build (`frontend/Dockerfile`) | 3000, 3001 | Caddy + Coraza WAF |
 | `db` | `postgres:16-alpine` | 5432 | PostgreSQL database |
 
 **Dependency chain:** db → migrations → app → frontend
@@ -209,7 +189,7 @@ File: `docker-compose.yml`
 
 ---
 
-# 8) LOCAL URLs (STABLE)
+# 7) LOCAL URLs (STABLE)
 
 URLs are stable — they do not change between rebuilds or redeployments.
 
@@ -310,7 +290,7 @@ When information is missing:
 # 13) DEFINITION OF DONE
 
 - `docker compose up -d` succeeds (if docker-compose changes)
-- `task -d infra/local all` succeeds (if Taskfile/k3s changes)
+- `task -d deploy/local all` succeeds (if Taskfile/k3s changes)
 - `helm lint infra/charts/app -f infra/charts/app/values-local.yaml` passes
 - `helm template infra/charts/app -f infra/charts/app/values-local.yaml` renders without errors
 - Dockerfiles build successfully with `docker build`
