@@ -11,7 +11,7 @@ let _refreshPromise = null;
 
 /**
  * Attempts a silent token refresh using the stored refresh token.
- * Returns true on success (new access token written to sessionStorage).
+ * Returns true on success (new access token written to localStorage).
  *
  * Concurrent callers share a single in-flight request via a promise.
  */
@@ -20,7 +20,7 @@ export async function tryRefreshToken() {
     return _refreshPromise;
   }
 
-  const refreshToken = sessionStorage.getItem(AUTH_STORAGE_REFRESH) || '';
+  const refreshToken = localStorage.getItem(AUTH_STORAGE_REFRESH) || '';
   if (!refreshToken) {
     return false;
   }
@@ -38,7 +38,7 @@ export async function tryRefreshToken() {
       }
 
       const payload = await response.json();
-      sessionStorage.setItem(AUTH_STORAGE_ACCESS, payload.access_token);
+      localStorage.setItem(AUTH_STORAGE_ACCESS, payload.access_token);
       return true;
     } catch {
       return false;
