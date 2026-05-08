@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
+
+import pytz
 from typing import Optional
 from urllib.parse import quote
 
@@ -139,6 +141,29 @@ def _apply_sort(query, field: SortField, order: SortOrder):
     return query.order_by(col.desc().nullslast())
 
 
+def _today_vancouver() -> date:
+    """Return the current date in the America/Vancouver timezone (FEAT-0010)."""
+    return datetime.now(pytz.timezone("America/Vancouver")).date()
+
+
+def _apply_effective_date_filter(query):
+    """Exclude forms whose effective_date is strictly in the future (FEAT-0010).
+
+    Forms with a NULL effective_date are always visible.  Forms with an
+    effective_date of today (at or past 00:00 America/Vancouver) or any
+    past date are also visible.
+
+    ``func.date()`` extracts the date portion of the stored TIMESTAMP so the
+    comparison is pure-date and unaffected by any time-component serialisation
+    differences between drivers and backends (SQLite / PostgreSQL).
+    """
+    today = _today_vancouver()
+    return query.filter(
+        (PublicForm.effective_date == None)  # noqa: E711
+        | (sa_func.date(PublicForm.effective_date) <= today)
+    )
+
+
 def _conditional_json(
     request: Request,
     *,
@@ -209,6 +234,7 @@ def list_public_forms(
         )
 
     query = db.query(PublicForm)
+    query = _apply_effective_date_filter(query)  # FEAT-0010
 
     if q is not None and q.strip():
         query = _apply_text_search(query, q.strip())
@@ -244,14 +270,15 @@ def list_public_forms(
 # ------------------------------------------------------------------
 
 def _get_form_or_404(db: Session, form_number: str) -> PublicForm:
-    row = (
+    query = (
         db.query(PublicForm)
         .filter(PublicForm.form_number == form_number)
-        .first()
     )
+    query = _apply_effective_date_filter(query)  # FEAT-0010
+    row = query.first()
     if row is None:
         # Generic 404 — never disclose whether the form exists privately
-        # (US-014 AC5).
+        # or has a future effective date (US-014 AC5, FEAT-0010).
         raise HTTPException(status_code=404, detail="Not Found")
     return row
 
