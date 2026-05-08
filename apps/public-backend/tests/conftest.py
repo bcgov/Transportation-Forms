@@ -1,0 +1,129 @@
+"""Self-contained test fixtures for the public-backend test suite.
+
+Uses an SQLite in-memory database to avoid a PostgreSQL dependency.
+The ``public_forms_v`` table is created via raw SQL using SQLite-compatible
+types so that the ``PublicForm`` ORM model can run SELECT queries against it
+without needing PostgreSQL-specific DDL types (JSONB, UUID).
+
+Each test function gets a fresh, rolled-back session.
+"""
+
+from __future__ import annotations
+
+import importlib
+import os
+import sys
+from pathlib import Path
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+# ---------------------------------------------------------------------------
+# Ensure public-backend is importable
+# ---------------------------------------------------------------------------
+
+_PUBLIC_BACKEND_DIR = str(Path(__file__).resolve().parent.parent)
+if _PUBLIC_BACKEND_DIR not in sys.path:
+    sys.path.insert(0, _PUBLIC_BACKEND_DIR)
+
+
+# ---------------------------------------------------------------------------
+# Minimal required env vars (loaded before any settings object is imported)
+# ---------------------------------------------------------------------------
+
+os.environ.setdefault("DATABASE_URL_READONLY", "sqlite:///:memory:")
+os.environ.setdefault("INTERNAL_AUTH_SECRET", "")
+os.environ.setdefault("CACHE_MAX_AGE", "0")
+os.environ.setdefault("OG_CACHE_MAX_AGE", "0")
+os.environ.setdefault("LOG_LEVEL", "WARNING")
+
+
+# ---------------------------------------------------------------------------
+# SQLite in-memory engine (session-scoped)
+# ---------------------------------------------------------------------------
+
+_CREATE_TABLE_SQL = text("""
+    CREATE TABLE IF NOT EXISTS public_forms_v (
+        form_id        TEXT        PRIMARY KEY,
+        form_number    TEXT,
+        title          TEXT        NOT NULL DEFAULT 'Untitled',
+        description    TEXT,
+        business_area_id TEXT,
+        business_area  TEXT,
+        keywords       TEXT,
+        file_type      TEXT,
+        effective_date DATETIME,
+        updated_at     DATETIME,
+        s3_key         TEXT,
+        file_name      TEXT,
+        file_size      INTEGER
+    )
+""")
+
+
+@pytest.fixture(scope="session")
+def sqlite_engine():
+    # StaticPool reuses one connection across all threads so in-memory data
+    # is visible to the FastAPI request handler (which runs in a worker thread).
+    # check_same_thread=False lets that worker thread reuse the connection.
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        echo=False,
+    )
+    with engine.connect() as conn:
+        conn.execute(_CREATE_TABLE_SQL)
+        conn.commit()
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture()
+def db(sqlite_engine):
+    """Yield a Session; truncate public_forms_v after each test for isolation."""
+    _SessionLocal = sessionmaker(bind=sqlite_engine, autocommit=False, autoflush=False)
+    session = _SessionLocal()
+    yield session
+    session.close()
+    # Truncate test data so tests remain isolated.
+    with sqlite_engine.connect() as conn:
+        conn.execute(text("DELETE FROM public_forms_v"))
+        conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# FastAPI TestClient wired to the SQLite session
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def public_client(db: Session, sqlite_engine):
+    """TestClient for the public-backend app with get_db overridden.
+
+    The dependency override creates a fresh session per request bound to the
+    shared StaticPool engine, so request handlers see data committed by the
+    test's ``db`` session.
+    """
+    database_mod = importlib.import_module("database")
+    main_mod = importlib.import_module("main")
+
+    from fastapi.testclient import TestClient
+    from sqlalchemy.orm import sessionmaker
+
+    public_app = main_mod.app
+    public_get_db = database_mod.get_db
+
+    _ReqSession = sessionmaker(bind=sqlite_engine, autocommit=False, autoflush=False)
+
+    def _override_get_db():
+        s = _ReqSession()
+        try:
+            yield s
+        finally:
+            s.close()
+
+    public_app.dependency_overrides[public_get_db] = _override_get_db
+    yield TestClient(public_app, raise_server_exceptions=False)
+    public_app.dependency_overrides.pop(public_get_db, None)
