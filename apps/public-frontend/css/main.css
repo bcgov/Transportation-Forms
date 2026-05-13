@@ -88,6 +88,9 @@ form-card button:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s linear infinite;
 }
+.skeleton-card.sk-title { height: 2rem; width: 60%; }
+.skeleton-card.sk-subtitle { height: 1rem; width: 40%; }
+.skeleton-card.sk-body { height: 8rem; }
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
