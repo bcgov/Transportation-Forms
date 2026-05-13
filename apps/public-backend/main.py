@@ -11,22 +11,15 @@ FEAT-0005 hardening (vs FEAT-0004):
   * Stack traces are never exposed to clients.
 """
 
-import os
-import sys
-
-# Ensure the public-backend directory is importable regardless of CWD.
-_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
-if _PKG_DIR not in sys.path:
-    sys.path.insert(0, _PKG_DIR)
-
 import structlog
+from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from config import settings
-from database import SessionLocal, get_db
+from database import get_db
 from logging_config import configure_logging
 from middleware import (
     MethodRestrictionMiddleware,
@@ -43,6 +36,19 @@ from routes.sitemap import router as sitemap_router
 configure_logging()
 logger = structlog.get_logger()
 
+# ---------- Startup / shutdown ----------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info(
+        "public_backend_started",
+        environment=settings.ENVIRONMENT,
+        # Never log the secret value — only whether it's configured.
+        internal_auth_configured=bool(settings.INTERNAL_AUTH_SECRET),
+    )
+    yield
+    logger.info("public_backend_stopped")
+
 # ---------- App ----------
 app = FastAPI(
     title="BC Transportation Forms — Public API",
@@ -51,6 +57,7 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    lifespan=lifespan,
 )
 
 # ---------- Middleware stack ----------
@@ -158,19 +165,3 @@ app.include_router(forms_router)
 app.include_router(business_areas_router)
 app.include_router(sitemap_router)
 
-
-# ---------- Startup / shutdown ----------
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info(
-        "public_backend_started",
-        environment=settings.ENVIRONMENT,
-        # Never log the secret value — only whether it's configured.
-        internal_auth_configured=bool(settings.INTERNAL_AUTH_SECRET),
-    )
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("public_backend_stopped")
