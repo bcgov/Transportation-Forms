@@ -380,7 +380,7 @@ _OG_TEMPLATE = """<!doctype html>
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{description}">
 <meta property="og:url" content="{canonical}">
-<meta property="og:site_name" content="BC Government Public Forms">
+<meta property="og:site_name" content="BC Transportation Forms">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="{title}">
 <meta name="twitter:description" content="{description}">
@@ -390,7 +390,7 @@ _OG_TEMPLATE = """<!doctype html>
 <main>
 <h1>{title}</h1>
 <p>{description}</p>
-<p><a href="{canonical}">View this form on BC Government Public Forms</a></p>
+<p><a href="{canonical}">View this form on BC Transportation Forms</a></p>
 </main>
 </body>
 </html>
@@ -400,7 +400,7 @@ _OG_404_TEMPLATE = """<!doctype html>
 <html lang="en-CA">
 <head>
 <meta charset="utf-8">
-<title>Form not found — BC Government Public Forms</title>
+<title>Form not found — BC Transportation Forms</title>
 <meta name="robots" content="noindex">
 </head>
 <body>
