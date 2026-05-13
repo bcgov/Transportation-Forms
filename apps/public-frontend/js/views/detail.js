@@ -56,9 +56,9 @@ async function _fetchFresh(formNumber, article) {
 
 function _skeleton() {
   return `
-    <div class="skeleton-card" style="height:2rem;width:60%;"></div>
-    <div class="skeleton-card" style="height:1rem;width:40%;"></div>
-    <div class="skeleton-card" style="height:8rem;"></div>
+    <div class="skeleton-card sk-title"></div>
+    <div class="skeleton-card sk-subtitle"></div>
+    <div class="skeleton-card sk-body"></div>
   `;
 }
 

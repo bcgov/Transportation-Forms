@@ -145,7 +145,7 @@ async function _loadBusinessAreas() {
       // US-005 AC3 — hide control when empty
       select.disabled = true;
       const wrapper = select.closest('.col-12, .col-md-3, .col-md-4, [class*="col-"]');
-      if (wrapper) wrapper.style.display = 'none';
+      if (wrapper) wrapper.classList.add('d-none');
       return;
     }
     items.sort((a, b) => String(a.name).localeCompare(String(b.name), 'en-CA'));
