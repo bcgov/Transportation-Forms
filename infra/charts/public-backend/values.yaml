@@ -31,11 +31,11 @@ resources:
   # public-backend FastAPI container
   app:
     requests:
-      cpu: "25m"
-      memory: "64Mi"
-    limits:
       cpu: "100m"
-      memory: "256Mi"
+      memory: "192Mi"
+    limits:
+      cpu: "250m"
+      memory: "384Mi"
 
 autoscaling:
   enabled: false
@@ -54,14 +54,14 @@ startupProbe:
 
 readinessProbe:
   path: /readyz
-  initialDelaySeconds: 5
+  initialDelaySeconds: 60
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 5
 
 livenessProbe:
   path: /healthz
-  initialDelaySeconds: 10
+  initialDelaySeconds: 120
   periodSeconds: 30
   timeoutSeconds: 5
   failureThreshold: 3
