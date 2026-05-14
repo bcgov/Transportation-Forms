@@ -467,6 +467,7 @@ class FormNumberPrefix(Base):
     is_case_sensitive = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
     created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    updated_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     deleted_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
     updated_at = Column(
@@ -475,6 +476,7 @@ class FormNumberPrefix(Base):
 
     # Relationships
     created_by = relationship("User", foreign_keys=[created_by_id])
+    updated_by = relationship("User", foreign_keys=[updated_by_id])
     reservations = relationship(
         "FormNumberReservation", back_populates="prefix", cascade="all, delete-orphan"
     )

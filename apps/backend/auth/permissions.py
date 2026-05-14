@@ -74,6 +74,13 @@ class Permission(str, Enum):
     RESERVATION_RELEASE = "reservation:release"
     RESERVATION_ADMIN = "reservation:admin"
 
+    # Form Number Prefix Management Permissions (FEAT-0012)
+    FORM_NUMBER_PREFIX_CREATE = "form_number_prefix:create"
+    FORM_NUMBER_PREFIX_READ = "form_number_prefix:read"
+    FORM_NUMBER_PREFIX_UPDATE = "form_number_prefix:update"
+    FORM_NUMBER_PREFIX_DELETE = "form_number_prefix:delete"
+    FORM_NUMBER_PREFIX_ARCHIVE = "form_number_prefix:archive"
+
     # System Configuration Permissions
     SYSTEM_CONFIG = "system:config"
     SYSTEM_HEALTH = "system:health"
@@ -135,6 +142,12 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.RESERVATION_REQUEST_CHANGES,
             Permission.RESERVATION_RELEASE,
             Permission.RESERVATION_ADMIN,
+            # All form number prefix management permissions (FEAT-0012)
+            Permission.FORM_NUMBER_PREFIX_CREATE,
+            Permission.FORM_NUMBER_PREFIX_READ,
+            Permission.FORM_NUMBER_PREFIX_UPDATE,
+            Permission.FORM_NUMBER_PREFIX_DELETE,
+            Permission.FORM_NUMBER_PREFIX_ARCHIVE,
             # System configuration
             Permission.SYSTEM_CONFIG,
             Permission.SYSTEM_HEALTH,
@@ -261,6 +274,13 @@ PERMISSION_GROUPS: Dict[str, List[Permission]] = {
         Permission.RESERVATION_REQUEST_CHANGES,
         Permission.RESERVATION_RELEASE,
     ],
+    "form_number_prefix_manage": [
+        Permission.FORM_NUMBER_PREFIX_CREATE,
+        Permission.FORM_NUMBER_PREFIX_READ,
+        Permission.FORM_NUMBER_PREFIX_UPDATE,
+        Permission.FORM_NUMBER_PREFIX_DELETE,
+        Permission.FORM_NUMBER_PREFIX_ARCHIVE,
+    ],
 }
 
 
@@ -367,6 +387,13 @@ RESOURCE_ACTION_PERMISSIONS: Dict[str, Dict[str, str]] = {
         "request_changes": Permission.RESERVATION_REQUEST_CHANGES,
         "release": Permission.RESERVATION_RELEASE,
         "admin": Permission.RESERVATION_ADMIN,
+    },
+    "form_number_prefixes": {
+        "create": Permission.FORM_NUMBER_PREFIX_CREATE,
+        "read": Permission.FORM_NUMBER_PREFIX_READ,
+        "update": Permission.FORM_NUMBER_PREFIX_UPDATE,
+        "delete": Permission.FORM_NUMBER_PREFIX_DELETE,
+        "archive": Permission.FORM_NUMBER_PREFIX_ARCHIVE,
     },
 }
 
