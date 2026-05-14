@@ -68,6 +68,9 @@ export function hideAllViews() {
     'usersView',
     'userDetailView',
     'accessRequestsView',
+    'prefixesView',
+    'prefixCreateView',
+    'prefixDetailView',
   ];
   for (const id of viewIds) {
     const el = document.getElementById(id);
@@ -91,6 +94,9 @@ const _ROUTE_LINK_MAP = {
   users: 'usersLink',
   'user-detail': 'usersLink',
   'access-requests': 'accessRequestsLink',
+  prefixes: 'prefixesLink',
+  'prefix-create': 'prefixesLink',
+  'prefix-detail': 'prefixesLink',
 };
 
 /**
@@ -123,7 +129,10 @@ export function isAdminRoute(path) {
     path === ROUTES.USERS ||
     path.startsWith('/users/') ||
     path === ROUTES.ACCESS_REQUESTS ||
-    path.startsWith('/access-requests/')
+    path.startsWith('/access-requests/') ||
+    path === ROUTES.PREFIXES ||
+    path === ROUTES.PREFIX_CREATE ||
+    path.startsWith('/prefixes/')
   );
 }
 
@@ -274,6 +283,27 @@ export async function routeHandler(path, params = {}) {
     _routeParams = { formId };
     const { showEditView } = await import('./views/create.js');
     await showEditView(formId);
+
+  } else if (path === ROUTES.PREFIXES) {
+    _currentRoute = 'prefixes';
+    _routeParams = {};
+    const { showPrefixesView } = await import('./views/prefixes.js');
+    await showPrefixesView();
+
+  } else if (path === ROUTES.PREFIX_CREATE) {
+    _currentRoute = 'prefix-create';
+    _routeParams = {};
+    const { showPrefixCreateView } = await import('./views/prefixes.js');
+    await showPrefixCreateView();
+
+  } else if (path.startsWith('/prefixes/')) {
+    const prefixId = path.replace('/prefixes/', '');
+    if (prefixId && prefixId !== 'new') {
+      _currentRoute = 'prefix-detail';
+      _routeParams = { prefixId };
+      const { showPrefixDetailView } = await import('./views/prefixes.js');
+      await showPrefixDetailView(prefixId);
+    }
 
   } else {
     // Unknown path — redirect to the appropriate root by role.
