@@ -14,6 +14,8 @@ import {
     initFilterBusinessAreaCombobox,
     loadBusinessAreas,
 } from './business-areas.js';
+import { hasPermission, getAuthToken } from '../auth.js';
+import { getCurrentUser } from '../state.js';
 
 // ── Module-private pagination state ──────────────────────────────────────────
 let _currentSkip = 0;
@@ -135,27 +137,75 @@ export function displayForms(forms) {
                             Created: ${new Date(form.created_at).toLocaleDateString()}
                         </small>
                         <div class="mt-2">
-                            <button class="btn btn-sm btn-outline-primary"
-                                    data-action="view-form"
-                                    data-form-id="${escapeHtml(form.id)}">
-                                <i class="fas fa-eye"></i> View
-                            </button>
-                            <button class="btn btn-sm btn-outline-warning"
-                                    data-action="navigate"
-                                    data-route="/edit/${escapeHtml(form.id)}">
-                                <i class="fas fa-edit"></i> Edit
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger"
-                                    data-action="delete-form"
-                                    data-form-id="${escapeHtml(form.id)}">
-                                <i class="fas fa-trash"></i> Delete
-                            </button>
+                            ${_renderFormActionButtons(form)}
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     `).join('');
+}
+
+/**
+ * FEAT-0013: Render state-aware, permission-gated action buttons for a form card.
+ * @param {object} form  Form object from the API (includes status, created_by, id).
+ * @returns {string} HTML string of buttons.
+ */
+function _renderFormActionButtons(form) {
+    const buttons = [];
+    const id = escapeHtml(form.id);
+    const status = form.status;
+    const user = getCurrentUser();
+    const userId = user?.id || '';
+    const isOwner = form.created_by?.id === userId;
+
+    // View — all states, form:read
+    if (hasPermission('form:read')) {
+        buttons.push(`<button class="btn btn-sm btn-outline-primary"
+            data-action="view-form" data-form-id="${id}">
+            <i class="fas fa-eye"></i> View</button>`);
+    }
+
+    // Edit — draft + published, form:edit
+    if ((status === 'draft' || status === 'published') && hasPermission('form:edit')) {
+        buttons.push(`<button class="btn btn-sm btn-outline-warning"
+            data-action="navigate" data-route="/edit/${id}">
+            <i class="fas fa-edit"></i> Edit</button>`);
+    }
+
+    // Submit — draft only, creator only, form:submit_for_review
+    if (status === 'draft' && isOwner && hasPermission('form:submit_for_review')) {
+        buttons.push(`<button class="btn btn-sm btn-outline-success"
+            data-action="submit-form" data-form-id="${id}"
+            data-form-title="${escapeHtml(form.title)}">
+            <i class="fas fa-paper-plane"></i> Submit</button>`);
+    }
+
+    // Archive — published only, form:archive
+    if (status === 'published' && hasPermission('form:archive')) {
+        buttons.push(`<button class="btn btn-sm btn-outline-secondary"
+            data-action="archive-form" data-form-id="${id}"
+            data-form-title="${escapeHtml(form.title)}">
+            <i class="fas fa-archive"></i> Archive</button>`);
+    }
+
+    // Restore — archived only, form:approve
+    if (status === 'archived' && hasPermission('form:approve')) {
+        buttons.push(`<button class="btn btn-sm btn-outline-info"
+            data-action="restore-form" data-form-id="${id}"
+            data-form-title="${escapeHtml(form.title)}">
+            <i class="fas fa-undo"></i> Restore</button>`);
+    }
+
+    // Delete — draft only, form:delete
+    if (status === 'draft' && hasPermission('form:delete')) {
+        buttons.push(`<button class="btn btn-sm btn-outline-danger"
+            data-action="delete-form" data-form-id="${id}"
+            data-form-title="${escapeHtml(form.title)}">
+            <i class="fas fa-trash"></i> Delete</button>`);
+    }
+
+    return buttons.join('\n');
 }
 
 /** Reset to page 0 and reload — called by the search button and Enter key. */
@@ -222,11 +272,20 @@ function _handleFormsListClick(e) {
     const viewBtn = e.target.closest('[data-action="view-form"]');
     const deleteBtn = e.target.closest('[data-action="delete-form"]');
     const navBtn = e.target.closest('[data-action="navigate"]');
+    const submitBtn = e.target.closest('[data-action="submit-form"]');
+    const archiveBtn = e.target.closest('[data-action="archive-form"]');
+    const restoreBtn = e.target.closest('[data-action="restore-form"]');
 
     if (viewBtn) {
         _viewForm(viewBtn.dataset.formId);
     } else if (deleteBtn) {
-        _deleteForm(deleteBtn.dataset.formId);
+        _deleteForm(deleteBtn.dataset.formId, deleteBtn.dataset.formTitle);
+    } else if (submitBtn) {
+        _submitForm(submitBtn.dataset.formId, submitBtn.dataset.formTitle);
+    } else if (archiveBtn) {
+        _archiveFormFromList(archiveBtn.dataset.formId, archiveBtn.dataset.formTitle);
+    } else if (restoreBtn) {
+        _restoreFormFromList(restoreBtn.dataset.formId, restoreBtn.dataset.formTitle);
     } else if (navBtn) {
         _navigate(navBtn.dataset.route);
     }
@@ -435,16 +494,86 @@ async function _viewForm(formId) {
     }
 }
 
-async function _deleteForm(formId) {
-    if (!confirm('Are you sure you want to delete this form?')) return;
+async function _deleteForm(formId, formTitle) {
+    const title = formTitle || 'this form';
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
 
     try {
-        const response = await fetch(`${API_BASE}/forms/${formId}`, { method: 'DELETE' });
-        if (!response.ok) throw new Error('Failed to delete form');
+        const response = await fetch(`${API_BASE}/forms/${formId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to delete form');
+        }
 
         showAlert('Form deleted successfully', 'success');
-        setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1000);
+        loadForms();
     } catch (error) {
         showAlert('Error deleting form: ' + error.message, 'danger');
+    }
+}
+
+async function _submitForm(formId, formTitle) {
+    const title = formTitle || 'this form';
+    if (!confirm(`Submit "${title}" for review?`)) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${formId}/submit`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to submit form');
+        }
+
+        showAlert('Form submitted for review successfully.', 'success');
+        loadForms();
+    } catch (error) {
+        showAlert('Error submitting form: ' + error.message, 'danger');
+    }
+}
+
+async function _archiveFormFromList(formId, formTitle) {
+    const title = formTitle || 'this form';
+    if (!confirm(`Archive "${title}"? It will no longer be publicly available.`)) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${formId}/archive`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to archive form');
+        }
+
+        showAlert('Form archived successfully.', 'success');
+        loadForms();
+    } catch (error) {
+        showAlert('Error archiving form: ' + error.message, 'danger');
+    }
+}
+
+async function _restoreFormFromList(formId, formTitle) {
+    const title = formTitle || 'this form';
+    if (!confirm(`Restore "${title}" to published status?`)) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${formId}/restore`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to restore form');
+        }
+
+        showAlert('Form restored to published status.', 'success');
+        loadForms();
+    } catch (error) {
+        showAlert('Error restoring form: ' + error.message, 'danger');
     }
 }

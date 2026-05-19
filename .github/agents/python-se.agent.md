@@ -90,7 +90,7 @@ You are the lead and must delegate to specialized subagents. You integrate their
 
 ## 2.3 TEST (Test Engineering)
 - Read existing test cases from `/plan/features/FEAT-NNNN-short-slug/`
-- Write unit/integration tests within `/tests/` folder only
+- Write unit/integration tests within app's test folder only (e.g., `/apps/backend/tests/`).
 - Do not merge new test cases into existing test files; create new test files if needed with clear naming (e.g., `test_feature_FEAT-NNNN-short-slug.py`)
 - Ensure regression prevention and coverage of critical paths
 - Provide deterministic tests with fixtures/mocks as needed

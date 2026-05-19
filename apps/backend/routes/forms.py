@@ -474,22 +474,53 @@ async def delete_form(
     """
     Soft delete a form (sets deleted_at timestamp).
 
-    The form will no longer appear in list operations but the data is preserved.
+    FEAT-0013: Enforces form:delete permission, draft-only state restriction,
+    and ownership rules (admin can delete any draft; non-admin own drafts only).
     """
-    try:
-        form_uuid = UUID(form_id)
-        deleted = FormService.delete_form(
-            db=db, form_id=form_uuid, deleted_by_id=UUID(current_user.sub)
+    # ── Permission gate ──────────────────────────────────────────────────
+    user_perms = set(current_user.permissions or [])
+    if "form:delete" not in user_perms:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
         )
 
-        if not deleted:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
-            )
-
+    try:
+        form_uuid = UUID(form_id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+        )
+
+    # ── Fetch form ───────────────────────────────────────────────────────
+    form = FormService.get_form_by_id(db, form_uuid)
+    if not form:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+        )
+
+    # ── State restriction: draft only ────────────────────────────────────
+    if form.status != "draft":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only draft forms can be deleted",
+        )
+
+    # ── Ownership enforcement ────────────────────────────────────────────
+    is_admin = "admin" in (current_user.roles or [])
+    if not is_admin and str(form.created_by_id) != current_user.sub:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own draft forms",
+        )
+
+    deleted = FormService.delete_form(
+        db=db, form_id=form_uuid, deleted_by_id=UUID(current_user.sub)
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
         )
 
 

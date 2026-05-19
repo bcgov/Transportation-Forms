@@ -1,126 +1,94 @@
-<mxfile host="Electron" modified="2024-05-06T00:00:00.000Z" version="26.0.0">
-  <diagram id="architecture" name="Solution Architecture">
-    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
-      <root>
-        <mxCell id="0" />
-        <mxCell id="1" parent="0" />
-
-        <mxCell id="2" value="Transportation Forms - Solution Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="330" y="30" width="500" height="40" as="geometry" />
-        </mxCell>
-
-        <!-- TIER 1: CLIENT LAYER -->
-        <mxCell id="tier1" value="Client Layer" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=13;" vertex="1" parent="1">
-          <mxGeometry x="60" y="100" width="1050" height="130" as="geometry" />
-        </mxCell>
-
-        <mxCell id="browser_admin" value="Admin / Internal User&#xa;(Web Browser)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="tier1">
-          <mxGeometry x="250" y="50" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <mxCell id="browser_public" value="Public User&#xa;(Web Browser)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="tier1">
-          <mxGeometry x="650" y="50" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- TIER 2: PROXY & WEB LAYER -->
-        <mxCell id="tier2" value="Web / Reverse Proxy Layer" style="swimlane;startSize=30;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=13;" vertex="1" parent="1">
-          <mxGeometry x="60" y="270" width="1050" height="130" as="geometry" />
-        </mxCell>
-
-        <mxCell id="frontend_caddy" value="Internal Frontend&#xa;Caddy + Coraza WAF" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="tier2">
-          <mxGeometry x="240" y="40" width="180" height="70" as="geometry" />
-        </mxCell>
-
-        <mxCell id="public_frontend" value="Public Frontend&#xa;NGINX (Proxy Cache &amp; Static)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="tier2">
-          <mxGeometry x="640" y="40" width="180" height="70" as="geometry" />
-        </mxCell>
-
-        <!-- TIER 3: SERVICES LAYER -->
-        <mxCell id="tier3" value="API Layer" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=13;" vertex="1" parent="1">
-          <mxGeometry x="60" y="440" width="1050" height="130" as="geometry" />
-        </mxCell>
-
-        <mxCell id="backend_fastapi" value="Internal Backend&#xa;(FastAPI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="tier3">
-          <mxGeometry x="250" y="40" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <mxCell id="public_backend" value="Public Backend&#xa;(FastAPI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="tier3">
-          <mxGeometry x="650" y="40" width="160" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- TIER 4: DATA & IDENTITY LAYER -->
-        <mxCell id="tier4" value="Data &amp; Identity Layer" style="swimlane;startSize=30;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;fontSize=13;" vertex="1" parent="1">
-          <mxGeometry x="60" y="610" width="1050" height="150" as="geometry" />
-        </mxCell>
-
-        <mxCell id="db_postgres" value="Relational Database&#xa;(PostgreSQL)" style="shape=mxgraph.flowchart.database;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="tier4">
-          <mxGeometry x="250" y="40" width="120" height="80" as="geometry" />
-        </mxCell>
-
-        <mxCell id="storage_minio" value="Object Store&#xa;(MinIO / S3)" style="shape=mxgraph.flowchart.stored_data;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="tier4">
-          <mxGeometry x="465" y="40" width="120" height="80" as="geometry" />
-        </mxCell>
-
-        <mxCell id="auth_keycloak" value="Identity Provider&#xa;(Keycloak OIDC)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="tier4">
-          <mxGeometry x="670" y="50" width="120" height="60" as="geometry" />
-        </mxCell>
-        
-        <mxCell id="migrator" value="Alembic Migrations&#xa;(Init only)" style="rounded=1;dashed=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="tier4">
-          <mxGeometry x="80" y="50" width="120" height="60" as="geometry" />
-        </mxCell>        
-
-        <!-- EDGE CONNECTIONS -->
-        <mxCell id="c1" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="browser_admin" target="frontend_caddy" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="c1_pub" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="browser_public" target="public_frontend" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="c2" value="HTTP (/api/*, /auth/*)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="frontend_caddy" target="backend_fastapi" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="c2_pub" value="HTTP (/api/*)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="public_frontend" target="public_backend" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="c3" value="SQL (5432)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="backend_fastapi" target="db_postgres" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="c3_pub" value="SQL (5432)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.25;exitY=1;entryX=0.75;entryY=0;" edge="1" source="public_backend" target="db_postgres" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="c4" value="S3 API (9000)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.8;exitY=1;entryX=0.2;entryY=0;" edge="1" source="backend_fastapi" target="storage_minio" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <mxCell id="c4_pub" value="S3 API (X-Accel-Redirect proxy)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.75;exitY=1;entryX=0.8;entryY=0;" edge="1" source="public_frontend" target="storage_minio" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="775" y="580" />
-              <mxPoint x="561" y="580" />
-            </Array>
-          </mxGeometry>
-        </mxCell>
-
-        <mxCell id="c5" value="OIDC" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=1;exitY=0.5;entryX=0.25;entryY=0;" edge="1" source="backend_fastapi" target="auth_keycloak" parent="1">
-          <mxGeometry relative="1" as="geometry">
-           <Array as="points">
-             <mxPoint x="700" y="470" />
-           </Array>
-          </mxGeometry>
-        </mxCell>
-
-        <!-- Migrations to DB -->
-        <mxCell id="c6" value="Schema Init" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="migrator" target="db_postgres" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-      </root>
-    </mxGraphModel>
-  </diagram>
+<mxfile host="65bd71144e">
+    <diagram id="architecture" name="Solution Architecture">
+        <mxGraphModel dx="1363" dy="782" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="Transportation Forms - Solution Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="30" width="500" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="tier1" value="Client Layer" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="100" width="1050" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="browser_admin" value="Admin / Internal User&#xa;(Web Browser)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="tier1">
+                    <mxGeometry x="250" y="50" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="browser_public" value="Public User&#xa;(Web Browser)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="tier1">
+                    <mxGeometry x="650" y="50" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="tier2" value="Web / Reverse Proxy Layer" style="swimlane;startSize=30;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="270" width="1050" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="frontend_caddy" value="Internal Frontend&#xa;Caddy + Coraza WAF" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" parent="tier2" vertex="1">
+                    <mxGeometry x="240" y="40" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="public_frontend" value="Public Frontend&#xa;NGINX (Proxy Cache &amp; Static)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="tier2">
+                    <mxGeometry x="640" y="40" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="tier3" value="API Layer" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="440" width="1050" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="backend_fastapi" value="Internal Backend&#xa;(FastAPI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="tier3" vertex="1">
+                    <mxGeometry x="250" y="40" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="public_backend" value="Public Backend&#xa;(FastAPI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="tier3">
+                    <mxGeometry x="650" y="40" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="tier4" value="Data &amp; Identity Layer" style="swimlane;startSize=30;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="610" width="1050" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="db_postgres" value="Relational Database&#xa;(PostgreSQL)" style="shape=mxgraph.flowchart.database;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="tier4" vertex="1">
+                    <mxGeometry x="250" y="40" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="storage_minio" value="Object Store&lt;br&gt;(S3)" style="shape=mxgraph.flowchart.stored_data;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="tier4" vertex="1">
+                    <mxGeometry x="465" y="40" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="auth_keycloak" value="Identity Provider&#xa;(Keycloak OIDC)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" parent="tier4" vertex="1">
+                    <mxGeometry x="670" y="50" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="migrator" value="Alembic Migrations&#xa;(Init only)" style="rounded=1;dashed=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" parent="tier4" vertex="1">
+                    <mxGeometry x="80" y="50" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="c1" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="browser_admin" target="frontend_caddy" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c1_pub" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="browser_public" target="public_frontend">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c2" value="HTTP (/api/*, /auth/*)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="frontend_caddy" target="backend_fastapi" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c2_pub" value="HTTP (/api/*)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="public_frontend" target="public_backend">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c3" value="SQL (5432)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" parent="1" source="backend_fastapi" target="db_postgres" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c3_pub" value="SQL (5432)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.25;exitY=1;entryX=0.75;entryY=0;" edge="1" parent="1" source="public_backend" target="db_postgres">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c4" value="S3 API (9000)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.8;exitY=1;entryX=0.2;entryY=0;" parent="1" source="backend_fastapi" target="storage_minio" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c4_pub" value="S3 API (X-Accel-Redirect proxy)" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.75;exitY=1;entryX=0.8;entryY=0;" edge="1" parent="1" source="public_frontend" target="storage_minio">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="775" y="580"/>
+                            <mxPoint x="561" y="580"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="c5" value="OIDC" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=1;exitY=0.5;entryX=0.25;entryY=0;" parent="1" source="backend_fastapi" target="auth_keycloak" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="700" y="470"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="c6" value="Schema Init" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" parent="1" source="migrator" target="db_postgres" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
 </mxfile>

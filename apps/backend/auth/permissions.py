@@ -195,6 +195,7 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.FORM_READ,
             Permission.FORM_REVIEW,
             Permission.FORM_APPROVE,
+            Permission.FORM_ARCHIVE,  # FEAT-0013: reviewers can archive published forms
             # Business areas (read only)
             Permission.BUSINESS_AREA_READ,
             # Categories (read only)
