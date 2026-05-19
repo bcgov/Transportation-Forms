@@ -22,11 +22,13 @@ import {
 } from './file-upload.js';
 import { loadBusinessAreas, initBusinessAreaCombobox, getBusinessAreaOptions, closeBusinessAreaDropdown } from './business-areas.js';
 import { getAuthToken, hasPermission } from '../auth.js';
+import { getCurrentUser } from '../state.js';
 
 // ─── Module-private state ─────────────────────────────────────────────────────
 
 let _currentFormId = null;
 let _currentFormStatus = null;
+let _currentFormCreatedById = null;  // FEAT-0013: track form creator for ownership checks
 let _formNumberReservationId = null;
 let _formNumberReservations = [];
 let _workflowListenersAttached = false;
@@ -104,6 +106,11 @@ function _initWorkflowButtonListeners() {
         ?.addEventListener('click', _openFormRejectModal);
     document.getElementById('confirmFormRejectBtn')
         ?.addEventListener('click', _confirmFormReject);
+    // FEAT-0013: Delete and Restore buttons on edit page
+    document.getElementById('deleteFormBtn')
+        ?.addEventListener('click', _deleteFormFromEdit);
+    document.getElementById('restoreFormBtn')
+        ?.addEventListener('click', _restoreFormFromEdit);
 }
 
 /**
@@ -116,9 +123,11 @@ function _updateWorkflowButtons(status) {
     const approvePublishBtn = document.getElementById('approvePublishBtn');
     const rejectFormBtn = document.getElementById('rejectFormBtn');
     const archiveFormBtn = document.getElementById('archiveFormBtn');
+    const deleteFormBtn = document.getElementById('deleteFormBtn');
+    const restoreFormBtn = document.getElementById('restoreFormBtn');
 
     // Default: hide all workflow extras
-    [submitForReviewBtn, approvePublishBtn, rejectFormBtn, archiveFormBtn].forEach(el => {
+    [submitForReviewBtn, approvePublishBtn, rejectFormBtn, archiveFormBtn, deleteFormBtn, restoreFormBtn].forEach(el => {
         if (el) el.style.display = 'none';
     });
 
@@ -128,10 +137,19 @@ function _updateWorkflowButtons(status) {
         return;
     }
 
+    // FEAT-0013: Determine ownership for submit button
+    const user = getCurrentUser();
+    const userId = user?.id || '';
+    const isOwner = _currentFormCreatedById === userId;
+
     if (status === 'draft') {
         if (saveDraftBtn) saveDraftBtn.style.display = '';
-        if (submitForReviewBtn && hasPermission('form:submit_for_review')) {
+        if (submitForReviewBtn && isOwner && hasPermission('form:submit_for_review')) {
             submitForReviewBtn.style.display = '';
+        }
+        // FEAT-0013: Delete button for draft forms
+        if (deleteFormBtn && hasPermission('form:delete')) {
+            deleteFormBtn.style.display = '';
         }
     } else if (status === 'pending_review') {
         // Locked — no save/edit actions available to creators
@@ -144,11 +162,17 @@ function _updateWorkflowButtons(status) {
         }
     } else if (status === 'published') {
         if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-        if (archiveFormBtn && hasPermission('form:approve')) {
+        if (archiveFormBtn && hasPermission('form:archive')) {
             archiveFormBtn.style.display = '';
         }
+    } else if (status === 'archived') {
+        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
+        // FEAT-0013: Restore button for archived forms
+        if (restoreFormBtn && hasPermission('form:approve')) {
+            restoreFormBtn.style.display = '';
+        }
     } else {
-        // archived or unknown — no actions
+        // unknown — no actions
         if (saveDraftBtn) saveDraftBtn.style.display = 'none';
     }
 }
@@ -292,6 +316,62 @@ async function _archiveForm() {
     }
 }
 
+// FEAT-0013: Delete from edit page (draft forms only)
+async function _deleteFormFromEdit() {
+    if (!_currentFormId) return;
+    const title = document.getElementById('title')?.value || 'this form';
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
+
+    const btn = document.getElementById('deleteFormBtn');
+    btn.disabled = true;
+    try {
+        const response = await fetch(`${API_BASE}/forms/${_currentFormId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to delete form');
+        }
+        showAlert('Form deleted successfully.', 'success');
+        setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// FEAT-0013: Restore from edit page (archived forms only — stays on page)
+async function _restoreFormFromEdit() {
+    if (!_currentFormId) return;
+    const title = document.getElementById('title')?.value || 'this form';
+    if (!confirm(`Restore "${title}" to published status?`)) return;
+
+    const btn = document.getElementById('restoreFormBtn');
+    btn.disabled = true;
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${_currentFormId}/restore`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to restore form');
+        }
+        showAlert('Form restored to published status.', 'success');
+        // Stay on page — refresh form data to update button visibility
+        _currentFormStatus = 'published';
+        _updateWorkflowButtons('published');
+        _setFormFieldsLocked(true);
+        document.querySelector('#createView h2').textContent = 'View Form';
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -341,6 +421,7 @@ async function _loadFormForEdit(formId) {
         const form = await response.json();
 
         _currentFormId = formId;
+        _currentFormCreatedById = form.created_by?.id || null;  // FEAT-0013
 
         // Scalar fields
         document.getElementById('title').value = form.title;
@@ -543,6 +624,7 @@ export function resetFormState() {
     setKeywords([]);
     _currentFormId = null;
     _currentFormStatus = null;
+    _currentFormCreatedById = null;  // FEAT-0013
     clearUploadState();
     _formNumberReservationId = null;
 
@@ -553,7 +635,7 @@ export function resetFormState() {
     }
 
     // Hide workflow action buttons — they are shown per-status in _updateWorkflowButtons
-    ['submitForReviewBtn', 'approvePublishBtn', 'rejectFormBtn', 'archiveFormBtn'].forEach(id => {
+    ['submitForReviewBtn', 'approvePublishBtn', 'rejectFormBtn', 'archiveFormBtn', 'deleteFormBtn', 'restoreFormBtn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
