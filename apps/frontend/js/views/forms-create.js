@@ -21,7 +21,7 @@ import {
     restoreUploadState,
 } from './file-upload.js';
 import { loadBusinessAreas, initBusinessAreaCombobox, getBusinessAreaOptions, closeBusinessAreaDropdown } from './business-areas.js';
-import { getAuthToken, hasPermission } from '../auth.js';
+import { getAuthToken, hasPermission, isAdminUser } from '../auth.js';
 import { getCurrentUser } from '../state.js';
 
 // ─── Module-private state ─────────────────────────────────────────────────────
@@ -147,8 +147,8 @@ function _updateWorkflowButtons(status) {
         if (submitForReviewBtn && isOwner && hasPermission('form:submit_for_review')) {
             submitForReviewBtn.style.display = '';
         }
-        // FEAT-0013: Delete button for draft forms
-        if (deleteFormBtn && hasPermission('form:delete')) {
+        // FEAT-0013: Delete button for draft forms (owner or admin only)
+        if (deleteFormBtn && hasPermission('form:delete') && (isOwner || isAdminUser())) {
             deleteFormBtn.style.display = '';
         }
     } else if (status === 'pending_review') {
@@ -359,12 +359,9 @@ async function _restoreFormFromEdit() {
             const err = await response.json().catch(() => ({}));
             throw new Error(err.detail || 'Failed to restore form');
         }
+        // Stay on page — re-fetch form so all derived UI state matches backend
+        await _loadFormForEdit(_currentFormId);
         showAlert('Form restored to published status.', 'success');
-        // Stay on page — refresh form data to update button visibility
-        _currentFormStatus = 'published';
-        _updateWorkflowButtons('published');
-        _setFormFieldsLocked(true);
-        document.querySelector('#createView h2').textContent = 'View Form';
     } catch (error) {
         showAlert('Error: ' + error.message, 'danger');
     } finally {
