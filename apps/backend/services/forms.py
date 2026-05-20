@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc, asc, text
+from sqlalchemy import and_, desc, asc, text, case, literal
 from sqlalchemy.exc import OperationalError
 
 from backend.models import (
@@ -200,16 +200,26 @@ class FormService:
         )
 
     @staticmethod
+    def _escape_like(value: str) -> str:
+        """Escape LIKE/ILIKE wildcard characters in user input.
+
+        Prevents ``%`` and ``_`` from being interpreted as wildcards.
+        Uses backslash as the escape character (PostgreSQL default).
+        """
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    @staticmethod
     def list_forms(
         db: Session,
         skip: int = 0,
         limit: int = 25,
         q: Optional[str] = None,
-        status: Optional[str] = None,
+        status: Optional[List[str]] = None,
         business_area_ids: Optional[List[UUID]] = None,
-        form_source: Optional[str] = None,
+        form_source: Optional[List[str]] = None,
         is_public: Optional[bool] = None,
         sort_order: str = "desc",
+        sort_field: str = "created_at",
     ) -> tuple[List[Form], int]:
         """
         List forms with filters and pagination.
@@ -218,60 +228,107 @@ class FormService:
             db: Database session
             skip: Number of records to skip
             limit: Max records to return
-            q: Full-text search query
-            status: Filter by status (draft, pending_review, approved, published, archived)
+            q: Full-text search query (matches title/description/keywords OR form number)
+            status: Filter by status list (OR logic within)
             business_area_ids: Optional list of business area IDs (match any)
-            form_source: Filter by source ('Link' or 'Download')
+            form_source: Filter by source list (OR logic within)
             is_public: Filter by public status
             sort_order: asc or desc
+            sort_field: created_at or form_number
 
         Returns:
             Tuple of (list of Form objects, total count)
         """
-        query = db.query(Form).filter(Form.deleted_at.is_(None))
+        # Always LEFT JOIN form_number_reservations for search/sort access
+        query = (
+            db.query(Form)
+            .outerjoin(
+                FormNumberReservation,
+                Form.form_number_reservation_id == FormNumberReservation.id,
+            )
+            .filter(Form.deleted_at.is_(None))
+        )
 
+        search_active = False
         if q and q.strip():
-            query = query.filter(text("""
-                    COALESCE(
-                        forms.search_vector,
-                        setweight(to_tsvector('english',
-                            coalesce(forms.title, '')), 'A') ||
-                        setweight(to_tsvector('english',
-                            coalesce(forms.description, '')), 'B') ||
-                        setweight(to_tsvector('english',
-                            coalesce(forms.keywords::text, '')), 'C') ||
-                        setweight(to_tsvector('english',
-                            coalesce(forms.form_source, '')), 'D') ||
-                        setweight(to_tsvector('english',
-                            coalesce(forms.form_source_url, '')), 'D')
-                    ) @@ plainto_tsquery('english', :search_query)
-                    """)).params(search_query=q.strip())  # noqa: E501
+            search_active = True
+            escaped_q = FormService._escape_like(q.strip())
+            like_pattern = f"%{escaped_q}%"
+
+            # Full-text search OR form number ILIKE
+            # Outer parens required so OR doesn't bypass other WHERE filters
+            query = query.filter(
+                text("""(
+                    (
+                        COALESCE(
+                            forms.search_vector,
+                            setweight(to_tsvector('english',
+                                coalesce(forms.title, '')), 'A') ||
+                            setweight(to_tsvector('english',
+                                coalesce(forms.description, '')), 'B') ||
+                            setweight(to_tsvector('english',
+                                coalesce(forms.keywords::text, '')), 'C') ||
+                            setweight(to_tsvector('english',
+                                coalesce(forms.form_source, '')), 'D') ||
+                            setweight(to_tsvector('english',
+                                coalesce(forms.form_source_url, '')), 'D')
+                        ) @@ plainto_tsquery('english', :search_query)
+                    )
+                    OR
+                    (
+                        form_number_reservations.full_form_number
+                            ILIKE :like_pattern ESCAPE :esc
+                    )
+                )""")  # noqa: E501
+            ).params(search_query=q.strip(), like_pattern=like_pattern, esc="\\")
 
         # Apply filters
         if status:
-            query = query.filter(Form.status == status)
+            query = query.filter(Form.status.in_(status))
 
         if business_area_ids:
             query = query.filter(Form.business_area_id.in_(business_area_ids))
 
         if form_source:
-            normalized_source = "URL" if form_source.lower() == "link" else "Download"
-            query = query.filter(Form.form_source == normalized_source)
+            normalized_sources = [
+                "URL" if s.lower() == "link" else "Download" for s in form_source
+            ]
+            query = query.filter(Form.form_source.in_(normalized_sources))
 
         if is_public is not None:
             query = query.filter(Form.is_public == is_public)
 
-        query = query.distinct()
-
-        # Count total
+        # Count total (no DISTINCT needed — LEFT JOIN is 1:1 via FK)
         total = query.count()
 
-        sort_column = Form.created_at
-
-        if sort_order.lower() == "asc":
-            query = query.order_by(asc(sort_column))
+        # Sorting
+        if sort_field == "form_number":
+            sort_col = FormNumberReservation.full_form_number
+            if sort_order.lower() == "asc":
+                query = query.order_by(asc(sort_col).nullslast())
+            else:
+                query = query.order_by(desc(sort_col).nullslast())
         else:
-            query = query.order_by(desc(sort_column))
+            # Default: sort by created_at
+            if search_active:
+                # Rank form-number matches first (primary), then user sort (secondary)
+                rank_expr = text("""
+                    CASE WHEN form_number_reservations.full_form_number
+                              ILIKE :rank_pattern ESCAPE :esc
+                         THEN 0 ELSE 1 END
+                """).params(
+                    rank_pattern=f"%{FormService._escape_like(q.strip())}%",
+                    esc="\\",
+                )
+                if sort_order.lower() == "asc":
+                    query = query.order_by(rank_expr, asc(Form.created_at))
+                else:
+                    query = query.order_by(rank_expr, desc(Form.created_at))
+            else:
+                if sort_order.lower() == "asc":
+                    query = query.order_by(asc(Form.created_at))
+                else:
+                    query = query.order_by(desc(Form.created_at))
 
         # Apply pagination
         forms = query.offset(skip).limit(limit).all()
@@ -284,10 +341,13 @@ class FormService:
         query_text: str,
         max_suggestions: int = 10,
     ) -> List[str]:
-        """Get autocomplete suggestions from form titles and keywords."""
+        """Get autocomplete suggestions from form titles, keywords, and form numbers."""
         normalized_query = (query_text or "").strip()
         if len(normalized_query) < 2:
             return []
+
+        escaped_q = FormService._escape_like(normalized_query)
+        like_pattern = f"%{escaped_q}%"
 
         sql = text("""
             SELECT suggestion
@@ -295,7 +355,7 @@ class FormService:
                 SELECT DISTINCT f.title AS suggestion
                 FROM forms f
                 WHERE f.deleted_at IS NULL
-                  AND f.title ILIKE :pattern
+                  AND f.title ILIKE :pattern ESCAPE '\\'
 
                 UNION
 
@@ -305,8 +365,16 @@ class FormService:
                     ) AS suggestion
                 FROM forms f
                 WHERE f.deleted_at IS NULL
+
+                UNION
+
+                SELECT DISTINCT fnr.full_form_number AS suggestion
+                FROM form_number_reservations fnr
+                JOIN forms f ON f.form_number_reservation_id = fnr.id
+                WHERE f.deleted_at IS NULL
+                  AND fnr.full_form_number ILIKE :pattern ESCAPE '\\'
             ) s
-            WHERE s.suggestion ILIKE :pattern
+            WHERE s.suggestion ILIKE :pattern ESCAPE '\\'
             ORDER BY s.suggestion ASC
             LIMIT :max_suggestions
             """)  # noqa: E501
@@ -314,7 +382,7 @@ class FormService:
         rows = db.execute(
             sql,
             {
-                "pattern": f"%{normalized_query}%",
+                "pattern": like_pattern,
                 "max_suggestions": min(max(max_suggestions, 1), 10),
             },
         ).fetchall()
