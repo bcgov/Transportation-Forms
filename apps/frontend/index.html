@@ -232,21 +232,17 @@
                                 style="display:none; max-height:240px; overflow-y:auto;"></ul>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <label for="formSourceFilter" class="form-label">Form Source</label>
-                        <select class="form-select" id="formSourceFilter">
-                            <option value="">All</option>
-                            <option value="Link">Link</option>
-                            <option value="Download">Download</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="isPublicFilter" class="form-label">Public</label>
-                        <select class="form-select" id="isPublicFilter">
-                            <option value="">All</option>
-                            <option value="Yes">Yes</option>
-                            <option value="No">No</option>
-                        </select>
+                    <div class="col-md-6">
+                        <label for="filterComboboxInput" class="form-label">Filter</label>
+                        <div class="position-relative" id="filterCombobox">
+                            <input type="text" id="filterComboboxInput" class="form-control"
+                                placeholder="Type to add filters..." autocomplete="off" role="combobox"
+                                aria-expanded="false" aria-controls="filterComboboxDropdown" aria-haspopup="listbox"
+                                aria-autocomplete="list">
+                            <ul id="filterComboboxDropdown" role="listbox" class="dropdown-menu w-100 p-0"
+                                style="display:none; max-height:280px; overflow-y:auto; z-index:1060;"></ul>
+                        </div>
+                        <div id="selectedFilterChips" class="mt-2"></div>
                     </div>
                 </div>
 
@@ -264,10 +260,12 @@
                         <div id="selectedBusinessAreaFilters" class="mt-2"></div>
                     </div>
                     <div class="col-md-3">
-                        <label for="sortOrder" class="form-label">Date Created</label>
+                        <label for="sortOrder" class="form-label">Sort</label>
                         <select class="form-select" id="sortOrder">
-                            <option value="desc">Newest First</option>
-                            <option value="asc">Oldest First</option>
+                            <option value="created_at:desc">Date Created (Newest)</option>
+                            <option value="created_at:asc">Date Created (Oldest)</option>
+                            <option value="form_number:asc">Form Number A–Z</option>
+                            <option value="form_number:desc">Form Number Z–A</option>
                         </select>
                     </div>
                     <div class="col-md-3">
