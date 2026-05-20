@@ -195,9 +195,28 @@ async def submit_form_for_review(
 ) -> WorkflowStatusResponse:
     _require_permissions(current_user, _PERM_SUBMIT)
 
+    # FEAT-0013 / US-004: Only the form creator may submit for review (no admin bypass).
+    try:
+        form_uuid = UUID(form_id)
+    except ValueError as exc:
+        _handle_workflow_error(exc)
+
+    form_check = db.query(Form).filter(
+        Form.id == form_uuid, Form.deleted_at.is_(None)
+    ).first()
+    if not form_check:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+        )
+    if str(form_check.created_by_id) != current_user.sub:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the form creator can submit for review",
+        )
+
     try:
         form = FormService.submit_form_for_review(
-            db, UUID(form_id), UUID(current_user.sub)
+            db, form_uuid, UUID(current_user.sub)
         )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
