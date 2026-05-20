@@ -202,15 +202,16 @@ class TestFormWorkflowApi:
         assert approve_resp.json()["status"] == "published"
 
     @pytest.mark.integration
-    def test_reviewer_cannot_archive(self, db, user_factory, client_factory):
-        """Reviewer role does not carry form:approve sufficient for archive."""
+    def test_reviewer_can_archive_published_form(self, db, user_factory, client_factory):
+        """FEAT-0013 / US-005: Reviewer role now carries form:archive permission."""
         creator = _create_user(user_factory, "creator-arch@example.com")
         reviewer = _create_user(user_factory, "reviewer-arch@example.com")
         form = _create_form(db, creator.id, status="published")
 
         reviewer_client = client_factory(reviewer, ["reviewer"])
         archive_resp = reviewer_client.post(f"/api/v1/staff/forms/{form.id}/archive")
-        assert archive_resp.status_code == 403
+        assert archive_resp.status_code == 200
+        assert archive_resp.json()["status"] == "archived"
 
     @pytest.mark.integration
     def test_reject_endpoint_requires_reason_notes(self, db, user_factory, client_factory):
