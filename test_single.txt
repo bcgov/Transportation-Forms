@@ -1,0 +1,76 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\RMOHINDR\AppData\Local\Programs\Python\Python311\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Projects\Transportation Forms
+configfile: pytest.ini
+plugins: anyio-4.13.0, asyncio-1.3.0, cov-7.1.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+apps/backend/tests/test_feature_FEAT-0013-state-aware-buttons.py::TestDeleteEndpointEnforcement::test_tc003_1_staff_viewer_without_delete_perm_gets_403 PASSED [100%]
+
+============================== warnings summary ===============================
+apps\backend\config.py:8
+  C:\Projects\Transportation Forms\apps\backend\config.py:8: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Settings(BaseSettings):
+
+apps\backend\database.py:43
+  C:\Projects\Transportation Forms\apps\backend\database.py:43: MovedIn20Warning: The ``declarative_base()`` function is now available as sqlalchemy.orm.declarative_base(). (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    Base = declarative_base()
+
+apps\backend\routes\forms.py:158
+  C:\Projects\Transportation Forms\apps\backend\routes\forms.py:158: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class FormResponse(BaseModel):
+
+apps\backend\routes\business_areas.py:21
+  C:\Projects\Transportation Forms\apps\backend\routes\business_areas.py:21: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class BusinessAreaResponse(BaseModel):
+
+apps\backend\routes\prefixes.py:86
+  C:\Projects\Transportation Forms\apps\backend\routes\prefixes.py:86: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class PrefixResponse(BaseModel):
+
+apps\backend\routes\prefixes.py:145
+  C:\Projects\Transportation Forms\apps\backend\routes\prefixes.py:145: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class PrefixPublicResponse(BaseModel):
+
+apps\backend\routes\reservations.py:73
+  C:\Projects\Transportation Forms\apps\backend\routes\reservations.py:73: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ReservationResponse(BaseModel):
+
+apps\backend\routes\reservations.py:119
+  C:\Projects\Transportation Forms\apps\backend\routes\reservations.py:119: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ApproverDecisionResponse(BaseModel):
+
+apps\backend\routes\reservations.py:136
+  C:\Projects\Transportation Forms\apps\backend\routes\reservations.py:136: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class PrefixInfoResponse(BaseModel):
+
+apps\backend\routes\reservations.py:148
+  C:\Projects\Transportation Forms\apps\backend\routes\reservations.py:148: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ReservationDetailResponse(BaseModel):
+
+apps\backend\routes\reservations.py:182
+  C:\Projects\Transportation Forms\apps\backend\routes\reservations.py:182: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ApprovedUnusedReservationsResponse(BaseModel):
+
+apps\backend\main.py:90
+  C:\Projects\Transportation Forms\apps\backend\main.py:90: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+..\..\Users\RMOHINDR\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastapi\applications.py:4656
+  C:\Users\RMOHINDR\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastapi\applications.py:4656: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 1 passed, 13 warnings in 0.99s ========================

@@ -14,7 +14,7 @@ import {
     initFilterBusinessAreaCombobox,
     loadBusinessAreas,
 } from './business-areas.js';
-import { hasPermission, getAuthToken } from '../auth.js';
+import { hasPermission, getAuthToken, isAdminUser } from '../auth.js';
 import { getCurrentUser } from '../state.js';
 
 // ── Module-private pagination state ──────────────────────────────────────────
@@ -197,8 +197,8 @@ function _renderFormActionButtons(form) {
             <i class="fas fa-undo"></i> Restore</button>`);
     }
 
-    // Delete — draft only, form:delete
-    if (status === 'draft' && hasPermission('form:delete')) {
+    // Delete — draft only, form:delete, owner or admin (matches backend enforcement)
+    if (status === 'draft' && hasPermission('form:delete') && (isOwner || isAdminUser())) {
         buttons.push(`<button class="btn btn-sm btn-outline-danger"
             data-action="delete-form" data-form-id="${id}"
             data-form-title="${escapeHtml(form.title)}">
