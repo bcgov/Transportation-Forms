@@ -616,7 +616,9 @@ async function _restoreFormFromList(formId, formTitle) {
  */
 function _getVisibleFilterOptions() {
     const user = getCurrentUser();
-    const roles = Array.isArray(user?.roles) ? user.roles.map(r => String(r).toLowerCase()) : [];
+    if (!user) return _FILTER_OPTIONS; // auth not yet loaded; backend enforces access control
+
+    const roles = Array.isArray(user.roles) ? user.roles.map(r => String(r).toLowerCase()) : [];
     const isStaffViewerOnly = roles.length === 1 && roles[0] === 'staff_viewer';
     const hasNoRoles = roles.length === 0;
 
@@ -689,6 +691,7 @@ function _renderFilterDropdown(query) {
     if (groups.size === 0) {
         const li = document.createElement('li');
         li.className = 'dropdown-item disabled text-muted py-2';
+        li.setAttribute('role', 'presentation');
         li.setAttribute('aria-disabled', 'true');
         li.textContent = query ? 'No matching filters' : 'No more filters available';
         dropdown.appendChild(li);
