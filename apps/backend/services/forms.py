@@ -317,7 +317,7 @@ class FormService:
                               ILIKE :rank_pattern ESCAPE :esc
                          THEN 0 ELSE 1 END
                 """).params(
-                    rank_pattern=f"%{FormService._escape_like(q.strip())}%",
+                    rank_pattern=like_pattern,
                     esc="\\",
                 )
                 if sort_order.lower() == "asc":
