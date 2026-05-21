@@ -8,6 +8,7 @@ import {
     showSpinner,
     getErrorDetail,
     getFormNumberDisplay,
+    showNotification,
 } from '../utils.js';
 import {
     getSelectedFilters,
@@ -25,6 +26,29 @@ let _lastListTotal = 0;
 // ── Module-private setup flag & navigate callback ─────────────────────────────
 let _initialized = false;
 let _navigate = null;
+
+// ── Filter combobox state ─────────────────────────────────────────────────────
+let _selectedFilterChips = [];   // array of { key, label, category }
+
+/**
+ * All available filter options, grouped by category.
+ * Each entry maps a unique key to its display label and the API parameter it
+ * produces.  Entries marked `exclusive: true` belong to categories where only
+ * one selection is allowed at a time.
+ */
+const _FILTER_OPTIONS = [
+    // Visibility — mutually exclusive
+    { key: 'vis:public',   label: 'Public only',       category: 'Visibility', apiParam: 'is_public', apiValue: 'true',  exclusive: true },
+    { key: 'vis:internal', label: 'Internal only',      category: 'Visibility', apiParam: 'is_public', apiValue: 'false', exclusive: true },
+    // Source — mutually exclusive
+    { key: 'src:link',     label: 'Linked Form',        category: 'Source',     apiParam: 'form_source', apiValue: 'Link',     exclusive: true },
+    { key: 'src:download', label: 'Downloadable Form',  category: 'Source',     apiParam: 'form_source', apiValue: 'Download', exclusive: true },
+    // Workflow State — multi-select (OR within category)
+    { key: 'ws:draft',          label: 'Draft',          category: 'Workflow State', apiParam: 'status', apiValue: 'draft',          exclusive: false },
+    { key: 'ws:pending_review', label: 'Pending Review', category: 'Workflow State', apiParam: 'status', apiValue: 'pending_review', exclusive: false },
+    { key: 'ws:published',      label: 'Published',      category: 'Workflow State', apiParam: 'status', apiValue: 'published',      exclusive: false },
+    { key: 'ws:archived',       label: 'Archived',       category: 'Workflow State', apiParam: 'status', apiValue: 'archived',       exclusive: false },
+];
 
 function _defaultNavigate(path) {
     window.history.pushState({}, '', path);
@@ -68,15 +92,20 @@ export async function loadForms() {
         const selectedFilters = getSelectedFilters();
         selectedFilters.forEach(id => params.append('business_area_ids', id));
 
-        const formSource = document.getElementById('formSourceFilter')?.value ?? '';
-        if (formSource) params.set('form_source', formSource);
+        // Build filter params from chips
+        _selectedFilterChips.forEach(chip => {
+            const opt = _FILTER_OPTIONS.find(o => o.key === chip.key);
+            if (opt) params.append(opt.apiParam, opt.apiValue);
+        });
 
-        const isPublic = document.getElementById('isPublicFilter')?.value ?? '';
-        if (isPublic === 'Yes') params.set('is_public', 'true');
-        if (isPublic === 'No') params.set('is_public', 'false');
-
-        const sortOrder = document.getElementById('sortOrder')?.value || 'desc';
-        params.set('sort_order', sortOrder);
+        // Sort — value format is "field:order" (e.g. "created_at:desc")
+        const sortSelect = document.getElementById('sortOrder');
+        const sortValue = sortSelect?.value || 'created_at:desc';
+        const sortParts = sortValue.split(':');
+        const sortField = sortParts[0] || 'created_at';
+        const sortDir = sortParts[1] || 'desc';
+        params.set('sort_field', sortField);
+        params.set('sort_order', sortDir);
 
         const response = await fetch(`${API_BASE}/forms?${params.toString()}`);
 
@@ -240,10 +269,8 @@ function _initListViewEvents() {
         });
     }
 
-    // Filter drop-downs
-    ['formSourceFilter', 'isPublicFilter', 'sortOrder'].forEach(id => {
-        document.getElementById(id)?.addEventListener('change', applyFilters);
-    });
+    // Sort dropdown
+    document.getElementById('sortOrder')?.addEventListener('change', applyFilters);
 
     // Page size selector
     document.getElementById('pageSizeSelect')?.addEventListener('change', _onPageSizeChange);
@@ -266,6 +293,9 @@ function _initListViewEvents() {
 
     // Filter business area combobox — pass applyFilters as the change callback
     initFilterBusinessAreaCombobox(applyFilters);
+
+    // FEAT-0014: consolidated filter combobox
+    _initFilterCombobox();
 }
 
 function _handleFormsListClick(e) {
@@ -576,4 +606,199 @@ async function _restoreFormFromList(formId, formTitle) {
     } catch (error) {
         showAlert('Error restoring form: ' + error.message, 'danger');
     }
+}
+
+// ── FEAT-0014: Consolidated filter combobox ───────────────────────────────────
+
+/**
+ * Returns the filter options visible to the current user.
+ * Users who are staff-viewer-only OR have no roles assigned see only
+ * "Published" under Workflow State (US-006); backend enforces access control.
+ */
+function _getVisibleFilterOptions() {
+    const user = getCurrentUser();
+    if (!user) return _FILTER_OPTIONS; // auth not yet loaded; backend enforces access control
+
+    const roles = Array.isArray(user.roles) ? user.roles.map(r => String(r).toLowerCase()) : [];
+    const isStaffViewerOnly = roles.length === 1 && roles[0] === 'staff_viewer';
+    const hasNoRoles = roles.length === 0;
+
+    if (isStaffViewerOnly || hasNoRoles) {
+        return _FILTER_OPTIONS.filter(
+            o => o.category !== 'Workflow State' || o.key === 'ws:published'
+        );
+    }
+    return _FILTER_OPTIONS;
+}
+
+function _initFilterCombobox() {
+    const input = document.getElementById('filterComboboxInput');
+    const dropdown = document.getElementById('filterComboboxDropdown');
+    if (!input || !dropdown) return;
+
+    input.addEventListener('input', () => {
+        _renderFilterDropdown(input.value.trim().toLowerCase());
+        _setFilterDropdownVisible(true);
+    });
+
+    input.addEventListener('focus', () => {
+        _renderFilterDropdown(input.value.trim().toLowerCase());
+        _setFilterDropdownVisible(true);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const firstItem = dropdown.querySelector('[role="option"]');
+            if (firstItem) firstItem.focus();
+        } else if (e.key === 'Escape' || e.key === 'Tab') {
+            _closeFilterDropdown();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#filterCombobox')) {
+            _closeFilterDropdown();
+        }
+    });
+
+    // Delegated chip removal
+    const chipContainer = document.getElementById('selectedFilterChips');
+    if (chipContainer) {
+        chipContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action="remove-filter-chip"]');
+            if (btn) _removeFilterChip(btn.dataset.key);
+        });
+    }
+}
+
+function _renderFilterDropdown(query) {
+    const dropdown = document.getElementById('filterComboboxDropdown');
+    if (!dropdown) return;
+    dropdown.innerHTML = '';
+
+    const visible = _getVisibleFilterOptions();
+    const selectedKeys = new Set(_selectedFilterChips.map(c => c.key));
+
+    // Group by category, preserving insertion order
+    const groups = new Map();
+    for (const opt of visible) {
+        if (selectedKeys.has(opt.key)) continue;
+        if (query && !opt.label.toLowerCase().includes(query)) continue;
+        if (!groups.has(opt.category)) groups.set(opt.category, []);
+        groups.get(opt.category).push(opt);
+    }
+
+    if (groups.size === 0) {
+        const li = document.createElement('li');
+        li.className = 'dropdown-item disabled text-muted py-2';
+        li.setAttribute('role', 'presentation');
+        li.setAttribute('aria-disabled', 'true');
+        li.textContent = query ? 'No matching filters' : 'No more filters available';
+        dropdown.appendChild(li);
+        return;
+    }
+
+    for (const [category, options] of groups) {
+        // Non-selectable category header
+        const header = document.createElement('li');
+        header.className = 'dropdown-header fw-bold text-uppercase small text-muted px-3 pt-2 pb-1';
+        header.textContent = category;
+        header.setAttribute('role', 'presentation');
+        dropdown.appendChild(header);
+
+        for (const opt of options) {
+            const li = document.createElement('li');
+            li.className = 'dropdown-item py-2';
+            li.style.cursor = 'pointer';
+            li.setAttribute('role', 'option');
+            li.setAttribute('tabindex', '-1');
+            li.textContent = opt.label;
+
+            li.addEventListener('mousedown', (e) => e.preventDefault());
+            li.addEventListener('click', () => _addFilterChip(opt));
+            li.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    _addFilterChip(opt);
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    let next = li.nextElementSibling;
+                    while (next && next.getAttribute('role') !== 'option') next = next.nextElementSibling;
+                    if (next) next.focus();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    let prev = li.previousElementSibling;
+                    while (prev && prev.getAttribute('role') !== 'option') prev = prev.previousElementSibling;
+                    if (prev) prev.focus();
+                    else document.getElementById('filterComboboxInput')?.focus();
+                } else if (e.key === 'Escape' || e.key === 'Tab') {
+                    _closeFilterDropdown();
+                }
+            });
+            dropdown.appendChild(li);
+        }
+    }
+}
+
+function _addFilterChip(opt) {
+    // Enforce mutual exclusivity for exclusive categories
+    if (opt.exclusive) {
+        const existing = _selectedFilterChips.find(
+            c => c.category === opt.category && c.key !== opt.key
+        );
+        if (existing) {
+            _selectedFilterChips = _selectedFilterChips.filter(c => c.key !== existing.key);
+            showNotification(
+                `"${existing.label}" was replaced by "${opt.label}" (only one ${opt.category.toLowerCase()} filter at a time).`,
+                'info'
+            );
+        }
+    }
+
+    if (!_selectedFilterChips.find(c => c.key === opt.key)) {
+        _selectedFilterChips.push({
+            key: opt.key,
+            label: opt.label,
+            category: opt.category,
+        });
+    }
+
+    const inputEl = document.getElementById('filterComboboxInput');
+    if (inputEl) inputEl.value = '';
+    _renderFilterChips();
+    _renderFilterDropdown('');
+    _closeFilterDropdown();
+    applyFilters();
+}
+
+function _removeFilterChip(key) {
+    _selectedFilterChips = _selectedFilterChips.filter(c => c.key !== key);
+    _renderFilterChips();
+    applyFilters();
+}
+
+function _renderFilterChips() {
+    const container = document.getElementById('selectedFilterChips');
+    if (!container) return;
+
+    container.innerHTML = _selectedFilterChips.map(chip => `
+        <span class="badge bg-primary me-1 mb-1">
+            ${escapeHtml(chip.label)}
+            <button type="button" class="btn-close btn-close-white btn-sm ms-1" aria-label="Remove"
+                data-action="remove-filter-chip" data-key="${escapeHtml(chip.key)}"
+                style="font-size: 0.55rem;"></button>
+        </span>
+    `).join('');
+}
+
+function _setFilterDropdownVisible(visible) {
+    const input = document.getElementById('filterComboboxInput');
+    const dropdown = document.getElementById('filterComboboxDropdown');
+    if (input) input.setAttribute('aria-expanded', String(visible));
+    if (dropdown) dropdown.style.display = visible ? 'block' : 'none';
+}
+
+function _closeFilterDropdown() {
+    _setFilterDropdownVisible(false);
 }

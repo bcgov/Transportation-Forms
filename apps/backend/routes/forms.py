@@ -531,17 +531,22 @@ async def list_forms(
         25, description="Number of forms to return (allowed: 25, 50, 100)"
     ),
     q: Optional[str] = Query(None, description="Keyword full-text search query"),
-    status_filter: Optional[str] = Query(
-        None, alias="status", description="Filter by status"
+    status_filter: Optional[List[str]] = Query(
+        None, alias="status", description="Filter by status (multi-value, OR logic)"
     ),
     business_area_ids: Optional[List[str]] = Query(
         None, description="Filter by business area IDs (multi-select)"
     ),
-    form_source: Optional[str] = Query(
-        None, pattern="^(Link|Download)$", description="Filter by source type"
+    form_source: Optional[List[str]] = Query(
+        None, description="Filter by source type (multi-value: Link, Download)"
     ),
     is_public: Optional[bool] = Query(None, description="Filter by public status"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
+    sort_field: str = Query(
+        "created_at",
+        pattern="^(created_at|form_number)$",
+        description="Sort field (created_at or form_number)",
+    ),
     db: Session = Depends(get_db),
 ) -> FormListResponse:
     """
@@ -549,12 +554,13 @@ async def list_forms(
 
     - **skip**: Number of forms to skip (for pagination)
     - **limit**: Max forms to return (25, 50, 100)
-    - **q**: Full-text keyword search query
-    - **status**: Filter by status (draft, pending_review, approved, published, archived)
+    - **q**: Full-text keyword search query (also matches form numbers)
+    - **status**: Filter by status (draft, pending_review, published, archived). Multi-value with OR logic.
     - **business_area_ids**: Optional list of business area IDs to filter by
-    - **form_source**: Filter by source type (Link or Download)
+    - **form_source**: Filter by source type (Link or Download). Multi-value with OR logic.
     - **is_public**: Filter by public/private status
-    - **sort_order**: Sort by Date Created ascending (asc) or descending (desc)
+    - **sort_order**: Sort ascending (asc) or descending (desc)
+    - **sort_field**: Sort by created_at (default) or form_number
     """
 
     if limit not in {25, 50, 100}:
@@ -562,6 +568,28 @@ async def list_forms(
             status_code=422,
             detail="limit must be one of: 25, 50, 100",
         )
+
+    # Validate status values
+    VALID_STATUSES = {"draft", "pending_review", "published", "archived"}
+    if status_filter:
+        invalid = [s for s in status_filter if s not in VALID_STATUSES]
+        if invalid:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid status value(s): {', '.join(invalid)}. "
+                f"Allowed: {', '.join(sorted(VALID_STATUSES))}",
+            )
+
+    # Validate form_source values
+    VALID_SOURCES = {"Link", "Download"}
+    if form_source:
+        invalid_src = [s for s in form_source if s not in VALID_SOURCES]
+        if invalid_src:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid form_source value(s): {', '.join(invalid_src)}. "
+                f"Allowed: {', '.join(sorted(VALID_SOURCES))}",
+            )
 
     business_area_uuid_list: Optional[List[UUID]] = None
     if business_area_ids:
@@ -578,11 +606,12 @@ async def list_forms(
         skip=skip,
         limit=limit,
         q=q,
-        status=status_filter,
+        status=status_filter or None,
         business_area_ids=business_area_uuid_list,
-        form_source=form_source,
+        form_source=form_source or None,
         is_public=is_public,
         sort_order=sort_order,
+        sort_field=sort_field,
     )
 
     items = [
