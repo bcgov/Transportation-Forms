@@ -302,28 +302,39 @@ class FormService:
         total = query.count()
 
         # Sorting
-        if sort_field == "form_number":
-            sort_col = FormNumberReservation.full_form_number
-            if sort_order.lower() == "asc":
-                query = query.order_by(asc(sort_col).nullslast())
+        #
+        # When a search is active, form-number matches are ranked first
+        # (primary ORDER BY) regardless of the chosen sort_field, so that
+        # an exact/partial form-number hit always appears above title-only
+        # matches.  The user's sort_field is applied as secondary.
+        if search_active:
+            rank_expr = text("""
+                CASE WHEN form_number_reservations.full_form_number
+                          ILIKE :rank_pattern ESCAPE :esc
+                     THEN 0 ELSE 1 END
+            """).params(
+                rank_pattern=like_pattern,
+                esc="\\",
+            )
+
+            if sort_field == "form_number":
+                sort_col = FormNumberReservation.full_form_number
+                if sort_order.lower() == "asc":
+                    query = query.order_by(rank_expr, asc(sort_col).nullslast())
+                else:
+                    query = query.order_by(rank_expr, desc(sort_col).nullslast())
             else:
-                query = query.order_by(desc(sort_col).nullslast())
-        else:
-            # Default: sort by created_at
-            if search_active:
-                # Rank form-number matches first (primary), then user sort (secondary)
-                rank_expr = text("""
-                    CASE WHEN form_number_reservations.full_form_number
-                              ILIKE :rank_pattern ESCAPE :esc
-                         THEN 0 ELSE 1 END
-                """).params(
-                    rank_pattern=like_pattern,
-                    esc="\\",
-                )
                 if sort_order.lower() == "asc":
                     query = query.order_by(rank_expr, asc(Form.created_at))
                 else:
                     query = query.order_by(rank_expr, desc(Form.created_at))
+        else:
+            if sort_field == "form_number":
+                sort_col = FormNumberReservation.full_form_number
+                if sort_order.lower() == "asc":
+                    query = query.order_by(asc(sort_col).nullslast())
+                else:
+                    query = query.order_by(desc(sort_col).nullslast())
             else:
                 if sort_order.lower() == "asc":
                     query = query.order_by(asc(Form.created_at))
