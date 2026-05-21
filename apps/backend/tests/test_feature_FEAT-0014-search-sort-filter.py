@@ -73,6 +73,19 @@ def feat14_client(db, user_factory):
 
 
 @pytest.fixture()
+def unauthenticated_client(db):
+    """Test client with NO get_current_user override.
+
+    Only get_db is overridden. If an endpoint depends on get_current_user,
+    requests will fail — proving the endpoint is genuinely open.
+    """
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides.pop(get_current_user, None)
+    yield TestClient(app, raise_server_exceptions=False)
+    app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture()
 def prefix_h(db):
     """Active prefix 'H' for form number reservations."""
     p = FormNumberPrefix(
@@ -278,13 +291,13 @@ class TestSearchByFormNumber:
         assert resp.status_code == 200
 
     @pytest.mark.integration
-    def test_tc1_10_list_endpoint_is_open(self, feat14_client, db):
-        """List endpoint does not require authentication (existing behaviour)."""
-        client, _, _ = feat14_client
-        # The list endpoint has no get_current_user dependency, so it is open.
-        # This test documents existing behaviour. Backend enforcement of
-        # authentication is out of scope for FEAT-0014.
-        resp = client.get(
+    def test_tc1_10_list_endpoint_is_open(self, unauthenticated_client, db):
+        """List endpoint does not require authentication (existing behaviour).
+
+        Uses a client with no get_current_user override — if the endpoint
+        ever adds an auth dependency, this test will start failing.
+        """
+        resp = unauthenticated_client.get(
             "/api/v1/forms",
             params={"q": "H0021", "limit": 25},
         )
@@ -454,10 +467,12 @@ class TestAutocompleteFormNumbers:
         assert resp.status_code == 200
 
     @pytest.mark.integration
-    def test_tc2_9_autocomplete_endpoint_is_open(self, feat14_client, db):
-        """Autocomplete endpoint does not require authentication (existing behaviour)."""
-        client, _, _ = feat14_client
-        resp = client.get(
+    def test_tc2_9_autocomplete_endpoint_is_open(self, unauthenticated_client, db):
+        """Autocomplete endpoint does not require authentication (existing behaviour).
+
+        Uses a client with no get_current_user override.
+        """
+        resp = unauthenticated_client.get(
             "/api/v1/forms/autocomplete",
             params={"q": "H00", "max_suggestions": 10},
         )
@@ -626,10 +641,12 @@ class TestSortByFormNumber:
         assert resp.status_code == 200
 
     @pytest.mark.integration
-    def test_tc3_13_sort_endpoint_is_open(self, feat14_client, db):
-        """List endpoint with sort does not require authentication."""
-        client, _, _ = feat14_client
-        resp = client.get(
+    def test_tc3_13_sort_endpoint_is_open(self, unauthenticated_client, db):
+        """List endpoint with sort does not require authentication.
+
+        Uses a client with no get_current_user override.
+        """
+        resp = unauthenticated_client.get(
             "/api/v1/forms",
             params={"sort_field": "form_number", "limit": 25},
         )
@@ -793,10 +810,12 @@ class TestMultiValueFilters:
         assert resp.status_code == 200
 
     @pytest.mark.integration
-    def test_tc4_12_filter_endpoint_is_open(self, feat14_client, db):
-        """List endpoint with filters does not require authentication."""
-        client, _, _ = feat14_client
-        resp = client.get(
+    def test_tc4_12_filter_endpoint_is_open(self, unauthenticated_client, db):
+        """List endpoint with filters does not require authentication.
+
+        Uses a client with no get_current_user override.
+        """
+        resp = unauthenticated_client.get(
             "/api/v1/forms",
             params={"status": "draft", "limit": 25},
         )
