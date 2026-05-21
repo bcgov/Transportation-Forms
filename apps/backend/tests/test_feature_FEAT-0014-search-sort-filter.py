@@ -491,11 +491,9 @@ class TestSortByFormNumber:
     def test_tc3_3_form_number_asc(self, feat14_client, db, prefix_h, prefix_a):
         client, staff, _ = feat14_client
         r1 = _make_reservation(db, prefix_a, "001", "A001", staff)
-        r2 = _make_reservation(db, prefix_h, "0002", "B002", staff,)
-        r3 = _make_reservation(db, prefix_h, "0003", "C003", staff)
+        r2 = _make_reservation(db, prefix_h, "0002", "H002", staff)
+        r3 = _make_reservation(db, prefix_h, "0003", "H003", staff)
 
-        # Use distinct prefixes to get A001, B002, C003
-        # Actually, let's create them with the right full_form_number
         _make_form(db, staff, "Form A", reservation=r1)
         _make_form(db, staff, "Form B", reservation=r2)
         _make_form(db, staff, "Form C", reservation=r3)
