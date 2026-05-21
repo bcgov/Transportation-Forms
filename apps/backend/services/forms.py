@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc, asc, text, case, literal
+from sqlalchemy import and_, desc, asc, text
 from sqlalchemy.exc import OperationalError
 
 from backend.models import (

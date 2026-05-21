@@ -101,7 +101,9 @@ export async function loadForms() {
         // Sort — value format is "field:order" (e.g. "created_at:desc")
         const sortSelect = document.getElementById('sortOrder');
         const sortValue = sortSelect?.value || 'created_at:desc';
-        const [sortField, sortDir] = sortValue.split(':');
+        const sortParts = sortValue.split(':');
+        const sortField = sortParts[0] || 'created_at';
+        const sortDir = sortParts[1] || 'desc';
         params.set('sort_field', sortField);
         params.set('sort_order', sortDir);
 
@@ -698,7 +700,7 @@ function _renderFilterDropdown(query) {
         const header = document.createElement('li');
         header.className = 'dropdown-header fw-bold text-uppercase small text-muted px-3 pt-2 pb-1';
         header.textContent = category;
-        header.setAttribute('aria-disabled', 'true');
+        header.setAttribute('role', 'presentation');
         dropdown.appendChild(header);
 
         for (const opt of options) {
