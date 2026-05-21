@@ -612,7 +612,8 @@ async function _restoreFormFromList(formId, formTitle) {
 
 /**
  * Returns the filter options visible to the current user.
- * Staff-viewer-only users see only "Published" under Workflow State (US-006).
+ * Users who are staff-viewer-only OR have no roles assigned see only
+ * "Published" under Workflow State (US-006); backend enforces access control.
  */
 function _getVisibleFilterOptions() {
     const user = getCurrentUser();
