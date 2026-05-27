@@ -35,9 +35,11 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     try:
+        import anyio
+
         from backend.services.s3_service import ensure_bucket_exists
 
-        ensure_bucket_exists()
+        await anyio.to_thread.run_sync(ensure_bucket_exists)
         logger.info("s3_bucket_initialised")
     except (BotoCoreError, ClientError) as exc:
         logger.warning(
