@@ -3,16 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-
-
-def _utc_naive_now() -> datetime:
-    """Return current UTC time as a naive ``datetime`` (no tzinfo).
-
-    FEAT-0015: replaces ``datetime.utcnow()`` which is deprecated on
-    Python 3.12+ but matches the historical naive-UTC value stored in the
-    SQLAlchemy ``DateTime`` columns used here.
-    """
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 from typing import List, Optional
 from uuid import UUID
 
@@ -25,6 +15,16 @@ from backend.auth.dependencies import require_admin
 from backend.auth.jwt_handler import TokenData
 from backend.database import get_db
 from backend.models import AuditLog, Role, User, UserRole
+
+
+def _utc_naive_now() -> datetime:
+    """Return current UTC time as a naive ``datetime`` (no tzinfo).
+
+    FEAT-0015: replaces ``datetime.utcnow()`` which is deprecated on
+    Python 3.12+ but matches the historical naive-UTC value stored in the
+    SQLAlchemy ``DateTime`` columns used here.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class UserRoleSummaryResponse(BaseModel):
