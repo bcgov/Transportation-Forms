@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Optional
+from uuid import UUID
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, joinedload
+
+from backend.models import AccessRequest, AuditLog, Role, User, UserRole
 
 
 def _utc_naive_now() -> datetime:
@@ -13,15 +20,6 @@ def _utc_naive_now() -> datetime:
     SQLAlchemy ``DateTime`` columns used here.
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-from typing import Optional
-from uuid import UUID
-
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
-
-from backend.models import AccessRequest, AuditLog, Role, User, UserRole
 
 
 class AccessRequestNotFoundError(ValueError):
