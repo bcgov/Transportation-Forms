@@ -24,7 +24,7 @@ const HEADER_HTML = `
   <div class="bcgov-header" role="banner">
     <div class="container d-flex align-items-center py-2">
       <a href="/" class="d-flex align-items-center text-decoration-none" aria-label="BC Government — home">
-        <img src="/vendor/bc-gov-logo.svg" alt="" width="155" height="42" class="me-3">
+        <img src="/assets/bc-gov-transportation-logo.png" alt="" width="155" height="42" class="me-3">
         <span class="visually-hidden">BC Government</span>
       </a>
       <span class="ms-3 fs-5 ministry-name d-none d-sm-inline">__APP_NAME__</span>

@@ -12,14 +12,51 @@ points at the Rancher Desktop Compose service on port 5432.
 
 import os
 import uuid
+import warnings
 from datetime import datetime, timedelta, timezone
 from typing import Generator, Any
 
 import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
+from pydantic.warnings import PydanticDeprecatedSince20
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import MovedIn20Warning
 from sqlalchemy.orm import Session, sessionmaker
+
+
+def _enable_targeted_warning_gates() -> None:
+    """Fail tests on remediated owner-code framework deprecations."""
+    warnings.filterwarnings(
+        "error",
+        message=r".*Support for class-based `config` is deprecated.*",
+        category=PydanticDeprecatedSince20,
+        module=r"^backend(\.|$)",
+    )
+    warnings.filterwarnings(
+        "error",
+        message=r".*declarative_base\(\).*",
+        category=MovedIn20Warning,
+        module=r"^backend(\.|$)",
+    )
+    warnings.filterwarnings(
+        "error",
+        message=r".*on_event is deprecated.*",
+        category=DeprecationWarning,
+        module=r"^backend(\.|$)",
+    )
+
+
+_enable_targeted_warning_gates()
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    _enable_targeted_warning_gates()
+    config.addinivalue_line(
+        "markers",
+        "s3_live: live S3 credential and bucket validation requiring configured object storage",
+    )
+
 
 from backend.auth.dependencies import get_current_user
 from backend.database import Base, get_db
@@ -46,14 +83,26 @@ from backend.auth.jwt_handler import TokenData
 # Locally/CI: read from the .env file or GitHub Actions env block.
 DATABASE_URL = os.environ["DATABASE_URL"]
 
+
+def _ensure_psycopg_driver(url: str) -> str:
+    """Force SQLAlchemy to use psycopg v3 (FEAT-0015)."""
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url
+
+
 # Connection to the *admin* database used to CREATE/DROP the test database.
 # Inferred by replacing the database path from DATABASE_URL with /postgres
-_PG_ADMIN_URL = DATABASE_URL.rsplit("/", 1)[0] + "/postgres"
+_PG_ADMIN_URL = _ensure_psycopg_driver(
+    DATABASE_URL.rsplit("/", 1)[0] + "/postgres"
+)
 
 _TEST_DB_NAME = DATABASE_URL.rsplit("/", 1)[-1] + "_test"
 
 # Make sure tests run against the "_test" database instead of the main db
-TEST_DATABASE_URL = DATABASE_URL.rsplit("/", 1)[0] + f"/{_TEST_DB_NAME}"
+TEST_DATABASE_URL = _ensure_psycopg_driver(
+    DATABASE_URL.rsplit("/", 1)[0] + f"/{_TEST_DB_NAME}"
+)
 
 
 

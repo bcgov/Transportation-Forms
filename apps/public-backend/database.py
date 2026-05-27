@@ -15,8 +15,19 @@ from sqlalchemy.pool import QueuePool
 from config import settings
 
 
+def _ensure_psycopg_driver(url: str) -> str:
+    """Force SQLAlchemy to use psycopg v3 instead of legacy psycopg2.
+
+    Mirrors the helper in apps/backend/database.py; see that module for the
+    FEAT-0015 rationale.
+    """
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
+
+
 engine = create_engine(
-    settings.DATABASE_URL_READONLY,
+    _ensure_psycopg_driver(settings.DATABASE_URL_READONLY),
     poolclass=QueuePool,
     pool_size=settings.DB_POOL_SIZE,
     max_overflow=settings.DB_MAX_OVERFLOW,

@@ -1,5 +1,5 @@
 # ── Stage 1: Build ────────────────────────────────────────────────────────────
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 
 WORKDIR /build
 
@@ -10,29 +10,19 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY requirements.txt constraints.txt ./
 
-# Install only the packages required for running Alembic migrations
+# FEAT-0015: install the full pinned stack (alembic, psycopg v3, SQLAlchemy,
+# pydantic, etc.) from the same lockfile used by the API images so the
+# migration runner matches the runtime exactly.  psycopg[binary] bundles
+# libpq — no libpq-dev needed.
 RUN pip install --upgrade pip setuptools wheel && \
-    pip install --prefix=/install \
-        alembic \
-        psycopg2-binary \
-        SQLAlchemy \
-        python-jose[cryptography] \
-        passlib[bcrypt] \
-        python-dotenv \
-        pydantic \
-        pydantic-settings \
-        pydantic-extra-types \
-        structlog \
-        pytz \
-        python-dateutil
+    pip install --prefix=/install -r requirements.txt -c constraints.txt
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 WORKDIR /app
 

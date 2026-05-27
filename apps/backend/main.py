@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from botocore.exceptions import BotoCoreError, ClientError
+from contextlib import asynccontextmanager
 import structlog
 import os
 
@@ -28,11 +30,29 @@ from backend.routes.stats import router as stats_router
 # Configure logging
 logger = structlog.get_logger()
 
+
+# Initialise S3 object storage bucket on startup (idempotent — safe to run every boot)
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        from backend.services.s3_service import ensure_bucket_exists
+
+        ensure_bucket_exists()
+        logger.info("s3_bucket_initialised")
+    except (BotoCoreError, ClientError) as exc:
+        logger.warning(
+            "s3_bucket_initialisation_skipped",
+            error_type=type(exc).__name__,
+        )
+    yield
+
+
 # Create FastAPI app
 app = FastAPI(
     title="BC Transportation Forms API",
     description="RESTful API for managing transportation forms",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS Configuration (driven by CORS_ORIGINS environment variable)
@@ -84,18 +104,6 @@ async def serve_frontend():
     return JSONResponse(
         status_code=404, content={"message": "Frontend index.html not found"}
     )
-
-
-# Initialise S3 object storage bucket on startup (idempotent — safe to run every boot)
-@app.on_event("startup")
-async def startup_event():
-    try:
-        from backend.services.s3_service import ensure_bucket_exists
-
-        ensure_bucket_exists()
-        logger.info("S3 bucket initialised.")
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("S3 bucket initialisation skipped", error=str(exc))
 
 
 # Include API routes

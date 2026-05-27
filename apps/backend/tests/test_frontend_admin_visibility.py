@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 
-FRONTEND_INDEX = Path(__file__).resolve().parents[1] / "frontend" / "index.html"
+FRONTEND_INDEX = Path(__file__).resolve().parents[2] / "frontend" / "index.html"
 
 
 @pytest.mark.integration

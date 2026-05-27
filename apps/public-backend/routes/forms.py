@@ -37,13 +37,13 @@ from http_cache import compute_etag, etag_matches
 from models import PublicForm
 from problem import problem_response
 
-
 router = APIRouter(prefix="/api/public/v1", tags=["public-forms"])
 
 
 # ------------------------------------------------------------------
 # Query-parameter enums
 # ------------------------------------------------------------------
+
 
 class SortField(str, Enum):
     effective_date = "effective_date"
@@ -60,6 +60,7 @@ class SortOrder(str, Enum):
 # ------------------------------------------------------------------
 # Response schemas
 # ------------------------------------------------------------------
+
 
 class PublicFormItem(BaseModel):
     """List-row projection.
@@ -112,14 +113,11 @@ class PublicFormDetail(BaseModel):
 # Helpers
 # ------------------------------------------------------------------
 
+
 def _apply_text_search(query, q: str):
     """Apply a safely-escaped ILIKE ``%q%`` filter across title /
     description / keywords (FEAT-0004 behaviour)."""
-    safe_term = (
-        q.replace("\\", "\\\\")
-        .replace("%", "\\%")
-        .replace("_", "\\_")
-    )
+    safe_term = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     like_pattern = f"%{safe_term}%"
     return query.filter(
         PublicForm.title.ilike(like_pattern)
@@ -205,6 +203,7 @@ def _public_origin(request: Request) -> str:
 # GET /forms — list / search / sort / paginate
 # ------------------------------------------------------------------
 
+
 @router.get("/forms")
 def list_public_forms(
     request: Request,
@@ -249,7 +248,9 @@ def list_public_forms(
             query = query.filter(text("1 = 0"))
 
     sort_field = s or SortField.updated_at
-    sort_order = o or (SortOrder.desc if sort_field == SortField.updated_at else SortOrder.asc)
+    sort_order = o or (
+        SortOrder.desc if sort_field == SortField.updated_at else SortOrder.asc
+    )
     query = _apply_sort(query, sort_field, sort_order)
 
     # Total *before* pagination.
@@ -269,11 +270,9 @@ def list_public_forms(
 # GET /forms/{form_number} — detail
 # ------------------------------------------------------------------
 
+
 def _get_form_or_404(db: Session, form_number: str) -> PublicForm:
-    query = (
-        db.query(PublicForm)
-        .filter(PublicForm.form_number == form_number)
-    )
+    query = db.query(PublicForm).filter(PublicForm.form_number == form_number)
     query = _apply_effective_date_filter(query)  # FEAT-0010
     row = query.first()
     if row is None:
@@ -321,17 +320,19 @@ def get_public_form(
 # GET /forms/{form_number}/file — X-Accel-Redirect
 # ------------------------------------------------------------------
 
+
 def _content_disposition(filename: str) -> str:
     """Build a safe ``attachment`` header per RFC 6266.
 
     Filenames may contain Unicode; we provide both the ASCII fallback and
     the UTF-8 percent-encoded form.
     """
-    ascii_fallback = "".join(
-        c if 32 <= ord(c) < 127 and c not in '"\\' else "_" for c in filename
-    ) or "form"
+    ascii_fallback = (
+        "".join(c if 32 <= ord(c) < 127 and c not in '"\\' else "_" for c in filename)
+        or "form"
+    )
     utf8 = quote(filename, safe="")
-    return f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{utf8}'
+    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{utf8}"
 
 
 @router.get("/forms/{form_number}/file")
@@ -380,7 +381,7 @@ _OG_TEMPLATE = """<!doctype html>
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{description}">
 <meta property="og:url" content="{canonical}">
-<meta property="og:site_name" content="BC Transportation Forms">
+<meta property="og:site_name" content="BC Government Public Forms">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="{title}">
 <meta name="twitter:description" content="{description}">
@@ -390,7 +391,7 @@ _OG_TEMPLATE = """<!doctype html>
 <main>
 <h1>{title}</h1>
 <p>{description}</p>
-<p><a href="{canonical}">View this form on BC Transportation Forms</a></p>
+<p><a href="{canonical}">View this form on BC Government Public Forms</a></p>
 </main>
 </body>
 </html>
@@ -400,7 +401,7 @@ _OG_404_TEMPLATE = """<!doctype html>
 <html lang="en-CA">
 <head>
 <meta charset="utf-8">
-<title>Form not found — BC Transportation Forms</title>
+<title>Form not found — BC Government Public Forms</title>
 <meta name="robots" content="noindex">
 </head>
 <body>
@@ -454,7 +455,7 @@ def get_form_og(
         "description": description,
         "url": canonical,
         "identifier": form_number,
-        "inLanguage": "en-CA",    # US-008 AC8 / US-009
+        "inLanguage": "en-CA",  # US-008 AC8 / US-009
     }
     if row.business_area:
         jsonld_obj["publisher"] = {

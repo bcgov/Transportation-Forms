@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc_naive_now() -> datetime:
+    """Return current UTC time as a naive ``datetime`` (no tzinfo).
+
+    FEAT-0015: replaces ``datetime.utcnow()`` which is deprecated on
+    Python 3.12+ but matches the historical naive-UTC value stored in the
+    SQLAlchemy ``DateTime`` columns used here.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from typing import Optional
 from uuid import UUID
 
@@ -213,7 +223,7 @@ class RoleService:
         if role.is_system or role.name in RoleService.SYSTEM_ROLE_NAMES:
             raise RoleConflictError("System roles cannot be deleted")
 
-        now = datetime.utcnow()
+        now = _utc_naive_now()
         role.deleted_at = now
         role.is_active = False
 
