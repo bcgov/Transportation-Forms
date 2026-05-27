@@ -142,4 +142,4 @@ class TestPrefixesApi:
             "max_number_length": 10
         }
         response = client.post("/api/v1/admin/prefixes", json=payload, headers=admin_token_headers)
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
