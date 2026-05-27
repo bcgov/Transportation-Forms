@@ -119,11 +119,13 @@ tasks:
     desc: Deploy Crunchy PostgreSQL to k3s (mirrors .deployer.yml)
     dir: ../..
     cmds:
-      # Clone bcgov/action-crunchy repo (cached) if not already present
+      # Clone bcgov/action-crunchy repo (cached) if not already present.
+      # FEAT-0015: aligned with .github/workflows/.deployer.yml (v2.1.0,
+      # which supports PG 18 — matches infra/charts/crunchy/values.yml).
       - |
         if [ ! -d "{{.CRUNCHY_CACHE}}" ]; then
-          echo "Cloning bcgov/action-crunchy v2.0.0..."
-          git clone --branch v2.0.0 --depth 1 \
+          echo "Cloning bcgov/action-crunchy v2.1.0..."
+          git clone --branch v2.1.0 --depth 1 \
             https://github.com/bcgov/action-crunchy.git "{{.CRUNCHY_CACHE}}"
         else
           echo "Using cached action-crunchy chart."
