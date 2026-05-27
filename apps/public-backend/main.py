@@ -38,6 +38,7 @@ logger = structlog.get_logger()
 
 # ---------- Startup / shutdown ----------
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(
@@ -48,6 +49,7 @@ async def lifespan(app: FastAPI):
     )
     yield
     logger.info("public_backend_stopped")
+
 
 # ---------- App ----------
 app = FastAPI(
@@ -68,15 +70,16 @@ app = FastAPI(
 # auth runs before method restriction so spammy POSTs without the
 # secret get a single 403 (not 405) — denying attackers a method-probe
 # oracle.
-app.add_middleware(StripSetCookieMiddleware)                       # innermost
+app.add_middleware(StripSetCookieMiddleware)  # innermost
 app.add_middleware(MethodRestrictionMiddleware)
 app.add_middleware(XInternalAuthMiddleware, secret=settings.INTERNAL_AUTH_SECRET)
-app.add_middleware(RequestIDMiddleware)                            # outermost
+app.add_middleware(RequestIDMiddleware)  # outermost
 
 
 # ---------- RFC 7807 problem-JSON exception handlers ----------
 # These deliberately do **not** include stack traces, library versions,
 # or file paths in the response body (US-014 AC14).
+
 
 @app.exception_handler(HTTPException)
 async def _http_exception_handler(request: Request, exc: HTTPException):
@@ -98,9 +101,7 @@ async def _http_exception_handler(request: Request, exc: HTTPException):
 
 
 @app.exception_handler(RequestValidationError)
-async def _validation_exception_handler(
-    request: Request, exc: RequestValidationError
-):
+async def _validation_exception_handler(request: Request, exc: RequestValidationError):
     # Surface the field-level errors in the ``errors`` extension member,
     # but strip any value that could echo PII / payload bytes.
     errors = []
@@ -142,6 +143,7 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 
 # ---------- Health probes (kubelet — exempt from X-Internal-Auth) ----------
 
+
 @app.get("/healthz")
 async def liveness():
     return {"status": "healthy"}
@@ -164,4 +166,3 @@ def readiness(db: Session = Depends(get_db)):
 app.include_router(forms_router)
 app.include_router(business_areas_router)
 app.include_router(sitemap_router)
-

@@ -5,7 +5,17 @@ Includes audit logging, soft deletes, and version management.
 """
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc_naive_now() -> datetime:
+    """Return current UTC time as a naive ``datetime`` (no tzinfo).
+
+    FEAT-0015: replaces ``datetime.utcnow()`` which is deprecated on
+    Python 3.12+ but matches the historical naive-UTC value stored in the
+    SQLAlchemy ``DateTime`` columns used here.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, asc, text
@@ -513,7 +523,7 @@ class FormService:
         if not form:
             return False
 
-        form.deleted_at = datetime.utcnow()
+        form.deleted_at = _utc_naive_now()
         db.commit()
 
         # Audit log

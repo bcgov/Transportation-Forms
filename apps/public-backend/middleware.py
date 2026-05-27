@@ -17,7 +17,6 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-
 _REQUEST_ID_MAX_LEN = 128
 _REQUEST_ID_SAFE = re.compile(r"^[\w\-\.]+$")
 

@@ -12,7 +12,7 @@ global:
 crunchy:
   enabled: true
   imagePullPolicy: IfNotPresent
-  postgresVersion: 17
+  postgresVersion: 18
 
   # ── Instances (object, not list) ─────────────────────────────────────────────
   instances:

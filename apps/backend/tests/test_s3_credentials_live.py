@@ -48,8 +48,8 @@ def _make_client():
         endpoint_url=s.S3_ENDPOINT_URL,
         aws_access_key_id=s.S3_ACCESS_KEY,
         aws_secret_access_key=s.S3_SECRET_KEY,
-        verify=False,
-        config=Config(signature_version="s3v4")
+        verify=s.S3_VERIFY_TLS,
+        config=Config(signature_version="s3v4"),
     )
 
 

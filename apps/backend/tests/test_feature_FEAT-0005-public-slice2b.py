@@ -28,10 +28,10 @@ from pathlib import Path
 # Paths
 # ---------------------------------------------------------------------------
 
-REPO = Path(__file__).resolve().parents[1]
-PUBLIC_FE = REPO / "public-frontend"
-PUBLIC_BE = REPO / "public-backend"
-TESTS_DIR = REPO / "tests"
+APPS_DIR = Path(__file__).resolve().parents[2]
+PUBLIC_FE = APPS_DIR / "public-frontend"
+PUBLIC_BE = APPS_DIR / "public-backend"
+TESTS_DIR = APPS_DIR / "backend" / "tests"
 
 
 def _read_fe(rel: str) -> str:
@@ -210,9 +210,9 @@ class TestA11yHTMLShell:
     def test_logo_is_decorative_alt_empty(self):
         # AC7 — BC Gov logo is decorative, alt=""
         html = self._html()
-        assert 'bc-gov-logo.svg' in html
+        assert 'bc-gov-transportation-logo.png' in html
         # The logo img must have alt="" (decorative)
-        m = re.search(r'<img[^>]+bc-gov-logo\.svg[^>]*>', html)
+        m = re.search(r'<img[^>]+bc-gov-transportation-logo\.png[^>]*>', html)
         assert m, "Logo img tag not found"
         assert 'alt=""' in m.group(0)
 
@@ -781,4 +781,3 @@ class TestOGBackend:
                           "business_area_id", "form_id"):
             assert forbidden not in body, \
                 f"Internal field {forbidden} must not appear in OG response"
-

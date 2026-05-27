@@ -7,7 +7,7 @@ Business area CRUD management is handled in a future admin task
 
 from typing import List
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -21,15 +21,13 @@ from backend.models import BusinessArea
 class BusinessAreaResponse(BaseModel):
     """Response model for a single business area."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     description: str | None
     sort_order: int
     is_active: bool
-
-    class Config:
-        from_attributes = True
-
 
 # ============================================================================
 # Router

@@ -13,12 +13,45 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
+from pydantic.warnings import PydanticDeprecatedSince20
+from sqlalchemy.exc import MovedIn20Warning
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
+
+def _enable_targeted_warning_gates() -> None:
+    """Fail tests on remediated owner-code framework deprecations."""
+    warnings.filterwarnings(
+        "error",
+        message=r".*Support for class-based `config` is deprecated.*",
+        category=PydanticDeprecatedSince20,
+        module=r"^(config|database|main|models|routes)(\.|$)",
+    )
+    warnings.filterwarnings(
+        "error",
+        message=r".*declarative_base\(\).*",
+        category=MovedIn20Warning,
+        module=r"^(config|database|main|models|routes)(\.|$)",
+    )
+    warnings.filterwarnings(
+        "error",
+        message=r".*on_event is deprecated.*",
+        category=DeprecationWarning,
+        module=r"^(config|database|main|models|routes)(\.|$)",
+    )
+
+
+_enable_targeted_warning_gates()
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    _enable_targeted_warning_gates()
+
 
 # ---------------------------------------------------------------------------
 # Ensure public-backend is importable
@@ -97,6 +130,7 @@ def db(sqlite_engine):
 # ---------------------------------------------------------------------------
 # FastAPI TestClient wired to the SQLite session
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def public_client(db: Session, sqlite_engine):

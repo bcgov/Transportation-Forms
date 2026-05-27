@@ -18,7 +18,6 @@ from database import get_db
 from http_cache import compute_etag, etag_matches
 from models import PublicForm
 
-
 router = APIRouter(tags=["public-sitemap"])
 
 
