@@ -150,6 +150,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.1
 
+      - name: Run Trivy secret scan (blocking)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          config: .github/trivy-secret-blocking.yaml
+          format: table
+          exit-code: "1"
+
       - name: Run Trivy (filesystem — code + IaC)
         uses: aquasecurity/trivy-action@master
         with:
@@ -206,14 +215,13 @@ jobs:
         run: |
           FAILED=0
           for job_result in \
-            "${{ needs.test.result }}" \
-            "${{ needs.bandit.result }}"; do
+            "${{ needs.bandit.result }}" \
+            "${{ needs.trivy.result }}"; do
             if [[ -n "$job_result" && "$job_result" != "success" && "$job_result" != "skipped" ]]; then
               echo "Job failed: ${job_result}"
               FAILED=1
             fi
           done
-          # Trivy and CodeQL are informational — failures go to Security tab but do not block
           if [[ $FAILED -eq 1 ]]; then
             echo "One or more required analysis jobs failed."
             exit 1
