@@ -1,6 +1,6 @@
 # Module 2: Dependency Analysis
 
-**Output**: `findings/dependencies/dependency-inventory.md` + `findings/dependencies/component-dependencies/*.md`
+**Output**: `/docs/security_assessment/findings/dependencies/dependency-inventory.md` + `/docs/security_assessment/findings/dependencies/component-dependencies/*.md`
 **Time estimate**: 15-30 minutes
 
 ## Objective
@@ -69,7 +69,7 @@ Catalog every third-party dependency, assess version risk, map CVEs from Trivy (
 
 ## Required Output Format — Per-Component Files
 
-Write one file per architecture component as `component-dependencies/[Component-Name].md`:
+Write one file per architecture component as `/docs/security_assessment/component-dependencies/[Component-Name].md`:
 
 ```markdown
 # [Component Name] - Dependency Analysis

@@ -1,6 +1,6 @@
 # Module 4: Code Vulnerability Analysis (SAST)
 
-**Output**: `findings/security/code-vulnerabilities.md`
+**Output**: `/docs/security_assessment/findings/security/code-vulnerabilities.md`
 **Time estimate**: 20-40 minutes
 
 ## Objective

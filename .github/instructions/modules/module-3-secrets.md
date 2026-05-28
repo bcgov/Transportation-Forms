@@ -1,6 +1,6 @@
 # Module 3: Secrets Analysis
 
-**Output**: `findings/security/secrets-analysis.md`
+**Output**: `/docs/security_assessment/findings/security/secrets-analysis.md`
 **Time estimate**: 15-30 minutes
 
 ## Objective

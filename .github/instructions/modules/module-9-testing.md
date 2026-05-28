@@ -1,6 +1,6 @@
 # Module 9: Testing Gap Analysis
 
-**Output**: `findings/testing/testing-analysis.md`
+**Output**: `/docs/security_assessment/findings/testing/testing-analysis.md`
 **Time estimate**: 15-20 minutes
 
 ## Objective
@@ -39,7 +39,7 @@ Check for tests that specifically validate security:
 
 ### 9d. CI/CD Pipeline
 
-- CI configuration files: `.github/workflows/`, `Jenkinsfile`, `.gitlab-ci.yml`, `.circleci/`, `azure-pipelines.yml`
+- CI configuration files: `.github/workflows/*.yml`
 - Automated test execution in CI
 - Security scanning integration (SAST, dependency scanning)
 - Build and deployment automation
@@ -55,7 +55,7 @@ For each architecture component, assess:
 ## Search Strategy
 
 1. Use `search/fileSearch` to find test files: `**/test/**`, `**/tests/**`, `**/*Test.java`, `**/*_test.py`, `**/*.test.js`, `**/*.spec.*`
-2. Use `search/fileSearch` to find CI configs: `**/.github/workflows/*`, `**/Jenkinsfile`, `**/.gitlab-ci.yml`
+2. Use `search/fileSearch` to find CI configs: `**/.github/workflows/*`
 3. Use `search/textSearch` for test frameworks: `@Test|def test_|describe\(|it\(|test\(|[Fact]|[Test]`
 4. Use `search/textSearch` for coverage config: `jacoco|istanbul|nyc|coverage|SimpleCov`
 

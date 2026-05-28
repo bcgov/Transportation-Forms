@@ -1,6 +1,6 @@
 # Module 8: Security Logging Analysis
 
-**Output**: `findings/security/logging-analysis.md`
+**Output**: `/docs/security_assessment/findings/security/logging-analysis.md`
 **Time estimate**: 15-20 minutes
 
 ## Objective

@@ -1,5 +1,5 @@
 ---
-applyTo: "**/security_assessment/**"
+applyTo: "**/docs/security_assessment/**"
 ---
 
 # Security Scanner — Persistent Instructions
@@ -38,7 +38,7 @@ Every finding in every module MUST include:
 
 - **Read-only analysis**: Use read and search tools to inspect source code, configs, and dependencies
 - **Terminal (scoped)**: Use terminal execution **only** for Trivy commands and `mkdir` for creating output directories. Do not run any other commands.
-- **File output (scoped)**: Use edit tools **only** to create files within the `security_assessment/` folder. Do **not** modify any source files, configuration files, or dependency manifests.
+- **File output (scoped)**: Use edit tools **only** to create files within the `/docs/security_assessment/` folder. Do **not** modify any source files, configuration files, or dependency manifests.
 - **Do not** run build commands, install packages, or execute application code.
 
 ## Context Management

@@ -1,6 +1,6 @@
 # Module 5: Authentication & Authorization Analysis
 
-**Output**: `findings/security/authentication-analysis.md`
+**Output**: `/docs/security_assessment/findings/security/authentication-analysis.md`
 **Time estimate**: 15-20 minutes
 
 ## Objective
