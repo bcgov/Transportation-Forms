@@ -1,6 +1,6 @@
 # Module 6: Configuration Security Analysis
 
-**Output**: `findings/security/configuration-security.md`
+**Output**: `/docs/security_assessment/findings/security/configuration-security.md`
 **Time estimate**: 15-20 minutes
 
 ## Objective

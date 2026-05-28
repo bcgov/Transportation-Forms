@@ -1,6 +1,6 @@
 # Module 10: Database Script Analysis
 
-**Output**: `findings/security/database-analysis.md`
+**Output**: `/docs/security_assessment/findings/security/database-analysis.md`
 **Time estimate**: 10-20 minutes
 
 ## Objective
@@ -14,9 +14,8 @@ Use `search/fileSearch` to find all database-related files:
 - `**/migrations/**`
 - `**/db/**`
 - `**/schema/**`
-- `**/seeds/**`, `**/fixtures/**`
-- `**/flyway/**`, `**/liquibase/**`
-- `**/stored-procedures/**`, `**/sprocs/**`
+- `**/apps/**`
+- `**/alembic/**`
 
 ## Analysis Areas
 

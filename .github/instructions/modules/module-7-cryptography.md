@@ -1,6 +1,6 @@
 # Module 7: Cryptographic Analysis
 
-**Output**: `findings/security/cryptographic-analysis.md`
+**Output**: `/docs/security_assessment/findings/security/cryptographic-analysis.md`
 **Time estimate**: 15-20 minutes
 
 ## Objective

@@ -1,6 +1,6 @@
 # Module 1: Architecture Analysis
 
-**Output**: `findings/summary/architecture-diagram.md`
+**Output**: `/docs/security_assessment/findings/summary/architecture-diagram.md`
 **Time estimate**: 15-25 minutes
 
 ## Objective
