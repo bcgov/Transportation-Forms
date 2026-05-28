@@ -13,202 +13,88 @@ on:
       - 'requirements.txt'
       - 'entrypoint.sh'
   workflow_dispatch:
+    inputs:
+      force_build_all:
+        description: 'Force rebuild all images regardless of changes'
+        type: boolean
+        default: false
+        required: false
 
 jobs:
-  # ── Detect which components changed ─────────────────────────────────────────
-  changes:
-    name: Detect changed paths
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      migrations: ${{ steps.filter.outputs.migrations }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-      public-backend: ${{ steps.filter.outputs.public-backend }}
-      public-frontend: ${{ steps.filter.outputs.public-frontend }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.1
-
-      - name: Detect changes
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            backend:
-              - 'apps/backend/**'
-              - 'requirements.txt'
-              - 'entrypoint.sh'
-            migrations:
-              - 'apps/backend/alembic/**'
-              - 'apps/backend/alembic.ini'
-              - 'apps/backend/migrations/**'
-            frontend:
-              - 'apps/frontend/**'
-            public-backend:
-              - 'apps/public-backend/**'
-              - 'infra/charts/public-backend/**'
-            public-frontend:
-              - 'apps/public-frontend/**'
-              - 'infra/charts/public-frontend/**'
-              - 'infra/charts/public-frontend/files/**'
-
-  # ── Build backend image ──────────────────────────────────────────────────────
-  build-backend:
-    name: Build backend image
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
+  build:
+    name: Build ${{ matrix.package }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: backend
+            build_file: apps/backend/Dockerfile
+            triggers: ('apps/backend/' 'requirements.txt' 'entrypoint.sh')
+          - package: migrations
+            build_file: apps/backend/migrations/Dockerfile
+            triggers: ('apps/backend/alembic/' 'apps/backend/alembic.ini' 'apps/backend/migrations/')
+          - package: frontend
+            build_file: apps/frontend/Dockerfile
+            triggers: ('apps/frontend/')
+          - package: public-backend
+            build_file: apps/public-backend/Dockerfile
+            triggers: ('apps/public-backend/' 'infra/charts/public-backend/')
+          - package: public-frontend
+            build_file: apps/public-frontend/Dockerfile
+            triggers: ('apps/public-frontend/' 'infra/charts/public-frontend/' 'infra/charts/public-frontend/files/')
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
-
-      - name: Build and push backend image
+        uses: actions/checkout@v4
+      - name: Resolve triggers
+        id: triggers
+        run: |
+          if [[ "${{ inputs.force_build_all }}" == "true" ]]; then
+            echo "value=" >> $GITHUB_OUTPUT
+          else
+            echo "value=${{ matrix.triggers }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Build or retag ${{ matrix.package }}
         uses: bcgov/action-builder-ghcr@v4.2.1
         with:
-          package: backend
+          package: ${{ matrix.package }}
+          build_file: ${{ matrix.build_file }}
+          build_context: .
           tags: |
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          build_file: apps/backend/Dockerfile
-          build_context: .
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Empty string when force_build_all=true → action treats as no triggers → forces build
+          triggers: ${{ steps.triggers.outputs.value }}
 
-  # ── Build migrations image ───────────────────────────────────────────────────
-  build-migrations:
-    name: Build migrations image
-    needs: changes
-    if: needs.changes.outputs.migrations == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.1
-
-      - name: Build and push migrations image
-        uses: bcgov/action-builder-ghcr@v4.2.1
-        with:
-          package: migrations
-          tags: |
-            latest
-            ${{ github.sha }}
-          tag_fallback: latest
-          build_file: apps/backend/migrations/Dockerfile
-          build_context: .
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ── Build frontend image ─────────────────────────────────────────────────────
-  build-frontend:
-    name: Build frontend image
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.1
-
-      - name: Build and push frontend image
-        uses: bcgov/action-builder-ghcr@v4.2.1
-        with:
-          package: frontend
-          tags: |
-            latest
-            ${{ github.sha }}
-          tag_fallback: latest
-          build_file: apps/frontend/Dockerfile
-          build_context: .
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ── Build public-backend image ───────────────────────────────────────────────
-  build-public-backend:
-    name: Build public-backend image
-    needs: changes
-    if: needs.changes.outputs['public-backend'] == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.1
-
-      - name: Build and push public-backend image
-        uses: bcgov/action-builder-ghcr@v4.2.1
-        with:
-          package: public-backend
-          tags: |
-            latest
-            ${{ github.sha }}
-          tag_fallback: latest
-          build_file: apps/public-backend/Dockerfile
-          build_context: .
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ── Build public-frontend image ──────────────────────────────────────────────
-  build-public-frontend:
-    name: Build public-frontend image
-    needs: changes
-    if: needs.changes.outputs['public-frontend'] == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.1
-
-      - name: Build and push public-frontend image
-        uses: bcgov/action-builder-ghcr@v4.2.1
-        with:
-          package: public-frontend
-          tags: |
-            latest
-            ${{ github.sha }}
-          tag_fallback: latest
-          build_file: apps/public-frontend/Dockerfile
-          build_context: .
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ── Deploy to DEV ────────────────────────────────────────────────────────────
   deploy-dev:
     name: Deploy to DEV
-    needs: [changes, build-backend, build-migrations, build-frontend, build-public-backend, build-public-frontend]
+    needs: build
     if: |
       always() &&
-      !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled')
+      !contains(needs.build.result, 'failure') &&
+      !contains(needs.build.result, 'cancelled')
     permissions:
       contents: read
     uses: ./.github/workflows/.deployer.yml
     with:
       environment: dev
-      backend_tag: ${{ needs.build-backend.result == 'success' && github.sha || 'latest' }}
-      migrations_tag: ${{ needs.build-migrations.result == 'success' && github.sha || 'latest' }}
-      frontend_tag: ${{ needs.build-frontend.result == 'success' && github.sha || 'latest' }}
+      backend_tag: ${{ github.sha }}
+      migrations_tag: ${{ github.sha }}
+      frontend_tag: ${{ github.sha }}
       public_forms_base_url: https://forms-public-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
       params: >-
         --set global.secrets.persist=false
         --set backend.env.corsOrigins=https://frontend-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
-        --set-string "public-backend.image.tag=${{ needs.build-public-backend.result == 'success' && github.sha || 'latest' }}"
-        --set-string "public-frontend.image.tag=${{ needs.build-public-frontend.result == 'success' && github.sha || 'latest' }}"
+        --set-string "public-backend.image.tag=${{ github.sha }}"
+        --set-string "public-frontend.image.tag=${{ github.sha }}"
     secrets:
       oc_token: ${{ secrets.OC_TOKEN }}
       database_url: ${{ secrets.DATABASE_URL }}
