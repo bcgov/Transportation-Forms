@@ -19,7 +19,6 @@ import structlog
 
 from starlette.requests import Request
 
-
 _audit = structlog.get_logger("public_backend.audit")
 
 

@@ -1,35 +1,40 @@
 # BC Transportation Forms - Development Dependencies
-# Python 3.12 LTS
-# Include all production dependencies plus development tools
+# Python 3.14
+#
+# FEAT-0015: all direct dev dependencies are pinned with == and resolve
+# transitively against constraints.txt. `mypy` is intentionally held at
+# 1.20.0 pending the v2 migration ticket (see 05-implementation-notes.md).
+#
+# Install with: pip install -r requirements-dev.txt -c constraints.txt
 
 -r requirements.txt
 
 # Testing
-pytest>=7.4.3
-pytest-asyncio>=0.21.1
-pytest-cov>=4.1.0
-pytest-xdist>=3.5.0
-httpx[http2]>=0.25.1
-freezegun>=1.4.0
+pytest==9.0.3
+pytest-asyncio==1.4.0
+pytest-cov==7.1.0
+pytest-xdist==3.8.0
+httpx[http2]==0.28.1
+freezegun==1.5.5
 
 # Code Quality
-black>=24.10.0,<25
-flake8>=6.1.0
-mypy>=1.7.1
-isort>=5.13.2
-pylint>=3.0.3
+black==26.5.1
+flake8==7.3.0
+mypy==1.20.0
+isort==8.0.1
+pylint==4.0.5
 
 # Security
-bandit>=1.7.5
+bandit==1.9.4
 # safety removed — replaced by Trivy + CodeQL (Decision 6D)
 
 # Pre-commit Hooks
-pre-commit>=3.5.0
+pre-commit==4.6.0
 
 # Development Server
-ipython>=8.18.1
-ipdb>=0.13.13
+ipython==9.13.0
+ipdb==0.13.13
 
 # Documentation
-sphinx>=7.2.6
-sphinx-rtd-theme>=2.0.0
+sphinx==9.0.4
+sphinx-rtd-theme==3.1.0

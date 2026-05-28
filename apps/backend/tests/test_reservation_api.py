@@ -32,7 +32,7 @@ from backend.models import (
     User,
     UserRole,
 )
-from tests.conftest import TEST_DATABASE_URL, _PG_ADMIN_URL, _TEST_DB_NAME
+from .conftest import TEST_DATABASE_URL, _PG_ADMIN_URL, _TEST_DB_NAME
 
 # ---------------------------------------------------------------------------
 # Test DB setup – reuses the same PostgreSQL test database as conftest
@@ -53,6 +53,10 @@ def api_engine():
     admin_engine.dispose()
 
     engine = create_engine(TEST_DATABASE_URL, echo=False)
+    # Drop views that depend on tables before dropping the tables themselves.
+    with engine.connect() as conn:
+        conn.execute(text("DROP VIEW IF EXISTS public_forms_v CASCADE"))
+        conn.commit()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield engine

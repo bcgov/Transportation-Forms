@@ -24,6 +24,9 @@ logger = logging.getLogger('alembic.env')
 sqlalchemy_url = os.getenv('DATABASE_URL')
 if sqlalchemy_url is None:
     raise RuntimeError("DATABASE_URL environment variable is not set")
+# FEAT-0015: Use psycopg v3 driver if the URL doesn't specify it
+if sqlalchemy_url.startswith("postgresql://"):
+    sqlalchemy_url = sqlalchemy_url.replace("postgresql://", "postgresql+psycopg://", 1)
 # Escape % for configparser interpolation (Crunchy-generated passwords may
 # contain URL-encoded special characters like %29, %5D, etc.)
 config.set_main_option('sqlalchemy.url', sqlalchemy_url.replace('%', '%%'))

@@ -28,13 +28,14 @@ from sqlalchemy.orm import Session
 # before any freeze_time decorator runs (prevents pydantic metaclass conflict).
 from routes.forms import _today_vancouver  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 _FROZEN_NOW = "2026-05-15 17:00:00"  # UTC; Vancouver is UTC-7 → local 10:00
-_FROZEN_VANCOUVER_DATE = "2026-05-15"  # date visible in America/Vancouver at that moment
+_FROZEN_VANCOUVER_DATE = (
+    "2026-05-15"  # date visible in America/Vancouver at that moment
+)
 
 
 def _insert_form(
@@ -70,14 +71,12 @@ def _insert_form(
             effective_dt = datetime.strptime(effective_date, "%Y-%m-%d %H:%M:%S")
 
     db.execute(
-        text(
-            """
+        text("""
             INSERT INTO public_forms_v
                 (form_id, form_number, title, effective_date, s3_key, file_name, keywords)
             VALUES
                 (:form_id, :form_number, :title, :effective_date, :s3_key, :file_name, :keywords)
-            """
-        ),
+            """),
         {
             "form_id": form_id,
             "form_number": form_number,
@@ -100,7 +99,9 @@ def _insert_form(
 class TestTodayVancouver:
     """Unit-test _today_vancouver() returns the date in America/Vancouver."""
 
-    @freeze_time("2026-05-16 06:59:59", tz_offset=0)  # 2026-05-15 23:59:59 Vancouver (UTC-7)
+    @freeze_time(
+        "2026-05-16 06:59:59", tz_offset=0
+    )  # 2026-05-15 23:59:59 Vancouver (UTC-7)
     def test_returns_vancouver_date_not_utc_date(self):
         result = _today_vancouver()
         assert str(result) == "2026-05-15", (
@@ -108,12 +109,13 @@ class TestTodayVancouver:
             f"but got {result}"
         )
 
-    @freeze_time("2026-05-16 07:00:01", tz_offset=0)  # 2026-05-16 00:00:01 Vancouver (UTC-7)
+    @freeze_time(
+        "2026-05-16 07:00:01", tz_offset=0
+    )  # 2026-05-16 00:00:01 Vancouver (UTC-7)
     def test_rolls_over_at_vancouver_midnight(self):
         result = _today_vancouver()
         assert str(result) == "2026-05-16", (
-            "At 07:00:01 UTC it is May 16 in Vancouver, "
-            f"but got {result}"
+            "At 07:00:01 UTC it is May 16 in Vancouver, " f"but got {result}"
         )
 
 
@@ -127,14 +129,20 @@ class TestListEndpointEffectiveDateFilter:
     @freeze_time(_FROZEN_NOW)
     def test_future_form_excluded_from_list(self, public_client, db):
         """AC1: Form effective tomorrow must not appear in list results."""
-        _insert_form(db, form_number="TF-FUTURE-01", effective_date="2026-05-16")  # tomorrow
-        _insert_form(db, form_number="TF-TODAY-01", effective_date=_FROZEN_VANCOUVER_DATE)  # today
+        _insert_form(
+            db, form_number="TF-FUTURE-01", effective_date="2026-05-16"
+        )  # tomorrow
+        _insert_form(
+            db, form_number="TF-TODAY-01", effective_date=_FROZEN_VANCOUVER_DATE
+        )  # today
 
         resp = public_client.get("/api/public/v1/forms")
         assert resp.status_code == 200
 
         numbers = [item["form_number"] for item in resp.json()["items"]]
-        assert "TF-FUTURE-01" not in numbers, "Future-dated form must not appear in list"
+        assert (
+            "TF-FUTURE-01" not in numbers
+        ), "Future-dated form must not appear in list"
         assert "TF-TODAY-01" in numbers, "Today-dated form must appear in list"
 
     @freeze_time(_FROZEN_NOW)
@@ -193,7 +201,9 @@ class TestDetailEndpointEffectiveDateFilter:
     @freeze_time(_FROZEN_NOW)
     def test_today_form_detail_returns_200(self, public_client, db):
         """AC3: GET /forms/{number} must return 200 for a form effective today."""
-        _insert_form(db, form_number="TF-TODAY-D01", effective_date=_FROZEN_VANCOUVER_DATE)
+        _insert_form(
+            db, form_number="TF-TODAY-D01", effective_date=_FROZEN_VANCOUVER_DATE
+        )
 
         resp = public_client.get("/api/public/v1/forms/TF-TODAY-D01")
         assert resp.status_code == 200
@@ -228,7 +238,9 @@ class TestFileEndpointEffectiveDateFilter:
     @freeze_time(_FROZEN_NOW)
     def test_today_form_file_returns_200(self, public_client, db):
         """AC3: GET /forms/{number}/file must return 200 for a form effective today."""
-        _insert_form(db, form_number="TF-TODAY-F01", effective_date=_FROZEN_VANCOUVER_DATE)
+        _insert_form(
+            db, form_number="TF-TODAY-F01", effective_date=_FROZEN_VANCOUVER_DATE
+        )
 
         # The endpoint issues X-Accel-Redirect — TestClient will not follow
         # the internal NGINX redirect, but the handler should return 200.
@@ -253,22 +265,28 @@ class TestFileEndpointEffectiveDateFilter:
 
 class TestVancouverMidnightBoundary:
 
-    @freeze_time("2026-05-16 07:00:00", tz_offset=0)  # exactly 00:00:00 Vancouver (UTC-7)
-    def test_form_becomes_visible_exactly_at_vancouver_midnight(self, public_client, db):
+    @freeze_time(
+        "2026-05-16 07:00:00", tz_offset=0
+    )  # exactly 00:00:00 Vancouver (UTC-7)
+    def test_form_becomes_visible_exactly_at_vancouver_midnight(
+        self, public_client, db
+    ):
         """AC3 boundary: form effective 2026-05-16 becomes visible at 00:00 Vancouver."""
         _insert_form(db, form_number="TF-BOUNDARY-01", effective_date="2026-05-16")
 
         resp = public_client.get("/api/public/v1/forms/TF-BOUNDARY-01")
-        assert resp.status_code == 200, (
-            "Form effective today must be visible at exactly 00:00 Vancouver"
-        )
+        assert (
+            resp.status_code == 200
+        ), "Form effective today must be visible at exactly 00:00 Vancouver"
 
-    @freeze_time("2026-05-16 06:59:59", tz_offset=0)  # 23:59:59 Vancouver (still May 15)
+    @freeze_time(
+        "2026-05-16 06:59:59", tz_offset=0
+    )  # 23:59:59 Vancouver (still May 15)
     def test_form_hidden_one_second_before_vancouver_midnight(self, public_client, db):
         """AC1 boundary: form effective 2026-05-16 is hidden at 23:59:59 Vancouver on May 15."""
         _insert_form(db, form_number="TF-BOUNDARY-02", effective_date="2026-05-16")
 
         resp = public_client.get("/api/public/v1/forms/TF-BOUNDARY-02")
-        assert resp.status_code == 404, (
-            "Form effective tomorrow must still return 404 at 23:59:59 Vancouver"
-        )
+        assert (
+            resp.status_code == 404
+        ), "Form effective tomorrow must still return 404 at 23:59:59 Vancouver"

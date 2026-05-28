@@ -1,11 +1,17 @@
 """Public-backend configuration settings."""
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
 class Settings(BaseSettings):
     """Read-only public API settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
     ENVIRONMENT: str = Field(default="development", validation_alias="ENVIRONMENT")
 
@@ -36,10 +42,10 @@ class Settings(BaseSettings):
     PUBLIC_BASE_URL: str = ""
 
     # Caching (per-endpoint TTLs)
-    CACHE_MAX_AGE: int = 300                  # list / detail
-    BUSINESS_AREAS_CACHE_MAX_AGE: int = 600   # /business-areas
-    SITEMAP_CACHE_MAX_AGE: int = 3600         # /sitemap.xml
-    OG_CACHE_MAX_AGE: int = 600               # /forms/{n}/og
+    CACHE_MAX_AGE: int = 300  # list / detail
+    BUSINESS_AREAS_CACHE_MAX_AGE: int = 600  # /business-areas
+    SITEMAP_CACHE_MAX_AGE: int = 3600  # /sitemap.xml
+    OG_CACHE_MAX_AGE: int = 600  # /forms/{n}/og
 
     # Pagination clamps
     DEFAULT_LIMIT: int = 25
@@ -47,11 +53,6 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"
 
 
 settings = Settings()  # type: ignore[call-arg]

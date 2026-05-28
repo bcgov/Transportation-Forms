@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -15,6 +15,16 @@ from backend.auth.dependencies import require_admin
 from backend.auth.jwt_handler import TokenData
 from backend.database import get_db
 from backend.models import AuditLog, Role, User, UserRole
+
+
+def _utc_naive_now() -> datetime:
+    """Return current UTC time as a naive ``datetime`` (no tzinfo).
+
+    FEAT-0015: replaces ``datetime.utcnow()`` which is deprecated on
+    Python 3.12+ but matches the historical naive-UTC value stored in the
+    SQLAlchemy ``DateTime`` columns used here.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class UserRoleSummaryResponse(BaseModel):
@@ -74,7 +84,7 @@ def _to_user_summary(user: User) -> AdminUserSummaryResponse:
         _active_user_roles(user),
         key=lambda ur: (ur.role.name if ur.role else "").lower(),
     )
-    first_sign_in = user.created_at or datetime.utcnow()
+    first_sign_in = user.created_at or _utc_naive_now()
     return AdminUserSummaryResponse(
         id=str(user.id),
         keycloak_id=user.keycloak_id,
@@ -210,7 +220,7 @@ async def update_user_roles(
                 detail="One or more role IDs are invalid",
             )
 
-    now = datetime.utcnow()
+    now = _utc_naive_now()
     existing_memberships = db.query(UserRole).filter(UserRole.user_id == user.id).all()
     by_role_id = {membership.role_id: membership for membership in existing_memberships}
 

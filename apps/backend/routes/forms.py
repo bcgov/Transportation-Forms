@@ -8,7 +8,7 @@ from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends, Query, UploadFile, File
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -158,6 +158,8 @@ class FormUpdateRequest(BaseModel):
 class FormResponse(BaseModel):
     """Response model for form details."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     title: str
     description: Optional[str]
@@ -183,10 +185,6 @@ class FormResponse(BaseModel):
     collects_personal_info: str
     created_at: str
     updated_at: str
-
-    class Config:
-        from_attributes = True
-
 
 class FormListResponse(BaseModel):
     """Response model for form list."""

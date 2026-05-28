@@ -102,7 +102,7 @@ jobs:
 
       # ── Deploy Crunchy PostgreSQL ─────────────────────────────────────────
       - name: Deploy Crunchy PostgreSQL
-        uses: bcgov/action-crunchy@v2.0.0
+        uses: bcgov/action-crunchy@v2.1.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
           oc_token: ${{ secrets.oc_token }}

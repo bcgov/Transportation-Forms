@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -10,6 +10,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from backend.models import AccessRequest, AuditLog, Role, User, UserRole
+
+
+def _utc_naive_now() -> datetime:
+    """Return current UTC time as a naive ``datetime`` (no tzinfo).
+
+    FEAT-0015: replaces ``datetime.utcnow()`` which is deprecated on
+    Python 3.12+ but matches the historical naive-UTC value stored in the
+    SQLAlchemy ``DateTime`` columns used here.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class AccessRequestNotFoundError(ValueError):
@@ -198,7 +208,7 @@ class AccessRequestService:
         request.status = "approved"
         request.review_notes = review_notes
         request.processed_by_id = admin_user_id
-        request.processed_at = datetime.utcnow()
+        request.processed_at = _utc_naive_now()
 
         # Assign the default staff_viewer role if the user doesn't already have it.
         staff_viewer_role = (
@@ -263,7 +273,7 @@ class AccessRequestService:
         request.status = "rejected"
         request.review_notes = review_notes
         request.processed_by_id = admin_user_id
-        request.processed_at = datetime.utcnow()
+        request.processed_at = _utc_naive_now()
 
         db.add(
             AuditLog(

@@ -1,12 +1,18 @@
 """Application configuration settings."""
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import model_validator, Field
 from typing import Optional
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
     ENVIRONMENT: str = Field(default="development", validation_alias="ENVIRONMENT")
 
@@ -43,6 +49,7 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY: str = Field(alias="S3_ACCESS_KEY")
     S3_SECRET_KEY: str = Field(alias="S3_SECRET_KEY")
     S3_BUCKET: str = Field(alias="S3_BUCKET")
+    S3_VERIFY_TLS: bool = True
     # Feature Flags
     ENABLE_SEMANTIC_SEARCH: bool = True
     ENABLE_EMAIL_NOTIFICATIONS: bool = False
@@ -93,12 +100,6 @@ class Settings(BaseSettings):
             )
 
         return self
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"  # Ignore extra fields in .env
-
 
 # Global settings instance (lazy-loaded to support testing and CLI contexts)
 try:

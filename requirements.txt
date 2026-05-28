@@ -1,45 +1,49 @@
 # Transportation Forms - Python Dependencies
-# Python 3.12 LTS
+# Python 3.14
+#
+# FEAT-0015: all direct dependencies are pinned with == to make the installed
+# set deterministic. Transitive dependencies are pinned in constraints.txt
+# (install with `pip install -r requirements.txt -c constraints.txt`).
+# `python-jose` and `passlib` have been removed: the codebase uses PyJWT
+# directly and does not perform local password hashing. `psycopg2-binary` has
+# been replaced by `psycopg` v3 (same maintainer, official PostgreSQL 18
+# support, ships Python 3.14 wheels).
 
 # Web Framework
-fastapi>=0.100.0
-uvicorn[standard]>=0.23.0
-pydantic>=2.4.0
-pydantic-settings>=2.0.0
+fastapi==0.136.3
+uvicorn[standard]==0.48.0
+pydantic==2.13.4
+pydantic-settings==2.14.1
+pydantic-extra-types==2.11.1
 
 # Database
-sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.0
-alembic>=1.12.0
+sqlalchemy==2.0.50
+psycopg[binary]==3.3.4
+alembic==1.18.4
 
-# Authentication
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
-python-multipart>=0.0.5
-PyJWT>=2.8.0
-cryptography>=41.0.0
-python-keycloak>=3.8.0
+# Authentication / Crypto
+PyJWT==2.13.0
+cryptography==48.0.0
+python-multipart==0.0.29
+python-keycloak==7.1.1
 
 # Azure AD / OIDC (Phase 2 - User lookup only, not authentication)
-azure-identity>=1.13.0
-msal>=1.24.0
+azure-identity==1.25.3
+msal==1.36.0
 
 # AWS S3
-boto3>=1.26.0
+boto3==1.43.15
 
 # Environment Variables
-python-dotenv>=1.0.0
+python-dotenv==1.2.2
 
 # Logging
-structlog>=23.1.0
-
-# Validation & Serialization
-pydantic-extra-types>=2.1.0
+structlog==25.5.0
 
 # HTTP Client
-httpx>=0.24.0
-requests>=2.31.0
+httpx==0.28.1
+requests==2.34.2
 
 # Utilities
-pytz>=2023.3
-python-dateutil>=2.8.2
+pytz==2026.2
+python-dateutil==2.9.0.post0

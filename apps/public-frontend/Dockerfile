@@ -3,7 +3,7 @@
 # Single-stage vanilla NGINX build
 
 # Stage 1: Runtime
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.31.1-alpine AS runtime
 
 # Adapt for OpenShift's arbitrary-UID security model (OpenShift assigns a
 # random UID at runtime; we run as non-root group 0).

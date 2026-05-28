@@ -67,7 +67,7 @@ services:
 
   # PostgreSQL Database
   db:
-    image: postgres:16-alpine
+    image: postgres:18.4-alpine
     container_name: transportation-forms-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -89,7 +89,7 @@ services:
   # MinIO — S3-compatible object store for local development only.
   # In production (OpenShift), the backend connects to an external S3 service via S3_* env vars.
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-04-08T15-41-24Z
     container_name: transportation-forms-minio
     ports:
       - "9000:9000"   # S3 API

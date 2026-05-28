@@ -1,5 +1,5 @@
 # ── Stage 1: Build ────────────────────────────────────────────────────────────
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 
 WORKDIR /build
 
@@ -10,15 +10,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY requirements.txt constraints.txt ./
 RUN pip install --upgrade pip setuptools wheel && \
-    pip install --prefix=/install -r requirements.txt
+    pip install --prefix=/install -r requirements.txt -c constraints.txt
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 WORKDIR /app
 
