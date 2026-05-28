@@ -15,7 +15,6 @@ from database import get_db
 from http_cache import compute_etag, etag_matches
 from models import PublicForm
 
-
 router = APIRouter(prefix="/api/public/v1", tags=["public-business-areas"])
 
 

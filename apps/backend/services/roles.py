@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -10,6 +10,16 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from backend.models import AuditLog, Role, UserRole
+
+
+def _utc_naive_now() -> datetime:
+    """Return current UTC time as a naive ``datetime`` (no tzinfo).
+
+    FEAT-0015: replaces ``datetime.utcnow()`` which is deprecated on
+    Python 3.12+ but matches the historical naive-UTC value stored in the
+    SQLAlchemy ``DateTime`` columns used here.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class RoleNotFoundError(ValueError):
@@ -155,7 +165,7 @@ class RoleService:
             raise ValueError("name is required")
 
         existing_by_name = RoleService._get_by_name(db, role_name)
-        if existing_by_name and existing_by_name.id != role.id:
+        if existing_by_name and existing_by_name.id != role.id:  # type: ignore
             raise RoleConflictError(f"Role '{role_name}' already exists")
 
         normalized_permissions = RoleService._normalize_permissions(permissions)
@@ -163,12 +173,12 @@ class RoleService:
         old_values = {
             "name": role.name,
             "description": role.description,
-            "permissions": list(role.permissions or []),
+            "permissions": list(role.permissions or []),  # type: ignore
         }
 
-        role.name = role_name
-        role.description = description
-        role.permissions = normalized_permissions
+        role.name = role_name  # type: ignore
+        role.description = description  # type: ignore
+        role.permissions = normalized_permissions  # type: ignore
 
         db.add(
             AuditLog(
@@ -210,12 +220,12 @@ class RoleService:
         if not role:
             raise RoleNotFoundError("Role not found")
 
-        if role.is_system or role.name in RoleService.SYSTEM_ROLE_NAMES:
+        if role.is_system or role.name in RoleService.SYSTEM_ROLE_NAMES:  # type: ignore
             raise RoleConflictError("System roles cannot be deleted")
 
-        now = datetime.utcnow()
-        role.deleted_at = now
-        role.is_active = False
+        now = _utc_naive_now()
+        role.deleted_at = now  # type: ignore
+        role.is_active = False  # type: ignore
 
         user_roles = (
             db.query(UserRole)
@@ -226,7 +236,7 @@ class RoleService:
             .all()
         )
         for user_role in user_roles:
-            user_role.deleted_at = now
+            user_role.deleted_at = now  # type: ignore
 
         db.add(
             AuditLog(
@@ -237,7 +247,7 @@ class RoleService:
                 old_values={
                     "name": role.name,
                     "description": role.description,
-                    "permissions": list(role.permissions or []),
+                    "permissions": list(role.permissions or []),  # type: ignore
                     "is_system": role.is_system,
                 },
                 description=f"Deleted role '{role.name}'",

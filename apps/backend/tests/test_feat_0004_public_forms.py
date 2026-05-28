@@ -20,7 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 # Add public-backend to sys.path so its modules are importable.
-_PUBLIC_BACKEND_DIR = str(Path(__file__).resolve().parent.parent / "public-backend")
+_PUBLIC_BACKEND_DIR = str(Path(__file__).resolve().parents[2] / "public-backend")
 if _PUBLIC_BACKEND_DIR not in sys.path:
     sys.path.insert(0, _PUBLIC_BACKEND_DIR)
 

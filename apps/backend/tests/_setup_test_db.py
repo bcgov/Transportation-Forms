@@ -5,18 +5,20 @@ Reads connection details from existing environment variables:
     POSTGRES_PASSWORD  Superuser password
     PG_HOST            Postgres host          (default: localhost)
     PG_PORT            Postgres port          (default: 5432)
+
+FEAT-0015: migrated from psycopg2 to psycopg v3.
 """
 import os
-import psycopg2
+import psycopg
 
-conn = psycopg2.connect(
+conn = psycopg.connect(
     host=os.getenv("PG_HOST", "localhost"),
     port=int(os.getenv("PG_PORT", "5432")),
     user=os.environ["POSTGRES_USER"],
     password=os.environ["POSTGRES_PASSWORD"],
     dbname="postgres",
+    autocommit=True,
 )
-conn.autocommit = True
 cur = conn.cursor()
 
 postgres_user = os.environ["POSTGRES_USER"]

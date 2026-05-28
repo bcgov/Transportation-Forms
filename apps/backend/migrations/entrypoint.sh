@@ -22,6 +22,9 @@ for i in $(seq 1 $MAX_RETRIES); do
 import os, sys
 from sqlalchemy import create_engine, text
 url = os.getenv('DATABASE_URL')
+# FEAT-0015: Use psycopg v3 driver if the URL doesn't specify it
+if url and url.startswith('postgresql://'):
+    url = url.replace('postgresql://', 'postgresql+psycopg://', 1)
 engine = create_engine(url, pool_pre_ping=True)
 with engine.connect() as conn:
     conn.execute(text('SELECT 1'))

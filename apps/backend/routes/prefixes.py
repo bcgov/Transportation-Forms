@@ -8,7 +8,7 @@ Provides:
 from typing import Optional, List
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Depends
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -86,6 +86,8 @@ class CheckSequenceRequest(BaseModel):
 class PrefixResponse(BaseModel):
     """Response model for a form number prefix."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     prefix: str
     description: Optional[str]
@@ -98,10 +100,6 @@ class PrefixResponse(BaseModel):
     updated_by_name: Optional[str] = None
     created_at: str
     updated_at: str
-
-    class Config:
-        from_attributes = True
-
 
 class ReservationHistoryItem(BaseModel):
     """An item in the reservation history list."""
@@ -145,13 +143,11 @@ class CheckSequenceResponse(BaseModel):
 class PrefixPublicResponse(BaseModel):
     """Lightweight response for the public dropdown endpoint."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     prefix: str
     description: Optional[str]
-
-    class Config:
-        from_attributes = True
-
 
 # ============================================================================
 # Helper: convert ORM → response

@@ -21,7 +21,7 @@ from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -73,6 +73,8 @@ class CustomReserveRequest(BaseModel):
 class ReservationResponse(BaseModel):
     """Response model for a form number reservation."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     prefix_id: str
     form_number: str
@@ -86,10 +88,6 @@ class ReservationResponse(BaseModel):
     released_by_id: Optional[str] = None
     created_at: str
     updated_at: str
-
-    class Config:
-        from_attributes = True
-
 
 # TASK-406: Approval workflow schemas
 
@@ -119,6 +117,8 @@ class RequestChangesRequest(BaseModel):
 class ApproverDecisionResponse(BaseModel):
     """Response model for an approver's decision."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     approver_id: str
     approver_email: Optional[str] = None
@@ -129,24 +129,20 @@ class ApproverDecisionResponse(BaseModel):
     decided_at: Optional[str] = None
     created_at: str
 
-    class Config:
-        from_attributes = True
-
-
 class PrefixInfoResponse(BaseModel):
     """Compact prefix info included in reservation detail."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: str
     prefix: str
     description: Optional[str] = None
     is_active: bool
 
-    class Config:
-        from_attributes = True
-
-
 class ReservationDetailResponse(BaseModel):
     """Detailed response with nested approver and prefix information (TASK-408)."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: str
     prefix_id: str
@@ -166,10 +162,6 @@ class ReservationDetailResponse(BaseModel):
     prefix: Optional[PrefixInfoResponse] = None
     approvers: List[ApproverDecisionResponse] = []
 
-    class Config:
-        from_attributes = True
-
-
 class ReservationListResponse(BaseModel):
     """Paginated list of reservations."""
 
@@ -182,10 +174,9 @@ class ReservationListResponse(BaseModel):
 class ApprovedUnusedReservationsResponse(BaseModel):
     """Response for approved and unused reservations (TASK-413)."""
 
-    reservations: List[ReservationResponse]
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+    reservations: List[ReservationResponse]
 
 
 class ExpiryResultResponse(BaseModel):
