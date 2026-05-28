@@ -65,7 +65,7 @@ jobs:
             ${{ github.sha }}
           tag_fallback: latest
           # Empty string when force_build_all=true → action treats as no triggers → forces build
-          triggers: ${{ inputs.force_build_all == true && '' || matrix.triggers }}
+          triggers: ${{ inputs.force_build_all == 'true' && '' || matrix.triggers }}
 
   deploy-dev:
     name: Deploy to DEV
