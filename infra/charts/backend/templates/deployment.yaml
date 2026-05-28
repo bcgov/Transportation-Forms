@@ -64,6 +64,16 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secretName }}
                   key: secret-key
+            - name: JWT_PRIVATE_KEY_PEM
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: jwt-private-key-pem
+            - name: JWT_PUBLIC_KEY_PEM
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: jwt-public-key-pem
             - name: SQLALCHEMY_ECHO
               value: {{ .Values.env.sqlalchemyEcho | quote }}
             - name: LOG_LEVEL

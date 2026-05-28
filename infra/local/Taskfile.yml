@@ -11,7 +11,8 @@
 #   - Rancher Desktop installed with dockerd (moby) engine (not containerd)
 #   - Helm 3.x installed and kubectl context set to rancher-desktop
 #   - Root .env file populated with valid credentials (S3_*, KEYCLOAK_*, SECRET_KEY,
-#     INITIAL_ADMIN_EMAIL — all pointing to datacenter services, NOT local containers)
+#     JWT_PRIVATE_KEY_PEM, JWT_PUBLIC_KEY_PEM, INITIAL_ADMIN_EMAIL — all pointing
+#     to datacenter services, NOT local containers)
 #   - git available in PATH (for cloning the action-crunchy chart on first run)
 #   - On Windows: C:\Program Files\Git\bin must be in PATH (provides sh.exe for Task)
 #
@@ -174,6 +175,10 @@ tasks:
         # Extract only the primary host from the HA DB_URI to avoid SQLAlchemy parsing issues
         # Also URL-encode any remaining commas (like in the password) as %2C to prevent Helm's --set-string from splitting it
         PRIMARY_DB_URI=$(powershell -Command "\$u='$DB_URI'; \$parts=\$u.Split('@'); \$auth=\$parts[0]; \$tail=\$parts[1]; \$hosts=\$tail.Split('/')[0]; \$db=\$tail.Substring(\$hosts.Length); \$primary=\$hosts.Split(',')[0]; if (\$primary.IndexOf(':') -lt 0) { \$primary += ':5432' }; [Console]::Out.Write((\$auth + '@' + \$primary + \$db).Replace(',', '%2C'))")
+        JWT_PRIVATE_KEY_FILE=$(mktemp)
+        JWT_PUBLIC_KEY_FILE=$(mktemp)
+        printf '%s' "${JWT_PRIVATE_KEY_PEM}" > "$JWT_PRIVATE_KEY_FILE"
+        printf '%s' "${JWT_PUBLIC_KEY_PEM}" > "$JWT_PUBLIC_KEY_FILE"
 
         echo "Deploying application with Helm..."
         helm upgrade --install "{{.RELEASE_NAME}}" "{{.CHART}}" \
@@ -182,6 +187,8 @@ tasks:
           --set-string global.tag="{{.TAG}}" \
           --set-string backend.secrets.databaseUrl="${PRIMARY_DB_URI}" \
           --set backend.secrets.secretKey="${SECRET_KEY}" \
+          --set-file backend.secrets.jwtPrivateKeyPem="$JWT_PRIVATE_KEY_FILE" \
+          --set-file backend.secrets.jwtPublicKeyPem="$JWT_PUBLIC_KEY_FILE" \
           --set backend.secrets.s3EndpointUrl="${S3_ENDPOINT_URL}" \
           --set backend.secrets.s3AccessKey="${S3_ACCESS_KEY}" \
           --set backend.secrets.s3SecretKey="${S3_SECRET_KEY}" \

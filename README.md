@@ -35,7 +35,9 @@ BC Transportation Forms — FastAPI backend, Caddy + Coraza WAF frontend, Crunch
 | Variable | `TARGET_ENV_DOMAIN` | Route domain (e.g. `apps.silver.devops.gov.bc.ca`) |
 | Secret | `OC_TOKEN` | DEV service account token |
 | Secret | `DATABASE_URL` | DEV PostgreSQL connection string |
-| Secret | `SECRET_KEY` | JWT signing secret |
+| Secret | `SECRET_KEY` | Application secret key |
+| Secret | `JWT_PRIVATE_KEY_PEM` | Application JWT RS256 private key PEM |
+| Secret | `JWT_PUBLIC_KEY_PEM` | Matching application JWT RS256 public key PEM |
 | Secret | `S3_ENDPOINT_URL` | S3-compatible endpoint URL |
 | Secret | `S3_ACCESS_KEY` | S3-compatible access key |
 | Secret | `S3_SECRET_KEY` | S3-compatible secret key |
