@@ -12,7 +12,8 @@ global:
 crunchy:
   enabled: true
   imagePullPolicy: IfNotPresent
-  postgresVersion: 17
+  postgresVersion: 18
+  image: "artifacts.developer.gov.bc.ca/bcgov-docker-local/crunchy-postgres-gis:ubi9-18.1-3.6-2547"
   
   # ── Instances (object, not list) ─────────────────────────────────────────────
   instances:
