@@ -291,17 +291,17 @@ class TestSearchByFormNumber:
         assert resp.status_code == 200
 
     @pytest.mark.integration
-    def test_tc1_10_list_endpoint_is_open(self, unauthenticated_client, db):
-        """List endpoint does not require authentication (existing behaviour).
+    def test_tc1_10_list_endpoint_requires_auth(self, unauthenticated_client, db):
+        """FEAT-0018: List endpoint requires authentication.
 
-        Uses a client with no get_current_user override — if the endpoint
-        ever adds an auth dependency, this test will start failing.
+        Uses a client with no get_current_user override — unauthenticated
+        requests must be rejected with 401.
         """
         resp = unauthenticated_client.get(
             "/api/v1/forms",
             params={"q": "H0021", "limit": 25},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 401
 
     @pytest.mark.integration
     def test_tc1_11_no_reservation_excluded_from_form_number_match(
@@ -467,16 +467,17 @@ class TestAutocompleteFormNumbers:
         assert resp.status_code == 200
 
     @pytest.mark.integration
-    def test_tc2_9_autocomplete_endpoint_is_open(self, unauthenticated_client, db):
-        """Autocomplete endpoint does not require authentication (existing behaviour).
+    def test_tc2_9_autocomplete_endpoint_requires_auth(self, unauthenticated_client, db):
+        """FEAT-0018: Autocomplete endpoint requires authentication.
 
-        Uses a client with no get_current_user override.
+        Uses a client with no get_current_user override — unauthenticated
+        requests must be rejected with 401.
         """
         resp = unauthenticated_client.get(
             "/api/v1/forms/autocomplete",
             params={"q": "H00", "max_suggestions": 10},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 401
 
 
 # ============================================================================
@@ -639,16 +640,17 @@ class TestSortByFormNumber:
         assert resp.status_code == 200
 
     @pytest.mark.integration
-    def test_tc3_13_sort_endpoint_is_open(self, unauthenticated_client, db):
-        """List endpoint with sort does not require authentication.
+    def test_tc3_13_sort_endpoint_requires_auth(self, unauthenticated_client, db):
+        """FEAT-0018: List endpoint with sort requires authentication.
 
-        Uses a client with no get_current_user override.
+        Uses a client with no get_current_user override — unauthenticated
+        requests must be rejected with 401.
         """
         resp = unauthenticated_client.get(
             "/api/v1/forms",
             params={"sort_field": "form_number", "limit": 25},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 401
 
 
 # ============================================================================
@@ -808,16 +810,17 @@ class TestMultiValueFilters:
         assert resp.status_code == 200
 
     @pytest.mark.integration
-    def test_tc4_12_filter_endpoint_is_open(self, unauthenticated_client, db):
-        """List endpoint with filters does not require authentication.
+    def test_tc4_12_filter_endpoint_requires_auth(self, unauthenticated_client, db):
+        """FEAT-0018: List endpoint with filters requires authentication.
 
-        Uses a client with no get_current_user override.
+        Uses a client with no get_current_user override — unauthenticated
+        requests must be rejected with 401.
         """
         resp = unauthenticated_client.get(
             "/api/v1/forms",
             params={"status": "draft", "limit": 25},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 401
 
 
 # ============================================================================
