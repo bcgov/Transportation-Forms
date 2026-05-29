@@ -30,6 +30,7 @@ def ba_client(db, user_factory):
         name=f"{user.first_name} {user.last_name}",
         roles=["staff"],
         token_type="access",
+        permissions=["form:read", "form:create", "form:edit"],
     )
 
     app.dependency_overrides[get_db] = lambda: db

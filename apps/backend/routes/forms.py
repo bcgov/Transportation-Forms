@@ -707,6 +707,13 @@ async def unarchive_form(
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """Unarchive a form (restore from archived status)."""
+    # FEAT-0019: Unarchive is the inverse archive state change.
+    user_perms = set(current_user.permissions or [])
+    if "form:archive" not in user_perms:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
     try:
         form_uuid = UUID(form_id)
         form = FormService.unarchive_form(
