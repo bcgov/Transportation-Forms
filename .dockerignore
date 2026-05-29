@@ -39,6 +39,10 @@ htmlcov/
 .env.local
 .env.*.local
 
+# Secret material must never enter Docker build contexts.
+apps/backend/auth/keys/
+*.pem
+
 # Project specific
 *.db
 *.sqlite3

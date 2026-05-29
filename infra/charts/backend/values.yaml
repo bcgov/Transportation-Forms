@@ -102,6 +102,8 @@ networkPolicy:
 secrets:
   databaseUrl: ""
   secretKey: ""
+  jwtPrivateKeyPem: ""
+  jwtPublicKeyPem: ""
   s3EndpointUrl: ""
   s3AccessKey: ""
   s3SecretKey: ""

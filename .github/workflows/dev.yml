@@ -100,6 +100,8 @@ jobs:
       oc_token: ${{ secrets.OC_TOKEN }}
       database_url: ${{ secrets.DATABASE_URL }}
       secret_key: ${{ secrets.SECRET_KEY }}
+      jwt_private_key_pem: ${{ secrets.JWT_PRIVATE_KEY_PEM }}
+      jwt_public_key_pem: ${{ secrets.JWT_PUBLIC_KEY_PEM }}
       s3_endpoint_url: ${{ secrets.S3_ENDPOINT_URL }}
       s3_access_key: ${{ secrets.S3_ACCESS_KEY }}
       s3_secret_key: ${{ secrets.S3_SECRET_KEY }}

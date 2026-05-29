@@ -1,84 +1,61 @@
 """RSA key management for JWT token signing and verification."""
 
+from collections.abc import Mapping
 import os
-from pathlib import Path
-from cryptography.hazmat.primitives.asymmetric import rsa
+
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 
-def get_keys_directory() -> Path:
-    """Get or create the keys directory."""
-    keys_dir = Path(__file__).parent / "keys"
-    keys_dir.mkdir(exist_ok=True)
-    return keys_dir
+JWT_PRIVATE_KEY_ENV = "JWT_PRIVATE_KEY_PEM"
+JWT_PUBLIC_KEY_ENV = "JWT_PUBLIC_KEY_PEM"
 
 
-def get_private_key_path() -> Path:
-    """Get the path to the private key file."""
-    return get_keys_directory() / "private_key.pem"
+class JWTKeyConfigurationError(RuntimeError):
+    """Raised when required JWT key material is missing or invalid."""
 
 
-def get_public_key_path() -> Path:
-    """Get the path to the public key file."""
-    return get_keys_directory() / "public_key.pem"
+def _required_pem(env: Mapping[str, str], name: str) -> str:
+    value = env.get(name)
+    if value is None or not value.strip():
+        raise JWTKeyConfigurationError(
+            f"Missing required security configuration: {name}"
+        )
+    return value.replace("\\n", "\n").strip()
 
 
-def generate_rsa_keys() -> tuple:
-    """
-    Generate RSA 2048-bit key pair for JWT signing.
+def load_jwt_key_pair_from_env(
+    env: Mapping[str, str] | None = None,
+) -> tuple[str, str]:
+    """Load and validate the configured application JWT RSA key pair."""
+    source = os.environ if env is None else env
+    private_pem = _required_pem(source, JWT_PRIVATE_KEY_ENV)
+    public_pem = _required_pem(source, JWT_PUBLIC_KEY_ENV)
 
-    Returns:
-        tuple: (private_key_str, public_key_str)
-    """
-    private_key = rsa.generate_private_key(
-        public_exponent=65537, key_size=2048, backend=default_backend()
-    )
-    public_key = private_key.public_key()
+    try:
+        private_key = serialization.load_pem_private_key(
+            private_pem.encode("utf-8"),
+            password=None,
+        )
+        public_key = serialization.load_pem_public_key(public_pem.encode("utf-8"))
+    except (TypeError, ValueError) as exc:
+        raise JWTKeyConfigurationError(
+            "Invalid JWT PEM key configuration: keys must be valid RSA PEM values"
+        ) from exc
 
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode("utf-8")
+    if not isinstance(private_key, rsa.RSAPrivateKey) or not isinstance(
+        public_key, rsa.RSAPublicKey
+    ):
+        raise JWTKeyConfigurationError(
+            "Invalid JWT PEM key configuration: keys must be RSA keys"
+        )
 
-    public_pem = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
-
-    return private_pem, public_pem
-
-
-def ensure_keys_exist() -> tuple:
-    """
-    Ensure RSA keys exist. Generate them if not present.
-
-    Returns:
-        tuple: (private_key_str, public_key_str)
-    """
-    private_key_path = get_private_key_path()
-    public_key_path = get_public_key_path()
-
-    # Generate keys if they don't exist
-    if not private_key_path.exists() or not public_key_path.exists():
-        private_pem, public_pem = generate_rsa_keys()
-
-        private_key_path.write_text(private_pem, encoding="utf-8")
-        public_key_path.write_text(public_pem, encoding="utf-8")
-
-        # Restrict permissions on private key (Unix-like systems)
-        try:
-            os.chmod(private_key_path, 0o600)
-        except (AttributeError, OSError):
-            # Windows doesn't support chmod in the same way
-            pass
-
-    private_pem = private_key_path.read_text(encoding="utf-8")
-    public_pem = public_key_path.read_text(encoding="utf-8")
+    if private_key.public_key().public_numbers() != public_key.public_numbers():
+        raise JWTKeyConfigurationError(
+            "Invalid JWT PEM key configuration: public key does not match private key"
+        )
 
     return private_pem, public_pem
 
 
-# Load keys on module import
-PRIVATE_KEY, PUBLIC_KEY = ensure_keys_exist()
+PRIVATE_KEY, PUBLIC_KEY = load_jwt_key_pair_from_env()
