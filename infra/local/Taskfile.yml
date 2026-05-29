@@ -47,6 +47,7 @@ vars:
   CRUNCHY_CACHE: infra/local/.action-crunchy
   CRUNCHY_ACTION_REF: v2.1.0
   PGO_VERSION: 5.8.5
+  POWERSHELL: '{{if eq OS "windows"}}powershell{{else}}pwsh{{end}}'
 
 set: [errexit, pipefail]
 
