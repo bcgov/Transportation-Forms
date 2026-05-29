@@ -150,7 +150,7 @@ jobs:
             ENV="${{ inputs.environment }}"
             JWT_PRIVATE_KEY_FILE="$(mktemp)"
             JWT_PUBLIC_KEY_FILE="$(mktemp)"
-
+            trap 'rm -f "${JWT_PRIVATE_KEY_FILE}" "${JWT_PUBLIC_KEY_FILE}"' EXIT
             cat > "${JWT_PRIVATE_KEY_FILE}" <<'JWT_PRIVATE_KEY_EOF'
             ${{ secrets.jwt_private_key_pem }}
             JWT_PRIVATE_KEY_EOF
