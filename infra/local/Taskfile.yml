@@ -190,10 +190,8 @@ tasks:
           exit 1
         fi
 
-        JWT_TEMP_DIR="infra/local/.tmp"
-        mkdir -p "$JWT_TEMP_DIR"
-        JWT_PRIVATE_KEY_FILE="$JWT_TEMP_DIR/jwt-private-key-$$.pem"
-        JWT_PUBLIC_KEY_FILE="$JWT_TEMP_DIR/jwt-public-key-$$.pem"
+        JWT_PRIVATE_KEY_FILE="$(mktemp)"
+        JWT_PUBLIC_KEY_FILE="$(mktemp)"
         trap 'rm -f "$JWT_PRIVATE_KEY_FILE" "$JWT_PUBLIC_KEY_FILE"' EXIT
         printf '%s' "${JWT_PRIVATE_KEY_PEM}" > "$JWT_PRIVATE_KEY_FILE"
         printf '%s' "${JWT_PUBLIC_KEY_PEM}" > "$JWT_PUBLIC_KEY_FILE"
