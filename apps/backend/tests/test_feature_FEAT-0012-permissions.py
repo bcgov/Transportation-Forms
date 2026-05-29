@@ -21,7 +21,7 @@ from backend.auth.permissions import (
 )
 from backend.database import get_db
 from backend.main import app as fastapi_app
-from backend.models import Role, User, UserRole
+from backend.models import User, UserRole
 
 
 # ---------------------------------------------------------------------------

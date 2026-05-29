@@ -19,7 +19,7 @@ from backend.main import app
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-from backend.models import Form
+from backend.models import Form, Role, UserRole
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -40,7 +40,17 @@ _FORM_UPDATE_PAYLOAD = {
 
 
 def _make_client(db, user, permissions):
-    """Build a TestClient with the given user/permissions override."""
+    """Build a TestClient with matching token and DB role permissions."""
+    role = Role(
+        id=uuid.uuid4(),
+        name=f"feat_0019_{uuid.uuid4().hex}",
+        permissions=permissions,
+        is_active=True,
+    )
+    db.add(role)
+    db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
+    db.flush()
+
     def _get_user(request: Request) -> TokenData:
         return TokenData(
             sub=str(user.id),

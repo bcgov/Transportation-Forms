@@ -1,4 +1,5 @@
 crunchy:
+  image: registry.developers.crunchydata.com/crunchydata/crunchy-postgres-gis:ubi9-18.1-3.6-2547
   instances:
     dataVolumeClaimSpec:
       storageClassName: local-path    # k3s default (replaces netapp-block-standard)

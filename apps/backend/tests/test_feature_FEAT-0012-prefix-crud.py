@@ -17,10 +17,6 @@ from fastapi import status
 
 from backend.models import (
     Form,
-    FormNumberPrefix,
-    FormNumberReservation,
-    Role,
-    User,
     UserRole,
 )
 
@@ -717,14 +713,14 @@ class TestTC7Detail:
         """Reservations are returned newest-first."""
         pfx = prefix_factory(prefix="CHR", created_by=admin_user)
 
-        older = reservation_factory(
+        reservation_factory(
             prefix=pfx,
             form_number="0001",
             reserved_by=admin_user,
             status="released",
             created_at=datetime.now(timezone.utc) - timedelta(days=5),
         )
-        newer = reservation_factory(
+        reservation_factory(
             prefix=pfx,
             form_number="0002",
             reserved_by=admin_user,

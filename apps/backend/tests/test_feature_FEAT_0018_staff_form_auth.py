@@ -1,4 +1,4 @@
-"""FEAT-0018 SEC-002: Enforce authentication and form:read permission on staff form read endpoints.
+"""FEAT-0018 SEC-002: Enforce staff form read authentication and RBAC.
 
 Covers all test cases from TC-US-001:
 - TC1.1–TC1.3:  Unauthenticated requests to list, detail, autocomplete → 401

@@ -2,14 +2,13 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
 from backend.auth.permissions import DEFAULT_ROLES
 from backend.database import get_db
 from backend.main import app
-from backend.models import Form, FormWorkflow
+from backend.models import Form, FormWorkflow, Role, UserRole
 from backend.services.forms import (
     FormService,
     FormWorkflowConflictError,
@@ -48,10 +47,22 @@ def _perms_for_roles(*role_names: str) -> list:
     return list(perms)
 
 
+def _grant_permissions(db, user, permissions: list[str]) -> None:
+    role = Role(
+        id=uuid.uuid4(),
+        name=f"workflow_perm_{uuid.uuid4().hex}",
+        permissions=permissions,
+        is_active=True,
+    )
+    db.add(role)
+    db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
+    db.flush()
+
+
 class TestFormWorkflowService:
     @pytest.mark.integration
     def test_happy_path_draft_to_archived(self, db, user_factory):
-        """FEAT-0001: approve_form now transitions directly to published (no intermediate approved state)."""
+        """FEAT-0001: approve_form transitions directly to published."""
         creator = _create_user(user_factory, "creator-happy@example.com")
         reviewer = _create_user(user_factory, "reviewer-happy@example.com")
         form = _create_form(db, creator.id, status="draft")
@@ -86,10 +97,15 @@ class TestFormWorkflowService:
 
         FormService.submit_form_for_review(db, form_id, reviewer.id)
 
-        with pytest.raises(FormWorkflowValidationError, match=r"Rejection reason \(reason_notes\) is required"):
+        with pytest.raises(
+            FormWorkflowValidationError,
+            match=r"Rejection reason \(reason_notes\) is required",
+        ):
             FormService.reject_form(db, form_id, reviewer.id, "")
 
-        rejected = FormService.reject_form(db, form_id, reviewer.id, "Missing legal text")
+        rejected = FormService.reject_form(
+            db, form_id, reviewer.id, "Missing legal text"
+        )
         assert str(rejected.status) == "draft"
 
         latest = (
@@ -115,10 +131,15 @@ class TestFormWorkflowService:
             status="reserved",
             reserved_by=creator,
         )
-        form = _create_form(db, creator.id, status="draft", reservation_id=reservation.id)
+        form = _create_form(
+            db, creator.id, status="draft", reservation_id=reservation.id
+        )
         form_id = uuid.UUID(str(form.id))
 
-        with pytest.raises(FormWorkflowConflictError, match="Form number reservation must be approved before submission"):
+        with pytest.raises(
+            FormWorkflowConflictError,
+            match="Form number reservation must be approved before submission",
+        ):
             FormService.submit_form_for_review(db, form_id, reviewer.id)
 
     @pytest.mark.integration
@@ -129,7 +150,10 @@ class TestFormWorkflowService:
 
         draft_form = _create_form(db, creator.id, status="draft")
         draft_form_id = uuid.UUID(str(draft_form.id))
-        with pytest.raises(FormWorkflowValidationError, match="Invalid transition from 'draft' to 'published'"):
+        with pytest.raises(
+            FormWorkflowValidationError,
+            match="Invalid transition from 'draft' to 'published'",
+        ):
             FormService.publish_form(db, draft_form_id, reviewer.id)
 
     @pytest.mark.integration
@@ -140,7 +164,10 @@ class TestFormWorkflowService:
 
         published_form = _create_form(db, creator.id, status="published")
         published_form_id = uuid.UUID(str(published_form.id))
-        with pytest.raises(FormWorkflowValidationError, match="Form is already in 'published' state"):
+        with pytest.raises(
+            FormWorkflowValidationError,
+            match="Form is already in 'published' state",
+        ):
             FormService.approve_form(db, published_form_id, reviewer.id)
 
     @pytest.mark.integration
@@ -150,7 +177,10 @@ class TestFormWorkflowService:
         form = _create_form(db, creator.id, status="pending_review")
         form_id = uuid.UUID(str(form.id))
 
-        with pytest.raises(FormWorkflowValidationError, match="You cannot approve your own form submission"):
+        with pytest.raises(
+            FormWorkflowValidationError,
+            match="You cannot approve your own form submission",
+        ):
             FormService.approve_form(db, form_id, creator.id)
 
     @pytest.mark.integration
@@ -161,7 +191,10 @@ class TestFormWorkflowService:
         form = _create_form(db, creator.id, status="pending_review")
         form_id = uuid.UUID(str(form.id))
 
-        with pytest.raises(FormWorkflowValidationError, match=r"Rejection reason \(reason_notes\) is required"):
+        with pytest.raises(
+            FormWorkflowValidationError,
+            match=r"Rejection reason \(reason_notes\) is required",
+        ):
             FormService.reject_form(db, form_id, reviewer.id, "    ")
 
 
@@ -189,7 +222,9 @@ class TestFormWorkflowApi:
         app.dependency_overrides.clear()
 
     @pytest.mark.integration
-    def test_reviewer_can_approve_directly_to_published(self, db, user_factory, client_factory):
+    def test_reviewer_can_approve_directly_to_published(
+        self, db, user_factory, client_factory
+    ):
         """FEAT-0001: /approve endpoint transitions pending_review → published directly."""
         creator = _create_user(user_factory, "creator-api-role@example.com")
         reviewer = _create_user(user_factory, "reviewer-api-role@example.com")
@@ -202,7 +237,9 @@ class TestFormWorkflowApi:
         assert approve_resp.json()["status"] == "published"
 
     @pytest.mark.integration
-    def test_reviewer_can_archive_published_form(self, db, user_factory, client_factory):
+    def test_reviewer_can_archive_published_form(
+        self, db, user_factory, client_factory
+    ):
         """FEAT-0013 / US-005: Reviewer role now carries form:archive permission."""
         creator = _create_user(user_factory, "creator-arch@example.com")
         reviewer = _create_user(user_factory, "reviewer-arch@example.com")
@@ -214,7 +251,9 @@ class TestFormWorkflowApi:
         assert archive_resp.json()["status"] == "archived"
 
     @pytest.mark.integration
-    def test_reject_endpoint_requires_reason_notes(self, db, user_factory, client_factory):
+    def test_reject_endpoint_requires_reason_notes(
+        self, db, user_factory, client_factory
+    ):
         creator = _create_user(user_factory, "creator-api-reject@example.com")
         reviewer = _create_user(user_factory, "reviewer-api-reject@example.com")
         form = _create_form(db, creator.id, status="pending_review")
@@ -228,7 +267,9 @@ class TestFormWorkflowApi:
         assert "reason" in resp.json()["detail"].lower()
 
     @pytest.mark.integration
-    def test_workflow_history_returns_desc_order(self, db, user_factory, client_factory):
+    def test_workflow_history_returns_desc_order(
+        self, db, user_factory, client_factory
+    ):
         creator = _create_user(user_factory, "creator-api-history@example.com")
         reviewer = _create_user(user_factory, "reviewer-api-history@example.com")
         form = _create_form(db, creator.id, status="draft")
@@ -247,7 +288,9 @@ class TestFormWorkflowApi:
         assert items[1]["action"] == "submit"
 
     @pytest.mark.integration
-    def test_creator_cannot_submit_without_permission(self, db, user_factory, client_factory):
+    def test_creator_cannot_submit_without_permission(
+        self, db, user_factory, client_factory
+    ):
         """FEAT-0001 US-002: user without form:submit_for_review gets 403."""
         creator = _create_user(user_factory, "creator-noperm@example.com")
         form = _create_form(db, creator.id, status="draft")
@@ -257,39 +300,49 @@ class TestFormWorkflowApi:
         assert resp.status_code == 403
 
     @pytest.mark.integration
-    def test_creator_cannot_approve_own_form_via_api(self, db, user_factory, client_factory):
+    def test_creator_cannot_approve_own_form_via_api(
+        self, db, user_factory, client_factory
+    ):
         """FEAT-0001 BR-002: creator with approve permission cannot approve own form."""
         creator = _create_user(user_factory, "creator-sod-api@example.com")
         form = _create_form(db, creator.id, status="pending_review")
 
         # Give creator both submit and approve permissions (unusual but possible)
         both_perms = _perms_for_roles("staff_manager", "reviewer")
-        creator_client = client_factory(creator, ["staff_manager", "reviewer"], permissions=both_perms)
+        creator_client = client_factory(
+            creator, ["staff_manager", "reviewer"], permissions=both_perms
+        )
         resp = creator_client.post(f"/api/v1/staff/forms/{form.id}/approve")
         assert resp.status_code == 400
         assert "cannot approve your own" in resp.json()["detail"].lower()
 
     @pytest.mark.integration
-    def test_creator_cannot_publish_pending_form(self, db, user_factory, client_factory):
+    def test_creator_cannot_publish_pending_form(
+        self, db, user_factory, client_factory
+    ):
         """FEAT-0001 US-002 AC2: creator-only user cannot approve (publish) a form."""
         creator = _create_user(user_factory, "creator-noapprove@example.com")
         form = _create_form(db, creator.id, status="pending_review")
         # staff_manager has form:submit_for_review but not form:approve+form:review alone
-        creator_client = client_factory(
-            creator, ["staff_manager"],
-            permissions=_perms_for_roles("staff_manager"),
-        )
         # Remove approve permission to simulate creator-only
-        creator_perms = [p for p in _perms_for_roles("staff_manager")
-                         if p not in ("form:approve", "form:review")]
-        limited_client = client_factory(creator, ["staff_manager"], permissions=creator_perms)
+        creator_perms = [
+            p
+            for p in _perms_for_roles("staff_manager")
+            if p not in ("form:approve", "form:review")
+        ]
+        limited_client = client_factory(
+            creator, ["staff_manager"], permissions=creator_perms
+        )
         resp = limited_client.post(f"/api/v1/staff/forms/{form.id}/approve")
         assert resp.status_code == 403
 
     @pytest.mark.integration
-    def test_pending_review_form_cannot_be_edited(self, db, user_factory, client_factory):
+    def test_pending_review_form_cannot_be_edited(
+        self, db, user_factory, client_factory
+    ):
         """FEAT-0001 BR-003: forms in pending_review state cannot be edited by anyone."""
         creator = _create_user(user_factory, "creator-locked@example.com")
+        _grant_permissions(db, creator, ["form:edit"])
         form = _create_form(db, creator.id, status="pending_review")
 
         manager_client = client_factory(creator, ["staff_manager"])
@@ -354,6 +407,7 @@ class TestFormWorkflowApi:
     def test_history_form_not_found_returns_404(self, db, user_factory, client_factory):
         reviewer = _create_user(user_factory, "reviewer-hist404@example.com")
         reviewer_client = client_factory(reviewer, ["reviewer"])
-        resp = reviewer_client.get(f"/api/v1/staff/forms/{uuid.uuid4()}/workflow-history")
+        resp = reviewer_client.get(
+            f"/api/v1/staff/forms/{uuid.uuid4()}/workflow-history"
+        )
         assert resp.status_code == 404
-

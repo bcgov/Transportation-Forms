@@ -1,7 +1,7 @@
 """FEAT-0015 regression coverage for backend framework deprecation remediation."""
 
-from pathlib import Path
 import warnings
+from pathlib import Path
 
 from pydantic.warnings import PydanticDeprecatedSince20
 from sqlalchemy.exc import MovedIn20Warning

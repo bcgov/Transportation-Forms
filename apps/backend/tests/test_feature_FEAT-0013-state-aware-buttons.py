@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-from backend.auth.permissions import DEFAULT_ROLES, Permission
+from backend.auth.permissions import DEFAULT_ROLES
 from backend.database import get_db
 from backend.main import app
 from backend.models import AuditLog, Form
@@ -316,7 +316,7 @@ class TestSubmitOwnershipEnforcement:
     def test_tc004_3_admin_noncreator_gets_403(
         self, db, user_factory, client_factory,
     ):
-        """TC-004.3: Admin who is NOT the creator gets 403 (no admin bypass for submit)."""
+        """TC-004.3: Admin non-creator gets 403; no submit bypass."""
         creator = user_factory(email="tc004-3-creator@example.com")
         admin = user_factory(email="tc004-3-admin@example.com")
         form = _create_form(db, creator.id, status="draft")
