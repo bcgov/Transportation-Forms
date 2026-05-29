@@ -1,8 +1,7 @@
 name: Deploy to DEV
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches:
       - master
     paths:
@@ -24,7 +23,6 @@ on:
 jobs:
   build:
     name: Build ${{ matrix.package }}
-    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
