@@ -7,6 +7,7 @@
 # Prerequisites:
 #   - Rancher Desktop installed with dockerd (moby) engine (not containerd)
 #   - Helm 3.x installed and kubectl context set to rancher-desktop
+#   - PowerShell 7+ installed (pwsh on macOS/Linux)
 #   - Root .env file populated with valid credentials
 #   - git available in PATH (for cloning the action-crunchy chart on first run)
 #   - On Windows: C:\Program Files\Git\bin must be in PATH (provides sh.exe for Task)
