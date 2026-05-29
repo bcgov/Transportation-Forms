@@ -109,11 +109,15 @@ public-backend:
   resources:
     app:
       requests:
-        cpu: "10m"
-        memory: "32Mi"
+        cpu: "25m"
+        memory: "64Mi"
       limits:
-        cpu: "100m"
+        cpu: "250m"
         memory: "128Mi"
+
+  startupProbe:
+    failureThreshold: 60
+    periodSeconds: 2
 
 # ── Public-frontend subchart values (local) ──────────────────────────────────
 public-frontend:

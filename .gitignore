@@ -112,3 +112,5 @@ backend/
 QUICK_REFERENCE.md
 form-resevation.md
 SETUP.md
+
+docs/security_assessment/*

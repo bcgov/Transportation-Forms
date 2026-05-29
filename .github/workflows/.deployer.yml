@@ -58,6 +58,10 @@ on:
         required: true
       secret_key:
         required: true
+      jwt_private_key_pem:
+        required: true
+      jwt_public_key_pem:
+        required: true
       s3_endpoint_url:
         required: true
       s3_access_key:
@@ -144,6 +148,15 @@ jobs:
             MIGRATIONS_TAG="${{ inputs.migrations_tag }}"
             FRONTEND_TAG="${{ inputs.frontend_tag }}"
             ENV="${{ inputs.environment }}"
+            JWT_PRIVATE_KEY_FILE="$(mktemp)"
+            JWT_PUBLIC_KEY_FILE="$(mktemp)"
+            trap 'rm -f "${JWT_PRIVATE_KEY_FILE}" "${JWT_PUBLIC_KEY_FILE}"' EXIT
+            cat > "${JWT_PRIVATE_KEY_FILE}" <<'JWT_PRIVATE_KEY_EOF'
+            ${{ secrets.jwt_private_key_pem }}
+            JWT_PRIVATE_KEY_EOF
+            cat > "${JWT_PUBLIC_KEY_FILE}" <<'JWT_PUBLIC_KEY_EOF'
+            ${{ secrets.jwt_public_key_pem }}
+            JWT_PUBLIC_KEY_EOF
 
             # Determine values file override (test/prod have specific files)
             VALUES_OVERRIDE=""
@@ -164,6 +177,8 @@ jobs:
               --set global.repository=bcgov/transportation-forms \
               --set backend.secrets.databaseUrl="${{ secrets.database_url }}" \
               --set backend.secrets.secretKey="${{ secrets.secret_key }}" \
+              --set-file backend.secrets.jwtPrivateKeyPem="${JWT_PRIVATE_KEY_FILE}" \
+              --set-file backend.secrets.jwtPublicKeyPem="${JWT_PUBLIC_KEY_FILE}" \
               --set backend.secrets.s3EndpointUrl="${{ secrets.s3_endpoint_url }}" \
               --set backend.secrets.s3AccessKey="${{ secrets.s3_access_key }}" \
               --set backend.secrets.s3SecretKey="${{ secrets.s3_secret_key }}" \

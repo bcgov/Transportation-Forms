@@ -17,6 +17,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Generator, Any
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Request
 from fastapi.testclient import TestClient
 from pydantic.warnings import PydanticDeprecatedSince20
@@ -48,6 +50,26 @@ def _enable_targeted_warning_gates() -> None:
 
 
 _enable_targeted_warning_gates()
+
+
+def _set_default_test_jwt_keys() -> None:
+    if os.environ.get("JWT_PRIVATE_KEY_PEM") and os.environ.get("JWT_PUBLIC_KEY_PEM"):
+        return
+
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_key = private_key.public_key()
+    os.environ["JWT_PRIVATE_KEY_PEM"] = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+    os.environ["JWT_PUBLIC_KEY_PEM"] = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode("utf-8")
+
+
+_set_default_test_jwt_keys()
 
 
 def pytest_configure(config: pytest.Config) -> None:
