@@ -381,7 +381,7 @@ tasks:
           }
         '
       - |
-        powershell -NoProfile -ExecutionPolicy Bypass -Command '
+        {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
           $ErrorActionPreference = "Stop"
           kubectl apply -f infra/local/ingress.yaml
           if ($LASTEXITCODE -ne 0) {
