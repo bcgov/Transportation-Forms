@@ -1,7 +1,8 @@
 name: Deploy to DEV
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches:
       - master
     paths:
@@ -23,6 +24,7 @@ on:
 jobs:
   build:
     name: Build ${{ matrix.package }}
+    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -53,6 +55,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Resolve triggers
         id: triggers
         run: |
@@ -61,6 +64,7 @@ jobs:
           else
             echo "value=${{ matrix.triggers }}" >> $GITHUB_OUTPUT
           fi
+
       - name: Build or retag ${{ matrix.package }}
         uses: bcgov/action-builder-ghcr@v4.2.1
         with:
@@ -71,7 +75,6 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          # Empty string when force_build_all=true → action treats as no triggers → forces build
           triggers: ${{ steps.triggers.outputs.value }}
 
   deploy-dev:
@@ -107,5 +110,5 @@ jobs:
       keycloak_realm: ${{ secrets.KEYCLOAK_REALM }}
       keycloak_client_id: ${{ secrets.KEYCLOAK_CLIENT_ID }}
       keycloak_client_secret: ${{ secrets.KEYCLOAK_CLIENT_SECRET }}
-      keycloak_redirect_uri: ${{ secrets.KEYCLOAK_REDIRECT_URI }}
+      keycloak_redirect_uri: ${{ secrets.KEYCLOAK_REDIRECT_uri }}
       initial_admin_email: ${{ secrets.INITIAL_ADMIN_EMAIL }}
