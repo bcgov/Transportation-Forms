@@ -75,7 +75,7 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          triggers: ${{ steps.triggers.outputs.value }}
+          #triggers: ${{ steps.triggers.outputs.value }}
 
   deploy-dev:
     name: Deploy to DEV
