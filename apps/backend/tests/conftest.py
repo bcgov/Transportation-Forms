@@ -379,6 +379,7 @@ def active_prefix(prefix_factory) -> FormNumberPrefix:
 def make_token_data(
     user: User,
     roles: list[str] | None = None,
+    permissions: list[str] | None = None,
 ) -> TokenData:
     """Build a ``TokenData`` from a User ORM object (for dependency overrides)."""
     return TokenData(
@@ -387,6 +388,7 @@ def make_token_data(
         name=f"{user.first_name} {user.last_name}",
         roles=roles or ["staff"],
         token_type="access",
+        permissions=permissions,
     )
 
 
@@ -417,12 +419,18 @@ def client(db, admin_user, staff_user) -> Generator[TestClient, None, None]:
     def _get_user(request: Request) -> TokenData:
         auth = request.headers.get("Authorization", "")
         if auth.strip().endswith("admin"):
+            from backend.auth.permissions import DEFAULT_ROLES, Permission
+            admin_perms = [
+                p.value if isinstance(p, Permission) else str(p)
+                for p in DEFAULT_ROLES["admin"]["permissions"]
+            ]
             return TokenData(
                 sub=str(admin_user.id),
                 email=str(admin_user.email),
                 name=f"{admin_user.first_name} {admin_user.last_name}",
                 roles=["admin"],
                 token_type="access",
+                permissions=admin_perms,
             )
         return TokenData(
             sub=str(staff_user.id),
@@ -430,6 +438,7 @@ def client(db, admin_user, staff_user) -> Generator[TestClient, None, None]:
             name=f"{staff_user.first_name} {staff_user.last_name}",
             roles=["staff"],
             token_type="access",
+            permissions=["form:read", "form:create", "form:edit"],
         )
 
     fastapi_app.dependency_overrides[get_db] = lambda: db

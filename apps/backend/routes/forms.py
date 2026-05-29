@@ -356,9 +356,17 @@ async def autocomplete_forms(
     max_suggestions: int = Query(
         10, ge=1, le=10, description="Maximum suggestions (1-10)"
     ),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FormAutocompleteResponse:
     """Return autocomplete suggestions for form titles/keywords."""
+    # FEAT-0018: Enforce form:read permission
+    user_perms = set(current_user.permissions or [])
+    if "form:read" not in user_perms:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
     suggestions = FormService.get_autocomplete_suggestions(
         db=db,
         query_text=q,
@@ -370,9 +378,17 @@ async def autocomplete_forms(
 @router.get("/{form_id}", response_model=FormResponse)
 async def get_form(
     form_id: str,
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """Get a form by ID."""
+    # FEAT-0018: Enforce form:read permission
+    user_perms = set(current_user.permissions or [])
+    if "form:read" not in user_perms:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
     try:
         form_uuid = UUID(form_id)
         form_data = FormService.get_form_with_details(db, form_uuid)
@@ -545,6 +561,7 @@ async def list_forms(
         pattern="^(created_at|form_number)$",
         description="Sort field (created_at or form_number)",
     ),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FormListResponse:
     """
@@ -560,6 +577,13 @@ async def list_forms(
     - **sort_order**: Sort ascending (asc) or descending (desc)
     - **sort_field**: Sort by created_at (default) or form_number
     """
+    # FEAT-0018: Enforce form:read permission
+    user_perms = set(current_user.permissions or [])
+    if "form:read" not in user_perms:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
 
     if limit not in {25, 50, 100}:
         raise HTTPException(

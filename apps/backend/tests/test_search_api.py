@@ -8,16 +8,29 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.database import get_db
+from backend.auth.dependencies import get_current_user
+from backend.auth.jwt_handler import TokenData
 from backend.models import BusinessArea, Form
 
 
 @pytest.fixture()
-def search_client(db):
-    """Test client with DB override for search API tests."""
+def search_client(db, user_factory):
+    """Test client with DB and auth overrides for search API tests."""
+    user = user_factory(email="search-client@example.com")
+    token = TokenData(
+        sub=str(user.id),
+        email=user.email,
+        name=f"{user.first_name} {user.last_name}",
+        roles=["staff"],
+        token_type="access",
+        permissions=["form:read"],
+    )
     app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: token
     client = TestClient(app)
     yield client
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.fixture()
