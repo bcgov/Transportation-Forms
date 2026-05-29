@@ -308,6 +308,13 @@ async def create_form(
     - **business_area_id**: Associated business area ID
     - **effective_date**: When form becomes effective
     """
+    # FEAT-0019: Enforce form:create permission
+    user_perms = set(current_user.permissions or [])
+    if "form:create" not in user_perms:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
     try:
         # Convert string UUIDs to UUID objects
         business_area_id = None
@@ -418,6 +425,13 @@ async def update_form(
 
     Provide only the fields you want to update.
     """
+    # FEAT-0019: Enforce form:edit permission
+    user_perms = set(current_user.permissions or [])
+    if "form:edit" not in user_perms:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
     try:
         form_uuid = UUID(form_id)
 
@@ -660,6 +674,13 @@ async def archive_form(
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """Archive a form (mark as archived)."""
+    # FEAT-0019: Enforce form:archive permission
+    user_perms = set(current_user.permissions or [])
+    if "form:archive" not in user_perms:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
     try:
         form_uuid = UUID(form_id)
         form = FormService.archive_form(
