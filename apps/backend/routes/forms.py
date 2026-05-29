@@ -572,8 +572,8 @@ async def list_forms(
     - **skip**: Number of forms to skip (for pagination)
     - **limit**: Max forms to return (25, 50, 100)
     - **q**: Full-text keyword search query (also matches form numbers)
-        - **status**: Filter by status (draft, pending_review, published, archived).
-            Multi-value with OR logic.
+    - **status**: Filter by status (draft, pending_review, published, archived).
+      Multi-value with OR logic.
     - **business_area_ids**: Optional list of business area IDs to filter by
     - **form_source**: Filter by source type (Link or Download). Multi-value with OR logic.
     - **is_public**: Filter by public/private status
