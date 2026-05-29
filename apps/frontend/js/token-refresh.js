@@ -2,6 +2,11 @@
 // Shared token-refresh logic used by both api.js (fetch interceptor) and auth.js.
 // Intentionally depends only on constants to avoid coupling the networking layer
 // to auth UI concerns.
+//
+// FEAT-0020 / SEC-004: The refresh token lives in an HttpOnly cookie set by
+// /auth/callback. JavaScript cannot read it, so we send `credentials: 'include'`
+// to let the browser attach the cookie and let the backend recover it from the
+// request. No refresh-token value is read from or sent through JavaScript.
 
 import { API_BASE, AUTH_STORAGE_ACCESS, AUTH_STORAGE_REFRESH } from './constants.js';
 
@@ -10,7 +15,7 @@ import { API_BASE, AUTH_STORAGE_ACCESS, AUTH_STORAGE_REFRESH } from './constants
 let _refreshPromise = null;
 
 /**
- * Attempts a silent token refresh using the stored refresh token.
+ * Attempts a silent token refresh using the HttpOnly refresh-token cookie.
  * Returns true on success (new access token written to localStorage).
  *
  * Concurrent callers share a single in-flight request via a promise.
@@ -20,17 +25,13 @@ export async function tryRefreshToken() {
     return _refreshPromise;
   }
 
-  const refreshToken = localStorage.getItem(AUTH_STORAGE_REFRESH) || '';
-  if (!refreshToken) {
-    return false;
-  }
-
   _refreshPromise = (async () => {
     try {
       const response = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        credentials: 'include',
+        body: JSON.stringify({}),
       });
 
       if (!response.ok) {
@@ -39,6 +40,9 @@ export async function tryRefreshToken() {
 
       const payload = await response.json();
       localStorage.setItem(AUTH_STORAGE_ACCESS, payload.access_token);
+      // FEAT-0020 migration safeguard: ensure any legacy refresh token value
+      // left in localStorage from a previous build is removed.
+      localStorage.removeItem(AUTH_STORAGE_REFRESH);
       return true;
     } catch {
       return false;

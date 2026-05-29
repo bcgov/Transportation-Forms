@@ -18,6 +18,7 @@ function _getAccessToken() {
 
 function _clearAuthSession() {
   localStorage.removeItem(AUTH_STORAGE_ACCESS);
+  // FEAT-0020 migration safeguard: clear any legacy refresh-token value.
   localStorage.removeItem(AUTH_STORAGE_REFRESH);
   localStorage.removeItem(AUTH_STORAGE_USER);
   setCurrentUser(null);

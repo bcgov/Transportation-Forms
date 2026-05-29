@@ -6,9 +6,12 @@ from datetime import datetime, timezone
 from uuid import UUID
 from typing import Optional
 from urllib.parse import urlparse
-from fastapi import APIRouter, HTTPException, status, Depends, Request, Body
+from fastapi import APIRouter, HTTPException, status, Depends, Request, Response, Body
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+from backend.auth.jwt_handler import REFRESH_TOKEN_EXPIRY
 
 from backend.database import get_db
 from backend.models import User, Role, UserRole, AuditLog
@@ -31,10 +34,17 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    """Response for successful login."""
+    """Response for successful login.
+
+    The refresh token is intentionally NOT returned in the response body — it
+    is delivered out-of-band as an HttpOnly Secure SameSite cookie so that it
+    cannot be read by any JavaScript on the staff portal (FEAT-0020 / SEC-004).
+    The field is preserved (always empty) only for backward compatibility with
+    the existing response schema and any clients that still inspect it.
+    """
 
     access_token: str
-    refresh_token: str
+    refresh_token: str = ""
     token_type: str
     expires_in: int
     user: dict
@@ -55,13 +65,24 @@ class CallbackRequest(BaseModel):
 
 
 class RefreshTokenRequest(BaseModel):
-    """Request to refresh access token."""
+    """Request to refresh access token.
 
-    refresh_token: str
+    ``refresh_token`` is optional: the canonical source is the HttpOnly cookie
+    set at login time (FEAT-0020). A body-supplied value is only honoured as a
+    transitional fallback during the rollout window and will be removed in a
+    future release.
+    """
+
+    refresh_token: Optional[str] = None
 
 
 class LogoutRequest(BaseModel):
-    """Request to logout."""
+    """Request to logout.
+
+    ``refresh_token`` is optional: the canonical source is the HttpOnly cookie
+    set at login time (FEAT-0020). A body-supplied value is only honoured as a
+    transitional fallback.
+    """
 
     refresh_token: Optional[str] = None
 
@@ -88,6 +109,51 @@ def _get_request_metadata(request: Request) -> tuple[Optional[str], Optional[str
     return request.client.host if request.client else None, request.headers.get(
         "user-agent"
     )
+
+
+def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    """Attach the refresh token to ``response`` as an HttpOnly Secure cookie.
+
+    FEAT-0020 / SEC-004: The refresh token must not be readable by JavaScript;
+    delivering it through an HttpOnly cookie removes the localStorage theft
+    vector exploitable by XSS or compromised third-party scripts.
+    """
+    response.set_cookie(
+        key=settings.AUTH_REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        max_age=REFRESH_TOKEN_EXPIRY,
+        path=settings.AUTH_REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite=settings.AUTH_REFRESH_COOKIE_SAMESITE,
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    """Remove the refresh-token cookie by setting Max-Age=0 (FEAT-0020)."""
+    response.delete_cookie(
+        key=settings.AUTH_REFRESH_COOKIE_NAME,
+        path=settings.AUTH_REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite=settings.AUTH_REFRESH_COOKIE_SAMESITE,
+    )
+
+
+def _refresh_token_from_request(
+    cookie_value: Optional[str], body_value: Optional[str]
+) -> Optional[str]:
+    """Resolve the refresh token from the cookie first, body second.
+
+    The cookie is the canonical, JavaScript-inaccessible source (FEAT-0020).
+    Body fallback exists only for the migration window and will be removed in a
+    future release.
+    """
+    if cookie_value:
+        return cookie_value
+    if body_value:
+        return body_value
+    return None
 
 
 def _is_allowed_redirect_uri(uri: str) -> bool:
@@ -199,7 +265,10 @@ async def login(
 
 @router.post("/callback", response_model=LoginResponse)
 async def auth_callback(
-    request: CallbackRequest, http_request: Request, db: Session = Depends(get_db)
+    request: CallbackRequest,
+    http_request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
 ):
     """
     Handle KeyCloak OIDC callback after user authentication.
@@ -329,9 +398,15 @@ async def auth_callback(
         )
         logger.info(f"Successfully authenticated user: {email}")
 
+        # FEAT-0020: Set the refresh token as an HttpOnly Secure SameSite
+        # cookie and omit it from the JSON response body so the staff portal
+        # cannot store it in localStorage / sessionStorage where JavaScript
+        # could read it.
+        _set_refresh_cookie(response, app_tokens["refresh_token"])
+
         return LoginResponse(
             access_token=app_tokens["access_token"],
-            refresh_token=app_tokens["refresh_token"],
+            refresh_token="",
             token_type=app_tokens["token_type"],
             expires_in=app_tokens["expires_in"],
             user={
@@ -360,15 +435,32 @@ async def auth_callback(
 
 
 @router.post("/refresh")
-async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
+async def refresh_token(
+    request: RefreshTokenRequest,
+    http_request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     """
     Refresh access token using refresh token.
 
     This uses our application's refresh token (not KeyCloak's).
+
+    FEAT-0020: The refresh token is sourced from the HttpOnly cookie set at
+    login time. A body-supplied value is honoured only as a transitional
+    fallback during the rollout window.
     """
     try:
+        cookie_value = http_request.cookies.get(settings.AUTH_REFRESH_COOKIE_NAME)
+        token_value = _refresh_token_from_request(cookie_value, request.refresh_token)
+        if not token_value:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token missing",
+            )
+
         token_data = jwt_handler.validate_token(
-            request.refresh_token, token_type="refresh"
+            token_value, token_type="refresh"
         )
 
         user_id = (
@@ -414,10 +506,16 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
         raise
     except ValueError:
         db.rollback()
-        raise HTTPException(
+        # FEAT-0020: invalidate the bad cookie so subsequent requests don't
+        # keep retrying with the same expired/forged value. Use a direct
+        # JSONResponse here because HTTPException unwinds the request before
+        # the cookie set on the injected ``response`` object can take effect.
+        unauthorized = JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
+            content={"detail": "Invalid or expired refresh token"},
         )
+        _clear_refresh_cookie(unauthorized)
+        return unauthorized
     except Exception as e:
         logger.error(f"Token refresh failed: {str(e)}")
         db.rollback()
@@ -431,14 +529,16 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
 async def logout(
     request: LogoutRequest,
     http_request: Request,
+    response: Response,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Logout user by clearing tokens.
 
-    In a production system with Redis, this would blacklist the tokens.
-    For now, client should discard tokens.
+    FEAT-0020: Clears the HttpOnly refresh-token cookie on the response so the
+    browser cannot continue to silently refresh sessions after logout.
+    Subsequent authenticated requests will return HTTP 401.
     """
     try:
         user_id = (
@@ -448,9 +548,12 @@ async def logout(
         )
         user = db.query(User).filter(User.id == user_id).first()
 
-        if request.refresh_token:
+        cookie_value = http_request.cookies.get(settings.AUTH_REFRESH_COOKIE_NAME)
+        refresh_for_kc = _refresh_token_from_request(cookie_value, request.refresh_token)
+
+        if refresh_for_kc:
             try:
-                keycloak_service.logout(request.refresh_token)
+                keycloak_service.logout(refresh_for_kc)
             except Exception as e:
                 logger.warning(f"KeyCloak logout failed: {str(e)}")
 
@@ -464,6 +567,9 @@ async def logout(
             user_agent=user_agent,
         )
         db.commit()
+
+        # FEAT-0020: Remove the HttpOnly refresh-token cookie from the browser.
+        _clear_refresh_cookie(response)
 
         return {
             "message": "Successfully logged out",

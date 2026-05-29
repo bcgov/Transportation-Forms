@@ -55,13 +55,18 @@ window.addEventListener('storage', (event) => {
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-function _getRefreshToken() {
-  return localStorage.getItem(AUTH_STORAGE_REFRESH) || '';
-}
+// FEAT-0020 / SEC-004: The refresh token now lives in an HttpOnly cookie set
+// by the backend; it is intentionally NOT readable from JavaScript. The legacy
+// localStorage key is cleared on every auth-state transition below as a
+// migration safeguard so any value left over from a previous deploy cannot
+// continue to be exposed.
 
 function _saveAuthSession(accessToken, refreshToken, user) {
   localStorage.setItem(AUTH_STORAGE_ACCESS, accessToken);
-  localStorage.setItem(AUTH_STORAGE_REFRESH, refreshToken);
+  // FEAT-0020: Do NOT persist the refresh token in localStorage. It is
+  // delivered to the browser as an HttpOnly cookie by /auth/callback and is
+  // not (and must not be) accessible to JavaScript. Remove any legacy value.
+  localStorage.removeItem(AUTH_STORAGE_REFRESH);
   localStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(user || {}));
   setCurrentUser(user || null);
   window.dispatchEvent(new CustomEvent('auth:session-started'));
@@ -70,6 +75,7 @@ function _saveAuthSession(accessToken, refreshToken, user) {
 
 function _clearAuthSession() {
   localStorage.removeItem(AUTH_STORAGE_ACCESS);
+  // FEAT-0020 migration safeguard: clear any legacy refresh token value.
   localStorage.removeItem(AUTH_STORAGE_REFRESH);
   localStorage.removeItem(AUTH_STORAGE_USER);
   setCurrentUser(null);
@@ -192,6 +198,7 @@ export async function startLogin() {
     const response = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ frontend_redirect_uri: frontendRedirectUri }),
     });
 
@@ -235,6 +242,7 @@ export async function handleAuthCallback() {
     const response = await fetch(`${API_BASE}/auth/callback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ code, state }),
     });
 
@@ -268,12 +276,14 @@ export async function handleAuthCallback() {
 }
 
 /**
- * Calls the backend logout endpoint (to invalidate the Keycloak session),
- * clears local session state, and navigates to the home/welcome page.
+ * Calls the backend logout endpoint (to invalidate the Keycloak session and
+ * clear the HttpOnly refresh-token cookie), clears local session state, and
+ * navigates to the home/welcome page.
+ *
+ * FEAT-0020: The refresh token is no longer kept in localStorage; the backend
+ * reads it from the HttpOnly cookie and clears that cookie on the response.
  */
 export async function signOut() {
-  const refreshToken = _getRefreshToken();
-
   try {
     await fetch(`${API_BASE}/auth/logout`, {
       method: 'POST',
@@ -281,7 +291,8 @@ export async function signOut() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${getAuthToken()}`,
       },
-      body: JSON.stringify({ refresh_token: refreshToken || null }),
+      credentials: 'include',
+      body: JSON.stringify({}),
     });
   } catch (error) {
     console.error('Logout request failed:', error);

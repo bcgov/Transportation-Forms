@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     # Authentication
     AUTH_DEMO_MODE: bool = False
 
+    # Refresh-token cookie (FEAT-0020 / SEC-004)
+    # Cookie name carrying the staff-portal refresh token. Marked HttpOnly so it
+    # is not readable by JavaScript, Secure so it is only sent over HTTPS, and
+    # SameSite=lax so legitimate OIDC top-level redirects keep working.
+    # AUTH_COOKIE_SECURE may be set to False in local http-only development.
+    AUTH_REFRESH_COOKIE_NAME: str = "tf_refresh_token"
+    AUTH_REFRESH_COOKIE_PATH: str = "/api/v1/auth"
+    AUTH_REFRESH_COOKIE_SAMESITE: str = "lax"
+    AUTH_COOKIE_SECURE: bool = True
+
     # S3-compatible object storage (MinIO in local dev, custom S3 service in production)
     S3_ENDPOINT_URL: str = Field(alias="S3_ENDPOINT_URL")
     S3_ACCESS_KEY: str = Field(alias="S3_ACCESS_KEY")

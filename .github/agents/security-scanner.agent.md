@@ -40,7 +40,7 @@ The `tools:` allowlist in the front matter enforces which tools this agent may u
 
 - **Read-only analysis**: Use `read` and `search` tools to inspect source code, configs, and dependencies.
 - **Terminal (scoped)**: Use `execute/runInTerminal` **only** for the Trivy commands listed in Step 0 below. Use `execute/getTerminalOutput` to retrieve the command's stdout for parsing. Do not run any other commands.
-- **File output (scoped)**: Use `edit` tools **only** to create files within the `/docs/security_assessment/` folder as described in the Output Folder Structure below. Do **not** modify any source files, configuration files, or dependency manifests.
+- **File output (scoped)**: Use `edit` tools **only** to create files within the `/docs/security_assessment-DDMMYYYY/` folder (where DDMMYYYY is the current date) as described in the Output Folder Structure below. Do **not** modify any source files, configuration files, or dependency manifests.
 - **Do not** run build commands, install packages, or execute application code.
 
 ---
@@ -95,7 +95,7 @@ For high-assurance assessments, supplement with dedicated SAST tools (Semgrep, C
 Before beginning any scanning, create the following folder structure in the workspace root:
 
 ```
-/docs/security_assessment/
+/docs/security_assessment-DDMMYYYY/
   step_0_trivy/               ← Step 0: Trivy automated scan output
   step_1_tech_stack/          ← Step 1: Tech stack detection results
   step_2_file_inventory/      ← Step 2: File inventory (coverage baseline)
@@ -108,7 +108,7 @@ Before beginning any scanning, create the following folder structure in the work
   summary.md                  ← Final report (see Report Structure)
 ```
 
-Create each subfolder before writing its findings file. All output files **must** reside within `/docs/security_assessment/`. Do not create or modify files anywhere else in the workspace.
+Create each subfolder before writing its findings file. All output files **must** reside within `/docs/security_assessment-DDMMYYYY/`. Do not create or modify files anywhere else in the workspace.
 
 ## Step 0 — Trivy Automated Scan (optional)
 
@@ -155,7 +155,7 @@ Merge these findings into the appropriate report sections (Dependency Risk Summa
 
 ### 0d. Document Step 0 findings
 
-Write a file `/docs/security_assessment/step_0_trivy/findings.md` containing:
+Write a file `/docs/security_assessment-DDMMYYYY/step_0_trivy/findings.md` containing:
 - Trivy version, scan date, scan duration, and vulnerability database date
 - Scan command used
 - Full parsed findings (vulnerabilities, secrets, misconfigurations) in structured Markdown tables
@@ -182,7 +182,7 @@ Before manual scanning, identify the project's tech stack by looking for key ind
 
 Also detect framework-specific markers (e.g., Spring, Django, Express, Rails, ASP.NET Core, Laravel) and template engines (JSP, Thymeleaf, Jinja2, Razor, EJS, Blade, ERB). Record the detected stack at the top of the report.
 
-Write a file `/docs/security_assessment/step_1_tech_stack/detection.md` containing:
+Write a file `/docs/security_assessment-DDMMYYYY/step_1_tech_stack/detection.md` containing:
 - A table of all detected languages, frameworks, template engines, databases, and build tools
 - All dependency manifests found (paths)
 - Any indicator files used to determine the stack
@@ -210,7 +210,7 @@ Use `search/fileSearch` to discover all files under the workspace root. Classify
 
 ### 2b. Write inventory
 
-Write `/docs/security_assessment/step_2_file_inventory/inventory.md` containing:
+Write `/docs/security_assessment-DDMMYYYY/step_2_file_inventory/inventory.md` containing:
 - Summary count table by category (with a `security-relevant` flag)
 - Per-category file listing: path, language, approximate line count
 - Total counts and the list of paths that will be scanned in Step 3
@@ -325,10 +325,10 @@ After completing each Step 3 sub-step, write the corresponding findings file. Fo
 
 | Sub-step | Output file | Reference module |
 |---|---|---|
-| Code Analysis (SAST) | `/docs/security_assessment/step_3_security_scanning/code_analysis/findings.md` | [module-4-code-vulnerabilities.md](../instructions/modules/module-4-code-vulnerabilities.md), [module-3-secrets.md](../instructions/modules/module-3-secrets.md), [module-5-authentication.md](../instructions/modules/module-5-authentication.md), [module-7-cryptography.md](../instructions/modules/module-7-cryptography.md), [module-8-logging.md](../instructions/modules/module-8-logging.md) |
-| Dependency & Component Analysis (SCA) | `/docs/security_assessment/step_3_security_scanning/dependencies/findings.md` | [module-2-dependencies.md](../instructions/modules/module-2-dependencies.md) |
-| Configuration & Infrastructure | `/docs/security_assessment/step_3_security_scanning/configuration/findings.md` | [module-6-configuration.md](../instructions/modules/module-6-configuration.md) |
-| SQL / Database Script Analysis | `/docs/security_assessment/step_3_security_scanning/database/findings.md` | [module-10-database.md](../instructions/modules/module-10-database.md) |
+| Code Analysis (SAST) | `/docs/security_assessment-DDMMYYYY/step_3_security_scanning/code_analysis/findings.md` | [module-4-code-vulnerabilities.md](../instructions/modules/module-4-code-vulnerabilities.md), [module-3-secrets.md](../instructions/modules/module-3-secrets.md), [module-5-authentication.md](../instructions/modules/module-5-authentication.md), [module-7-cryptography.md](../instructions/modules/module-7-cryptography.md), [module-8-logging.md](../instructions/modules/module-8-logging.md) |
+| Dependency & Component Analysis (SCA) | `/docs/security_assessment-DDMMYYYY/step_3_security_scanning/dependencies/findings.md` | [module-2-dependencies.md](../instructions/modules/module-2-dependencies.md) |
+| Configuration & Infrastructure | `/docs/security_assessment-DDMMYYYY/step_3_security_scanning/configuration/findings.md` | [module-6-configuration.md](../instructions/modules/module-6-configuration.md) |
+| SQL / Database Script Analysis | `/docs/security_assessment-DDMMYYYY/step_3_security_scanning/database/findings.md` | [module-10-database.md](../instructions/modules/module-10-database.md) |
 
 Each findings file MUST include:
 - A summary of what was scanned (files, manifests, or config files examined)
@@ -339,13 +339,13 @@ Each findings file MUST include:
 
 ## Step 4 — Validation (pre-summary check)
 
-Before writing the summary report, verify the assessment quality. Write `/docs/security_assessment/step_4_validation/validation.md` with the results of this checklist:
+Before writing the summary report, verify the assessment quality. Write `/docs/security_assessment-DDMMYYYY/step_4_validation/validation.md` with the results of this checklist:
 
 1. **Required output files exist and have content**
-   - `/docs/security_assessment/step_0_trivy/findings.md` (or note explaining skip)
-   - `/docs/security_assessment/step_1_tech_stack/detection.md`
-   - `/docs/security_assessment/step_2_file_inventory/inventory.md`
-   - All four `/docs/security_assessment/step_3_security_scanning/*/findings.md` files
+   - `/docs/security_assessment-DDMMYYYY/step_0_trivy/findings.md` (or note explaining skip)
+   - `/docs/security_assessment-DDMMYYYY/step_1_tech_stack/detection.md`
+   - `/docs/security_assessment-DDMMYYYY/step_2_file_inventory/inventory.md`
+   - All four `/docs/security_assessment-DDMMYYYY/step_3_security_scanning/*/findings.md` files
 2. **Evidence standards** — spot-check at least 5 findings across different sub-steps. Each must have file path, line numbers, and a code snippet. List any findings that fail and fix them.
 3. **False positive sweep** — explicitly check for and remove:
    - SQL injection claims on code that uses `PreparedStatement`, parameterized queries, or ORM-bound parameters
@@ -361,7 +361,7 @@ Only proceed to write `summary.md` after the validation report shows all checks 
 
 ## Report Structure
 
-After all steps are complete, produce the full summary report as `/docs/security_assessment/summary.md`. This file consolidates all findings from the per-step folders into the sections below, in order:
+After all steps are complete, produce the full summary report as `/docs/security_assessment-DDMMYYYY/summary.md`. This file consolidates all findings from the per-step folders into the sections below, in order:
 
 ### 0. Scan Metadata
 
