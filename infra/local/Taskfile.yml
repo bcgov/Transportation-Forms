@@ -211,7 +211,7 @@ tasks:
       - deps:charts
     cmds:
       - |
-        powershell -NoProfile -ExecutionPolicy Bypass -Command '
+        {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
           $ErrorActionPreference = "Stop"
 
           function Invoke-CheckedCommand {
