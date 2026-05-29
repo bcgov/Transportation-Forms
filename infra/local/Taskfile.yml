@@ -175,8 +175,26 @@ tasks:
         # Extract only the primary host from the HA DB_URI to avoid SQLAlchemy parsing issues
         # Also URL-encode any remaining commas (like in the password) as %2C to prevent Helm's --set-string from splitting it
         PRIMARY_DB_URI=$(powershell -Command "\$u='$DB_URI'; \$parts=\$u.Split('@'); \$auth=\$parts[0]; \$tail=\$parts[1]; \$hosts=\$tail.Split('/')[0]; \$db=\$tail.Substring(\$hosts.Length); \$primary=\$hosts.Split(',')[0]; if (\$primary.IndexOf(':') -lt 0) { \$primary += ':5432' }; [Console]::Out.Write((\$auth + '@' + \$primary + \$db).Replace(',', '%2C'))")
-        JWT_PRIVATE_KEY_FILE=$(mktemp)
-        JWT_PUBLIC_KEY_FILE=$(mktemp)
+        if [ -z "${JWT_PRIVATE_KEY_PEM:-}" ] || [ -z "${JWT_PUBLIC_KEY_PEM:-}" ]; then
+          echo "JWT PEM environment values not fully set; loading from Kubernetes secret pemkeys."
+          if ! kubectl get secret pemkeys >/dev/null 2>&1; then
+            echo "ERROR: Missing JWT PEM values. Set JWT_PRIVATE_KEY_PEM and JWT_PUBLIC_KEY_PEM in .env, or create a default-namespace Kubernetes secret named pemkeys."
+            exit 1
+          fi
+          JWT_PRIVATE_KEY_PEM=$(kubectl get secret pemkeys -o jsonpath="{.data.JWT_PRIVATE_KEY_PEM}" | base64 -d)
+          JWT_PUBLIC_KEY_PEM=$(kubectl get secret pemkeys -o jsonpath="{.data.JWT_PUBLIC_KEY_PEM}" | base64 -d)
+        fi
+
+        if [ -z "${JWT_PRIVATE_KEY_PEM:-}" ] || [ -z "${JWT_PUBLIC_KEY_PEM:-}" ]; then
+          echo "ERROR: JWT_PRIVATE_KEY_PEM and JWT_PUBLIC_KEY_PEM must both be populated for local deploy."
+          exit 1
+        fi
+
+        JWT_TEMP_DIR="infra/local/.tmp"
+        mkdir -p "$JWT_TEMP_DIR"
+        JWT_PRIVATE_KEY_FILE="$JWT_TEMP_DIR/jwt-private-key-$$.pem"
+        JWT_PUBLIC_KEY_FILE="$JWT_TEMP_DIR/jwt-public-key-$$.pem"
+        trap 'rm -f "$JWT_PRIVATE_KEY_FILE" "$JWT_PUBLIC_KEY_FILE"' EXIT
         printf '%s' "${JWT_PRIVATE_KEY_PEM}" > "$JWT_PRIVATE_KEY_FILE"
         printf '%s' "${JWT_PUBLIC_KEY_PEM}" > "$JWT_PUBLIC_KEY_FILE"
 
@@ -204,8 +222,18 @@ tasks:
           --set "public-backend.publicBaseUrl=http://forms-public.localhost" \
           --set "public-backend.resources.app.limits.memory=512Mi" \
           --set "public-frontend.resources.limits.memory=512Mi" \
-          --timeout 10m \
-          --wait
+          --timeout 10m
+
+        echo "Restarting local deployments to consume refreshed secrets and local images..."
+        kubectl rollout restart deployment/{{.RELEASE_NAME}}-backend
+        kubectl rollout restart deployment/{{.RELEASE_NAME}}-frontend
+        kubectl rollout restart deployment/{{.RELEASE_NAME}}-public-backend
+        kubectl rollout restart deployment/{{.RELEASE_NAME}}-public-frontend
+
+        kubectl rollout status deployment/{{.RELEASE_NAME}}-backend --timeout=300s
+        kubectl rollout status deployment/{{.RELEASE_NAME}}-frontend --timeout=300s
+        kubectl rollout status deployment/{{.RELEASE_NAME}}-public-backend --timeout=300s
+        kubectl rollout status deployment/{{.RELEASE_NAME}}-public-frontend --timeout=300s
 
       # The Helm chart templates lack an ingress definition, so we apply one manually
       # to expose the frontend and backend locally on Rancher Desktop's default port 80.

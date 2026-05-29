@@ -157,7 +157,7 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
-          config: .github/trivy-secret-blocking.yaml
+          trivy-config: .github/trivy-secret-blocking.yaml
           format: table
           exit-code: "1"
 
@@ -166,7 +166,7 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
-          config: .github/trivy.yaml
+          trivy-config: .github/trivy.yaml
           format: sarif
           output: trivy-results.sarif
           exit-code: "0"   # Non-blocking — security tab shows results
