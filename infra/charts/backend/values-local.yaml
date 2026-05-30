@@ -30,6 +30,10 @@ networkPolicy:
 # ── Lighter resource limits for local dev ─────────────────────────────────────
 env:
   corsOrigins: "http://transportation-forms.local,http://localhost,http://127.0.0.1"
+  # FEAT-0020 / SEC-004: Local dev runs over plain HTTP; browsers drop Secure
+  # cookies on http:// origins, which would break /auth/refresh and the cookie
+  # clear on /auth/logout. Disable the Secure flag only for the local cluster.
+  authCookieSecure: "false"
 resources:
   requests:
     cpu: "25m"

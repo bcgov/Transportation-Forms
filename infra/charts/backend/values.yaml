@@ -71,6 +71,9 @@ env:
   sqlalchemyEcho: "false"
   logLevel: INFO
   corsOrigins: ""
+  # FEAT-0020 / SEC-004: Refresh-token cookie is Secure by default. Override to
+  # "false" in local HTTP-only dev so browsers will send/clear the cookie.
+  authCookieSecure: "true"
   # All S3 credentials (endpoint, bucket, access key, secret key) are in the secrets section.
   # Do NOT add s3EndpointUrl or s3Bucket here with hardcoded defaults.
 

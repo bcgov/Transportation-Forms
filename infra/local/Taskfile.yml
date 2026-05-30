@@ -11,6 +11,10 @@
 #   - Root .env file populated with valid credentials
 #   - git available in PATH (for cloning the action-crunchy chart on first run)
 #   - On Windows: C:\Program Files\Git\bin must be in PATH (provides sh.exe for Task)
+#   - hosts file entry "127.0.0.1 forms-public.localhost" to reach the public portal
+#   - The local cluster serves over plain HTTP. The backend chart sets
+#     AUTH_COOKIE_SECURE=false in values-local.yaml so the refresh-token
+#     cookie works locally; do NOT carry that override to staging/prod.
 #
 # Usage:
 #   cd infra/local && task all          # full pipeline

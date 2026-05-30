@@ -80,6 +80,8 @@ spec:
               value: {{ .Values.env.logLevel | quote }}
             - name: CORS_ORIGINS
               value: {{ .Values.env.corsOrigins | quote }}
+            - name: AUTH_COOKIE_SECURE
+              value: {{ .Values.env.authCookieSecure | default "true" | quote }}
             - name: S3_ENDPOINT_URL
               valueFrom:
                 secretKeyRef:
