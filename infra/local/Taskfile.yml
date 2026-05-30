@@ -48,7 +48,7 @@ vars:
   CRUNCHY_CACHE: infra/local/.action-crunchy
   CRUNCHY_ACTION_REF: v2.1.0
   PGO_VERSION: 5.8.5
-  POWERSHELL: '{{if eq OS "windows"}}powershell{{else}}pwsh{{end}}'
+  POWERSHELL: pwsh
 
 set: [errexit, pipefail]
 
@@ -110,7 +110,7 @@ tasks:
             param([string]$FilePath, [string[]]$Arguments)
             & $FilePath @Arguments
             if ($LASTEXITCODE -ne 0) {
-              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join " ")"
+              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
             }
           }
 
@@ -144,7 +144,7 @@ tasks:
             param([string]$FilePath, [string[]]$Arguments)
             & $FilePath @Arguments
             if ($LASTEXITCODE -ne 0) {
-              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join " ")"
+              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
             }
           }
 
@@ -219,7 +219,7 @@ tasks:
             param([string]$FilePath, [string[]]$Arguments)
             & $FilePath @Arguments
             if ($LASTEXITCODE -ne 0) {
-              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join " ")"
+              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
             }
           }
 
@@ -257,7 +257,7 @@ tasks:
             [string]::IsNullOrWhiteSpace([System.Environment]::GetEnvironmentVariable($_))
           })
           if ($missingEnvNames.Count -gt 0) {
-            throw "Missing required .env values: $($missingEnvNames -join ", ")"
+            throw "Missing required .env values: $($missingEnvNames -join ', ')"
           }
 
           Write-Host "==> Extracting DATABASE_URL from Crunchy secret..."
@@ -360,7 +360,7 @@ tasks:
             param([string]$FilePath, [string[]]$Arguments)
             & $FilePath @Arguments
             if ($LASTEXITCODE -ne 0) {
-              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join " ")"
+              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
             }
           }
 
