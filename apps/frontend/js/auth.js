@@ -252,7 +252,9 @@ export async function handleAuthCallback() {
     }
 
     const payload = await response.json();
-    _saveAuthSession(payload.access_token, payload.refresh_token, payload.user);
+    // FEAT-0020: refresh_token is not present in the JSON response — it is
+    // delivered as an HttpOnly cookie by the backend and must not be read here.
+    _saveAuthSession(payload.access_token, null, payload.user);
     showAlert('Signed in successfully.', 'success');
 
     let dest = hasPortalRoles() ? ROUTES.DASHBOARD : ROUTES.HOME;

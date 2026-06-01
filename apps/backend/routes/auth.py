@@ -417,7 +417,6 @@ async def auth_callback(
 
 @router.post("/refresh")
 async def refresh_token(
-    request: RefreshTokenRequest,
     http_request: Request,
     response: Response,
     db: Session = Depends(get_db),
@@ -514,7 +513,6 @@ async def refresh_token(
 
 @router.post("/logout")
 async def logout(
-    request: LogoutRequest,
     http_request: Request,
     response: Response,
     current_user: TokenData = Depends(get_current_user),
