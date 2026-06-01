@@ -61,8 +61,7 @@ window.addEventListener('storage', (event) => {
 // migration safeguard so any value left over from a previous deploy cannot
 // continue to be exposed.
 
-function _saveAuthSession(accessToken, refreshToken, user) {
-  localStorage.setItem(AUTH_STORAGE_ACCESS, accessToken);
+function _saveAuthSession(accessToken, _refreshToken, user) {
   // FEAT-0020: Do NOT persist the refresh token in localStorage. It is
   // delivered to the browser as an HttpOnly cookie by /auth/callback and is
   // not (and must not be) accessible to JavaScript. Remove any legacy value.
