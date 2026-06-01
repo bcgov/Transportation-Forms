@@ -150,6 +150,10 @@ try {
     foreach ($tempFile in $script:TempFiles) {
         Remove-Item -Force -ErrorAction SilentlyContinue $tempFile
     }
+
+    if (Test-Path $tempDir -PathType Container -and -not (Get-ChildItem -Force -Path $tempDir | Select-Object -First 1)) {
+        Remove-Item -Force -ErrorAction SilentlyContinue $tempDir
+    }
 }
 
 $deployments = @(
