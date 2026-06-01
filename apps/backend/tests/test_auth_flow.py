@@ -119,7 +119,7 @@ def test_callback_success_creates_user_updates_last_login_and_returns_tokens(
     assert response.status_code == 200
     payload = response.json()
     assert payload["access_token"]
-    assert payload["refresh_token"]
+    assert "refresh_token" not in payload # FEAT-0020
     assert payload["user"]["email"] == "task421@example.com"
     assert payload["user"]["roles"] == ["staff_viewer"]
 
@@ -164,7 +164,8 @@ def test_refresh_success_returns_new_access_token_and_updates_last_login(
     before_refresh = user.last_login
     response = auth_client.post(
         "/api/v1/auth/refresh",
-        json={"refresh_token": refresh_token},
+        json={},
+        cookies={"tf_refresh_token": refresh_token},
     )
 
     assert response.status_code == 200
@@ -184,7 +185,8 @@ def test_refresh_success_returns_new_access_token_and_updates_last_login(
 def test_refresh_invalid_token_returns_401(auth_client: TestClient):
     response = auth_client.post(
         "/api/v1/auth/refresh",
-        json={"refresh_token": "not-a-token"},
+        json={},
+        cookies={"tf_refresh_token": "not-a-token"},
     )
 
     assert response.status_code == 401
@@ -211,8 +213,9 @@ def test_logout_forwards_refresh_token_and_writes_audit_log(
 
     response = auth_client.post(
         "/api/v1/auth/logout",
-        json={"refresh_token": "kc-refresh-token"},
+        json={},
         headers=_auth_headers_for_user(user, ["staff_viewer"]),
+        cookies={"tf_refresh_token": "kc-refresh-token"},
     )
 
     assert response.status_code == 200

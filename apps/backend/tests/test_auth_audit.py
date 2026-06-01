@@ -94,10 +94,13 @@ def test_login_and_logout_audits_include_keycloak_id(
 
     logout = audit_client.post(
         "/api/v1/auth/logout",
-        json={"refresh_token": "kc-refresh"},
+        json={},
         headers={"Authorization": f"Bearer {_access_token(user)}"},
+        cookies={"tf_refresh_token": "kc-refresh"},
     )
     assert logout.status_code == 200
+    # FEAT-0020: refresh_token is delivered via HttpOnly cookie, not in the response body.
+    assert "refresh_token" not in callback_payload
 
     login_audit = (
         db.query(AuditLog)
@@ -114,8 +117,6 @@ def test_login_and_logout_audits_include_keycloak_id(
     )
     assert logout_audit is not None
     assert logout_audit.new_values["keycloak_id"] == "22222222-3333-4444-5555-666666666666"
-
-    assert callback_payload["refresh_token"]
 
 
 @pytest.mark.integration
@@ -134,7 +135,8 @@ def test_refresh_does_not_create_login_or_logout_audit(
 
     response = audit_client.post(
         "/api/v1/auth/refresh",
-        json={"refresh_token": refresh_token},
+        json={},
+        cookies={"tf_refresh_token": refresh_token},
     )
     assert response.status_code == 200
 
