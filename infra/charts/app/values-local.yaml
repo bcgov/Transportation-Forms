@@ -50,6 +50,7 @@ backend:
 
   env:
     corsOrigins: "http://transportation-forms.local,http://localhost,http://127.0.0.1"
+    authCookieSecure: "false"
 
   # Lighter resource limits for local dev
   resources:
