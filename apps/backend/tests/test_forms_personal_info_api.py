@@ -1,5 +1,7 @@
 """API integration tests for form personal info collection field."""
 
+import uuid
+
 from fastapi.testclient import TestClient
 import pytest
 
@@ -7,12 +9,19 @@ from backend.main import app
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
+from backend.models import UserRole
 
 
 @pytest.fixture()
-def forms_client(db, user_factory):
+def forms_client(db, user_factory, role_factory):
     """Create a TestClient with DB and auth dependency overrides."""
     user = user_factory(email="forms_api_user@example.com")
+    role = role_factory(
+        name=f"forms_api_writer_{uuid.uuid4().hex}",
+        permissions=["form:read", "form:create", "form:edit"],
+    )
+    db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
+    db.flush()
     token = TokenData(
         sub=str(user.id),
         email=user.email,

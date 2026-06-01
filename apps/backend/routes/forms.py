@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
+from backend.auth.authorization import require_permission
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
@@ -186,6 +187,7 @@ class FormResponse(BaseModel):
     created_at: str
     updated_at: str
 
+
 class FormListResponse(BaseModel):
     """Response model for form list."""
 
@@ -295,7 +297,7 @@ async def upload_form_attachment(
 @router.post("", response_model=FormResponse, status_code=status.HTTP_201_CREATED)
 async def create_form(
     request: FormCreateRequest,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("forms", "create")),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """
@@ -410,7 +412,7 @@ async def get_form(
 async def update_form(
     form_id: str,
     request: FormUpdateRequest,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("forms", "update")),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """
@@ -570,7 +572,8 @@ async def list_forms(
     - **skip**: Number of forms to skip (for pagination)
     - **limit**: Max forms to return (25, 50, 100)
     - **q**: Full-text keyword search query (also matches form numbers)
-    - **status**: Filter by status (draft, pending_review, published, archived). Multi-value with OR logic.
+    - **status**: Filter by status (draft, pending_review, published, archived).
+      Multi-value with OR logic.
     - **business_area_ids**: Optional list of business area IDs to filter by
     - **form_source**: Filter by source type (Link or Download). Multi-value with OR logic.
     - **is_public**: Filter by public/private status
@@ -656,7 +659,7 @@ async def list_forms(
 @router.post("/{form_id}/archive", response_model=FormResponse)
 async def archive_form(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("forms", "archive")),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """Archive a form (mark as archived)."""
@@ -682,7 +685,7 @@ async def archive_form(
 @router.post("/{form_id}/unarchive", response_model=FormResponse)
 async def unarchive_form(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("forms", "archive")),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """Unarchive a form (restore from archived status)."""

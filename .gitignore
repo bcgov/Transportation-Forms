@@ -99,7 +99,6 @@ requirements-dev.txt
 SETUP.md
 .github/workflows/demo.yml
 plan-renameMinioToS3.prompt.md
-infra/local/*
 plan
 form-resevation.md
 .github/copilot-instructions.md
@@ -108,9 +107,9 @@ form-resevation.md
 infra/charts/app/charts/
 .agents/
 form-approval.md
-backend/
+/backend/
 QUICK_REFERENCE.md
 form-resevation.md
 SETUP.md
-
+/plan/
 docs/security_assessment/*

@@ -10,6 +10,8 @@ Covers:
 - TC2.2:  GET /forms returns null file_type for URL-source forms
 """
 
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -17,12 +19,19 @@ from backend.main import app
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
+from backend.models import UserRole
 
 
 @pytest.fixture()
-def ft_client(db, user_factory):
+def ft_client(db, user_factory, role_factory):
     """TestClient wired for file_type integration tests."""
     user = user_factory(email="ft_user@example.com")
+    role = role_factory(
+        name=f"ft_writer_{uuid.uuid4().hex}",
+        permissions=["form:read", "form:create", "form:edit"],
+    )
+    db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
+    db.flush()
     token = TokenData(
         sub=str(user.id),
         email=user.email,

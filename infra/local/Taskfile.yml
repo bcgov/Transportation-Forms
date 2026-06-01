@@ -1,7 +1,4 @@
-# ── Local Deployment Taskfile ─────────────────────────────────────────────────
-#
-# Mirrors the GitHub CI/CD pipeline (.github/workflows/dev.yml and
-# .github/workflows/.deployer.yml) for local development on Rancher Desktop (k3s).
+# Local Deployment Taskfile
 #
 # Install:
 #   brew install go-task        (macOS / Linux)
@@ -10,9 +7,8 @@
 # Prerequisites:
 #   - Rancher Desktop installed with dockerd (moby) engine (not containerd)
 #   - Helm 3.x installed and kubectl context set to rancher-desktop
-#   - Root .env file populated with valid credentials (S3_*, KEYCLOAK_*, SECRET_KEY,
-#     JWT_PRIVATE_KEY_PEM, JWT_PUBLIC_KEY_PEM, INITIAL_ADMIN_EMAIL — all pointing
-#     to datacenter services, NOT local containers)
+#   - PowerShell 7+ installed (pwsh on macOS/Linux)
+#   - Root .env file populated with valid credentials
 #   - git available in PATH (for cloning the action-crunchy chart on first run)
 #   - On Windows: C:\Program Files\Git\bin must be in PATH (provides sh.exe for Task)
 #
@@ -35,6 +31,10 @@
 # Public-Backend Rollout: kubectl rollout restart deployment/transportation-forms-local-public-backend -n default
 # Public-Frontend Rollout: kubectl rollout restart deployment/transportation-forms-local-public-frontend -n default
 # ─────────────────────────────────────────────────────────────────────────────
+#
+# The pipeline is intentionally kept close to the OpenShift topology while using
+# local images, local-path storage, standard Kubernetes Ingress, and reduced
+# resource requests.
 
 version: "3"
 
@@ -42,43 +42,43 @@ dotenv: ["../../.env"]
 
 vars:
   TAG: local
-  ENV: local
   RELEASE_NAME: transportation-forms-local
   CRUNCHY_RELEASE: transportation-forms-local-crunchy
   CHART: infra/charts/app
   CRUNCHY_CACHE: infra/local/.action-crunchy
+  CRUNCHY_ACTION_REF: v2.1.0
+  PGO_VERSION: 5.8.5
+  POWERSHELL: '{{if eq OS "windows"}}powershell{{else}}pwsh{{end}}'
 
 set: [errexit, pipefail]
 
 tasks:
-  # ── Build tasks (mirror the builds matrix job in dev.yml) ──────────────────
-
   build:backend:
-    desc: Build the backend Docker image (tagged local)
+    desc: Build the backend Docker image
     dir: ../..
     cmds:
       - docker build -f apps/backend/Dockerfile -t ghcr.io/bcgov/transportation-forms/backend:{{.TAG}} .
 
   build:frontend:
-    desc: Build the frontend Docker image (tagged local)
+    desc: Build the frontend Docker image
     dir: ../..
     cmds:
       - docker build -f apps/frontend/Dockerfile -t ghcr.io/bcgov/transportation-forms/frontend:{{.TAG}} .
 
   build:migrations:
-    desc: Build the migrations Docker image (tagged local)
+    desc: Build the migrations Docker image
     dir: ../..
     cmds:
       - docker build -f apps/backend/migrations/Dockerfile -t ghcr.io/bcgov/transportation-forms/migrations:{{.TAG}} .
 
   build:public-backend:
-    desc: Build the public-backend Docker image (tagged local)
+    desc: Build the public-backend Docker image
     dir: ../..
     cmds:
       - docker build -f apps/public-backend/Dockerfile -t ghcr.io/bcgov/transportation-forms/public-backend:{{.TAG}} .
 
   build:public-frontend:
-    desc: Build the public-frontend Docker image (tagged local)
+    desc: Build the public-frontend Docker image
     dir: ../..
     cmds:
       - docker build -f apps/public-frontend/Dockerfile -t ghcr.io/bcgov/transportation-forms/public-frontend:{{.TAG}} .
@@ -92,157 +92,309 @@ tasks:
       - build:public-backend
       - build:public-frontend
 
-  # ── Database tasks (mirror Crunchy deployment in .deployer.yml) ────────────
+  deps:charts:
+    desc: Build local Helm chart dependencies
+    dir: ../..
+    cmds:
+      - helm dependency build "{{.CHART}}"
 
   setup:pgo:
-    desc: Install the Crunchy PGO operator on k3s (idempotent)
+    desc: Install or upgrade the Crunchy PGO operator on k3s
     dir: ../..
     cmds:
       - |
-        if helm status pgo -n postgres-operator >/dev/null 2>&1; then
-          echo "PGO operator already installed — skipping."
-        else
-          echo "Installing PGO operator via Helm OCI chart..."
-          kubectl create namespace postgres-operator --dry-run=client -o yaml | kubectl apply -f -
-          helm install pgo \
-            oci://registry.developers.crunchydata.com/crunchydata/pgo \
-            --version 5.8.5 \
-            -n postgres-operator \
-            --timeout 120s \
-            --wait
-        fi
-      - |
-        echo "Waiting for PGO operator to become ready..."
-        kubectl wait --for=condition=Available deployment/pgo \
-          -n postgres-operator --timeout=120s
+        {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
+          $ErrorActionPreference = "Stop"
+
+          function Invoke-CheckedCommand {
+            param([string]$FilePath, [string[]]$Arguments)
+            & $FilePath @Arguments
+            if ($LASTEXITCODE -ne 0) {
+              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join " ")"
+            }
+          }
+
+          Write-Host "==> Installing or upgrading PGO operator..."
+          Invoke-CheckedCommand "helm" @(
+            "upgrade", "--install", "pgo",
+            "oci://registry.developers.crunchydata.com/crunchydata/pgo",
+            "--version", "{{.PGO_VERSION}}",
+            "-n", "postgres-operator",
+            "--create-namespace",
+            "--timeout", "120s",
+            "--wait"
+          )
+
+          Write-Host "==> Waiting for PGO operator deployment..."
+          Invoke-CheckedCommand "kubectl" @(
+            "wait", "--for=condition=Available", "deployment/pgo",
+            "-n", "postgres-operator", "--timeout=120s"
+          )
+        '
 
   deploy:db:
-    desc: Deploy Crunchy PostgreSQL to k3s (mirrors .deployer.yml)
+    desc: Deploy Crunchy PostgreSQL to k3s
     dir: ../..
     cmds:
-      # Clone bcgov/action-crunchy repo (cached) if not already present.
-      # FEAT-0015: aligned with .github/workflows/.deployer.yml (v2.1.0,
-      # which supports PG 18 — matches infra/charts/crunchy/values.yml).
       - |
-        if [ ! -d "{{.CRUNCHY_CACHE}}" ]; then
-          echo "Cloning bcgov/action-crunchy v2.1.0..."
-          git clone --branch v2.1.0 --depth 1 \
-            https://github.com/bcgov/action-crunchy.git "{{.CRUNCHY_CACHE}}"
-        else
-          echo "Using cached action-crunchy chart."
-        fi
-      # Fix for K3s: The action-crunchy chart includes a strict NetworkPolicy that blocks
-      # cross-namespace or pod-to-pod communication. We remove it locally.
-      - rm -f "{{.CRUNCHY_CACHE}}/charts/crunchy/templates/knp.yaml"
-      # Fix openshift flag locally on the chart itself instead of patching via kubectl.
-      # This avoids Server-Side Apply conflicts upon redeployment on local k3s.
-      - |
-        powershell -Command "(Get-Content -Path '{{.CRUNCHY_CACHE}}/charts/crunchy/templates/postgrescluster.yaml') -replace 'openshift: true', 'openshift: false' | Set-Content -Path '{{.CRUNCHY_CACHE}}/charts/crunchy/templates/postgrescluster.yaml'"
-      # Deploy Crunchy using the action's chart + project values + local overrides
-      - |
-        helm upgrade --install "{{.CRUNCHY_RELEASE}}" \
-          "{{.CRUNCHY_CACHE}}/charts/crunchy" \
-          -f infra/charts/crunchy/values.yml \
-          -f infra/local/crunchy-overrides.yaml \
-          --timeout 5m
-      # Wait for the PostgresCluster primary to become ready
-      - |
-        echo "Waiting for Crunchy PostgreSQL primary to become ready..."
-        kubectl wait --for=condition=Ready pod \
-          -l postgres-operator.crunchydata.com/role=master,postgres-operator.crunchydata.com/cluster={{.CRUNCHY_RELEASE}}-crunchy \
-          --timeout=180s 2>/dev/null || \
-        kubectl wait --for=condition=Ready pod \
-          -l postgres-operator.crunchydata.com/data=postgres,postgres-operator.crunchydata.com/cluster={{.CRUNCHY_RELEASE}}-crunchy \
-          --timeout=180s
+        {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
+          $ErrorActionPreference = "Stop"
 
-  # ── App deploy task (mirrors helm upgrade/install in .deployer.yml) ────────
+          function Invoke-CheckedCommand {
+            param([string]$FilePath, [string[]]$Arguments)
+            & $FilePath @Arguments
+            if ($LASTEXITCODE -ne 0) {
+              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join " ")"
+            }
+          }
+
+          $cachePath = "{{.CRUNCHY_CACHE}}"
+          $expectedRef = "{{.CRUNCHY_ACTION_REF}}"
+          $shouldClone = $true
+
+          if (Test-Path $cachePath) {
+            $currentRef = (& git -C $cachePath describe --tags --exact-match 2>$null)
+            if ($LASTEXITCODE -eq 0 -and $currentRef.Trim() -eq $expectedRef) {
+              $shouldClone = $false
+              Write-Host "==> Using cached action-crunchy chart at $expectedRef."
+            } else {
+              Write-Host "==> Removing stale action-crunchy cache."
+              Remove-Item -Recurse -Force $cachePath
+            }
+          }
+
+          if ($shouldClone) {
+            Write-Host "==> Cloning action-crunchy $expectedRef..."
+            Invoke-CheckedCommand "git" @(
+              "clone", "--branch", $expectedRef, "--depth", "1",
+              "https://github.com/bcgov/action-crunchy.git", $cachePath
+            )
+          }
+
+          $networkPolicyTemplate = "$cachePath/charts/crunchy/templates/knp.yaml"
+          if (Test-Path $networkPolicyTemplate) {
+            Remove-Item -Force $networkPolicyTemplate
+          }
+
+          $postgresClusterTemplate = "$cachePath/charts/crunchy/templates/postgrescluster.yaml"
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          $templateContent = [System.IO.File]::ReadAllText($postgresClusterTemplate)
+          [System.IO.File]::WriteAllText(
+            $postgresClusterTemplate,
+            $templateContent.Replace("openshift: true", "openshift: false"),
+            $utf8NoBom
+          )
+
+          Write-Host "==> Deploying Crunchy PostgreSQL..."
+          Invoke-CheckedCommand "helm" @(
+            "upgrade", "--install", "{{.CRUNCHY_RELEASE}}",
+            "$cachePath/charts/crunchy",
+            "-f", "infra/charts/crunchy/values.yml",
+            "-f", "infra/local/crunchy-overrides.yaml",
+            "--timeout", "5m"
+          )
+
+          Write-Host "==> Waiting for Crunchy PostgreSQL primary pod..."
+          $primarySelector = "postgres-operator.crunchydata.com/role=master,postgres-operator.crunchydata.com/cluster={{.CRUNCHY_RELEASE}}-crunchy"
+          & kubectl wait "--for=condition=Ready" pod -l $primarySelector "--timeout=180s"
+          if ($LASTEXITCODE -ne 0) {
+            $postgresSelector = "postgres-operator.crunchydata.com/data=postgres,postgres-operator.crunchydata.com/cluster={{.CRUNCHY_RELEASE}}-crunchy"
+            Invoke-CheckedCommand "kubectl" @(
+              "wait", "--for=condition=Ready", "pod", "-l", $postgresSelector, "--timeout=180s"
+            )
+          }
+        '
 
   deploy:
-    desc: Deploy the application via Helm (mirrors .deployer.yml)
+    desc: Deploy the application via Helm
     dir: ../..
+    deps:
+      - deps:charts
     cmds:
       - |
-        # Extract the pre-built DATABASE_URL (uri) directly from Crunchy-generated secret.
-        CRUNCHY_SECRET="{{.CRUNCHY_RELEASE}}-crunchy-pguser-app"
-        DB_URI=$(kubectl get secret "$CRUNCHY_SECRET" -o jsonpath="{.data.uri}" | base64 -d)
+        {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
+          $ErrorActionPreference = "Stop"
 
-        if [ -z "$DB_URI" ]; then
-          echo "ERROR: Could not extract DATABASE_URL (uri) from Crunchy secret."
-          echo "Ensure deploy:db has completed successfully."
-          exit 1
-        fi
+          function Invoke-CheckedCommand {
+            param([string]$FilePath, [string[]]$Arguments)
+            & $FilePath @Arguments
+            if ($LASTEXITCODE -ne 0) {
+              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join " ")"
+            }
+          }
 
-        # Extract only the primary host from the HA DB_URI to avoid SQLAlchemy parsing issues
-        # Also URL-encode any remaining commas (like in the password) as %2C to prevent Helm's --set-string from splitting it
-        PRIMARY_DB_URI=$(powershell -Command "\$u='$DB_URI'; \$parts=\$u.Split('@'); \$auth=\$parts[0]; \$tail=\$parts[1]; \$hosts=\$tail.Split('/')[0]; \$db=\$tail.Substring(\$hosts.Length); \$primary=\$hosts.Split(',')[0]; if (\$primary.IndexOf(':') -lt 0) { \$primary += ':5432' }; [Console]::Out.Write((\$auth + '@' + \$primary + \$db).Replace(',', '%2C'))")
-        if [ -z "${JWT_PRIVATE_KEY_PEM:-}" ] || [ -z "${JWT_PUBLIC_KEY_PEM:-}" ]; then
-          echo "JWT PEM environment values not fully set; loading from Kubernetes secret pemkeys."
-          if ! kubectl get secret pemkeys >/dev/null 2>&1; then
-            echo "ERROR: Missing JWT PEM values. Set JWT_PRIVATE_KEY_PEM and JWT_PUBLIC_KEY_PEM in .env, or create a default-namespace Kubernetes secret named pemkeys."
-            exit 1
-          fi
-          JWT_PRIVATE_KEY_PEM=$(kubectl get secret pemkeys -o jsonpath="{.data.JWT_PRIVATE_KEY_PEM}" | base64 -d)
-          JWT_PUBLIC_KEY_PEM=$(kubectl get secret pemkeys -o jsonpath="{.data.JWT_PUBLIC_KEY_PEM}" | base64 -d)
-        fi
+          function Get-KubernetesSecretValue {
+            param([string]$SecretName, [string]$Key)
+            $encodedValue = (& kubectl get secret $SecretName -o "jsonpath={.data.$Key}")
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($encodedValue)) {
+              throw "Could not read key $Key from Kubernetes secret $SecretName."
+            }
+            return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encodedValue.Trim()))
+          }
 
-        if [ -z "${JWT_PRIVATE_KEY_PEM:-}" ] || [ -z "${JWT_PUBLIC_KEY_PEM:-}" ]; then
-          echo "ERROR: JWT_PRIVATE_KEY_PEM and JWT_PUBLIC_KEY_PEM must both be populated for local deploy."
-          exit 1
-        fi
+          function Write-HelmValueFile {
+            param([string]$Name, [string]$Value)
+            $path = "infra/local/.tmp/$Name"
+            [System.IO.File]::WriteAllText($path, $Value, $script:Utf8NoBom)
+            $script:TempFiles += $path
+            return $path
+          }
 
-        JWT_PRIVATE_KEY_FILE="$(mktemp)"
-        JWT_PUBLIC_KEY_FILE="$(mktemp)"
-        trap 'rm -f "$JWT_PRIVATE_KEY_FILE" "$JWT_PUBLIC_KEY_FILE"' EXIT
-        printf '%s' "${JWT_PRIVATE_KEY_PEM}" > "$JWT_PRIVATE_KEY_FILE"
-        printf '%s' "${JWT_PUBLIC_KEY_PEM}" > "$JWT_PUBLIC_KEY_FILE"
+          $requiredEnvNames = @(
+            "SECRET_KEY",
+            "S3_ENDPOINT_URL",
+            "S3_ACCESS_KEY",
+            "S3_SECRET_KEY",
+            "S3_BUCKET",
+            "KEYCLOAK_SERVER_URL",
+            "KEYCLOAK_REALM",
+            "KEYCLOAK_CLIENT_ID",
+            "KEYCLOAK_CLIENT_SECRET",
+            "KEYCLOAK_REDIRECT_URI",
+            "INITIAL_ADMIN_EMAIL"
+          )
+          $missingEnvNames = @($requiredEnvNames | Where-Object {
+            [string]::IsNullOrWhiteSpace([System.Environment]::GetEnvironmentVariable($_))
+          })
+          if ($missingEnvNames.Count -gt 0) {
+            throw "Missing required .env values: $($missingEnvNames -join ", ")"
+          }
 
-        echo "Deploying application with Helm..."
-        helm upgrade --install "{{.RELEASE_NAME}}" "{{.CHART}}" \
-          -f "{{.CHART}}/values.yaml" \
-          -f "{{.CHART}}/values-local.yaml" \
-          --set-string global.tag="{{.TAG}}" \
-          --set-string backend.secrets.databaseUrl="${PRIMARY_DB_URI}" \
-          --set backend.secrets.secretKey="${SECRET_KEY}" \
-          --set-file backend.secrets.jwtPrivateKeyPem="$JWT_PRIVATE_KEY_FILE" \
-          --set-file backend.secrets.jwtPublicKeyPem="$JWT_PUBLIC_KEY_FILE" \
-          --set backend.secrets.s3EndpointUrl="${S3_ENDPOINT_URL}" \
-          --set backend.secrets.s3AccessKey="${S3_ACCESS_KEY}" \
-          --set backend.secrets.s3SecretKey="${S3_SECRET_KEY}" \
-          --set backend.secrets.s3Bucket="${S3_BUCKET}" \
-          --set backend.secrets.keycloakServerUrl="${KEYCLOAK_SERVER_URL}" \
-          --set backend.secrets.keycloakRealm="${KEYCLOAK_REALM}" \
-          --set backend.secrets.keycloakClientId="${KEYCLOAK_CLIENT_ID}" \
-          --set backend.secrets.keycloakClientSecret="${KEYCLOAK_CLIENT_SECRET}" \
-          --set backend.secrets.keycloakRedirectUri="${KEYCLOAK_REDIRECT_URI}" \
-          --set backend.secrets.initialAdminEmail="${INITIAL_ADMIN_EMAIL}" \
-          --set "public-frontend.s3.internalUpstream=${S3_ENDPOINT_URL}" \
-          --set "public-frontend.publicBaseUrl=http://forms-public.localhost" \
-          --set "public-backend.publicBaseUrl=http://forms-public.localhost" \
-          --set "public-backend.resources.app.limits.memory=512Mi" \
-          --set "public-frontend.resources.limits.memory=512Mi" \
-          --timeout 10m
+          Write-Host "==> Extracting DATABASE_URL from Crunchy secret..."
+          $crunchySecret = "{{.CRUNCHY_RELEASE}}-crunchy-pguser-app"
+          $dbUri = Get-KubernetesSecretValue $crunchySecret "uri"
 
-        echo "Restarting local deployments to consume refreshed secrets and local images..."
-        kubectl rollout restart deployment/{{.RELEASE_NAME}}-backend
-        kubectl rollout restart deployment/{{.RELEASE_NAME}}-frontend
-        kubectl rollout restart deployment/{{.RELEASE_NAME}}-public-backend
-        kubectl rollout restart deployment/{{.RELEASE_NAME}}-public-frontend
+          $dbUriMatch = [regex]::Match($dbUri, "^(?<scheme>[^:]+://)(?<auth>.+@)(?<hosts>[^/]+)(?<path>/.*)$")
+          if (-not $dbUriMatch.Success) {
+            throw "Crunchy DATABASE_URL format was not recognized."
+          }
 
-        kubectl rollout status deployment/{{.RELEASE_NAME}}-backend --timeout=300s
-        kubectl rollout status deployment/{{.RELEASE_NAME}}-frontend --timeout=300s
-        kubectl rollout status deployment/{{.RELEASE_NAME}}-public-backend --timeout=300s
-        kubectl rollout status deployment/{{.RELEASE_NAME}}-public-frontend --timeout=300s
+          $primaryHost = $dbUriMatch.Groups["hosts"].Value.Split(",")[0]
+          if ($primaryHost -notmatch ":\d+$") {
+            $primaryHost = $primaryHost + ":5432"
+          }
+          $primaryDbUri = (
+            $dbUriMatch.Groups["scheme"].Value +
+            $dbUriMatch.Groups["auth"].Value +
+            $primaryHost +
+            $dbUriMatch.Groups["path"].Value
+          ).Replace(",", "%2C")
 
-      # The Helm chart templates lack an ingress definition, so we apply one manually
-      # to expose the frontend and backend locally on Rancher Desktop's default port 80.
+          Write-Host "==> Resolving JWT PEM keys..."
+          $jwtPrivateKeyPem = [System.Environment]::GetEnvironmentVariable("JWT_PRIVATE_KEY_PEM")
+          $jwtPublicKeyPem = [System.Environment]::GetEnvironmentVariable("JWT_PUBLIC_KEY_PEM")
+          if ([string]::IsNullOrWhiteSpace($jwtPrivateKeyPem) -or [string]::IsNullOrWhiteSpace($jwtPublicKeyPem)) {
+            Write-Host "JWT PEM not in .env; loading from Kubernetes secret pemkeys..."
+            $jwtPrivateKeyPem = Get-KubernetesSecretValue "pemkeys" "JWT_PRIVATE_KEY_PEM"
+            $jwtPublicKeyPem = Get-KubernetesSecretValue "pemkeys" "JWT_PUBLIC_KEY_PEM"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($jwtPrivateKeyPem) -or [string]::IsNullOrWhiteSpace($jwtPublicKeyPem)) {
+            throw "JWT_PRIVATE_KEY_PEM and JWT_PUBLIC_KEY_PEM must both be populated."
+          }
+
+          $tempDir = "infra/local/.tmp"
+          New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+          $script:TempFiles = @()
+          $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
+          try {
+            $databaseUrlFile = Write-HelmValueFile "database-url.txt" $primaryDbUri
+            $secretKeyFile = Write-HelmValueFile "secret-key.txt" ([System.Environment]::GetEnvironmentVariable("SECRET_KEY"))
+            $jwtPrivateKeyFile = Write-HelmValueFile "jwt-private-key.pem" $jwtPrivateKeyPem
+            $jwtPublicKeyFile = Write-HelmValueFile "jwt-public-key.pem" $jwtPublicKeyPem
+            $s3EndpointFile = Write-HelmValueFile "s3-endpoint-url.txt" ([System.Environment]::GetEnvironmentVariable("S3_ENDPOINT_URL"))
+            $s3AccessKeyFile = Write-HelmValueFile "s3-access-key.txt" ([System.Environment]::GetEnvironmentVariable("S3_ACCESS_KEY"))
+            $s3SecretKeyFile = Write-HelmValueFile "s3-secret-key.txt" ([System.Environment]::GetEnvironmentVariable("S3_SECRET_KEY"))
+            $s3BucketFile = Write-HelmValueFile "s3-bucket.txt" ([System.Environment]::GetEnvironmentVariable("S3_BUCKET"))
+            $keycloakServerUrlFile = Write-HelmValueFile "keycloak-server-url.txt" ([System.Environment]::GetEnvironmentVariable("KEYCLOAK_SERVER_URL"))
+            $keycloakRealmFile = Write-HelmValueFile "keycloak-realm.txt" ([System.Environment]::GetEnvironmentVariable("KEYCLOAK_REALM"))
+            $keycloakClientIdFile = Write-HelmValueFile "keycloak-client-id.txt" ([System.Environment]::GetEnvironmentVariable("KEYCLOAK_CLIENT_ID"))
+            $keycloakClientSecretFile = Write-HelmValueFile "keycloak-client-secret.txt" ([System.Environment]::GetEnvironmentVariable("KEYCLOAK_CLIENT_SECRET"))
+            $keycloakRedirectUriFile = Write-HelmValueFile "keycloak-redirect-uri.txt" ([System.Environment]::GetEnvironmentVariable("KEYCLOAK_REDIRECT_URI"))
+            $initialAdminEmailFile = Write-HelmValueFile "initial-admin-email.txt" ([System.Environment]::GetEnvironmentVariable("INITIAL_ADMIN_EMAIL"))
+            $publicBaseUrlFile = Write-HelmValueFile "public-base-url.txt" "http://forms-public.localhost"
+
+            Write-Host "==> Deploying application with Helm..."
+            Invoke-CheckedCommand "helm" @(
+              "upgrade", "--install", "{{.RELEASE_NAME}}", "{{.CHART}}",
+              "-f", "{{.CHART}}/values.yaml",
+              "-f", "{{.CHART}}/values-local.yaml",
+              "--set-string", "backend.image.tag={{.TAG}}",
+              "--set-string", "backend.image.migrationsTag={{.TAG}}",
+              "--set-string", "frontend.image.tag={{.TAG}}",
+              "--set-string", "public-backend.image.tag={{.TAG}}",
+              "--set-string", "public-frontend.image.tag={{.TAG}}",
+              "--set-file", "backend.secrets.databaseUrl=$databaseUrlFile",
+              "--set-file", "backend.secrets.secretKey=$secretKeyFile",
+              "--set-file", "backend.secrets.jwtPrivateKeyPem=$jwtPrivateKeyFile",
+              "--set-file", "backend.secrets.jwtPublicKeyPem=$jwtPublicKeyFile",
+              "--set-file", "backend.secrets.s3EndpointUrl=$s3EndpointFile",
+              "--set-file", "backend.secrets.s3AccessKey=$s3AccessKeyFile",
+              "--set-file", "backend.secrets.s3SecretKey=$s3SecretKeyFile",
+              "--set-file", "backend.secrets.s3Bucket=$s3BucketFile",
+              "--set-file", "backend.secrets.keycloakServerUrl=$keycloakServerUrlFile",
+              "--set-file", "backend.secrets.keycloakRealm=$keycloakRealmFile",
+              "--set-file", "backend.secrets.keycloakClientId=$keycloakClientIdFile",
+              "--set-file", "backend.secrets.keycloakClientSecret=$keycloakClientSecretFile",
+              "--set-file", "backend.secrets.keycloakRedirectUri=$keycloakRedirectUriFile",
+              "--set-file", "backend.secrets.initialAdminEmail=$initialAdminEmailFile",
+              "--set-file", "public-frontend.s3.internalUpstream=$s3EndpointFile",
+              "--set-file", "public-frontend.publicBaseUrl=$publicBaseUrlFile",
+              "--set-file", "public-backend.publicBaseUrl=$publicBaseUrlFile",
+              "--set-string", "public-backend.resources.app.limits.memory=512Mi",
+              "--set-string", "public-frontend.resources.limits.memory=512Mi",
+              "--timeout", "10m"
+            )
+          } finally {
+            foreach ($tempFile in $script:TempFiles) {
+              Remove-Item -Force -ErrorAction SilentlyContinue $tempFile
+            }
+          }
+        '
       - |
-        echo "Applying local ingress..."
-        kubectl apply -f infra/local/ingress.yaml
+        {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
+          $ErrorActionPreference = "Stop"
 
-  # ── Orchestration tasks ────────────────────────────────────────────────────
+          function Invoke-CheckedCommand {
+            param([string]$FilePath, [string[]]$Arguments)
+            & $FilePath @Arguments
+            if ($LASTEXITCODE -ne 0) {
+              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join " ")"
+            }
+          }
+
+          $deployments = @(
+            "{{.RELEASE_NAME}}-backend",
+            "{{.RELEASE_NAME}}-frontend",
+            "{{.RELEASE_NAME}}-public-backend",
+            "{{.RELEASE_NAME}}-public-frontend"
+          )
+
+          Write-Host "==> Restarting deployments to pick up local image changes..."
+          foreach ($deployment in $deployments) {
+            Invoke-CheckedCommand "kubectl" @("rollout", "restart", "deployment/$deployment")
+          }
+
+          Write-Host "==> Waiting for rollouts to complete..."
+          foreach ($deployment in $deployments) {
+            Invoke-CheckedCommand "kubectl" @("rollout", "status", "deployment/$deployment", "--timeout=300s")
+          }
+        '
+      - |
+        {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
+          $ErrorActionPreference = "Stop"
+          kubectl apply -f infra/local/ingress.yaml
+          if ($LASTEXITCODE -ne 0) {
+            throw "Command failed ($LASTEXITCODE): kubectl apply -f infra/local/ingress.yaml"
+          }
+          Write-Host "Deployment complete."
+          Write-Host "Internal app:  http://localhost/"
+          Write-Host "Public portal: http://forms-public.localhost/"
+        '
 
   all:
-    desc: "Full pipeline: setup PGO → build + deploy DB → deploy app"
+    desc: "Full pipeline: setup PGO, build images, deploy DB, deploy app"
     cmds:
       - task: setup:pgo
       - task: _build-and-db
@@ -255,16 +407,19 @@ tasks:
       - deploy:db
 
   teardown:
-    desc: Uninstall the application Helm release (keeps database)
+    desc: Uninstall the application Helm release and keep the database
     dir: ../..
     cmds:
-      - kubectl delete -f infra/local/ingress.yaml --ignore-not-found || true
-      - helm uninstall {{.RELEASE_NAME}} || true
+      - kubectl delete -f infra/local/ingress.yaml --ignore-not-found
+      - cmd: helm uninstall {{.RELEASE_NAME}}
+        ignore_error: true
 
   teardown:all:
-    desc: Uninstall both the application and Crunchy PostgreSQL releases
+    desc: Uninstall the application and Crunchy PostgreSQL releases
     dir: ../..
     cmds:
-      - kubectl delete -f infra/local/ingress.yaml --ignore-not-found || true
-      - helm uninstall {{.RELEASE_NAME}} || true
-      - helm uninstall {{.CRUNCHY_RELEASE}} || true
+      - kubectl delete -f infra/local/ingress.yaml --ignore-not-found
+      - cmd: helm uninstall {{.RELEASE_NAME}}
+        ignore_error: true
+      - cmd: helm uninstall {{.CRUNCHY_RELEASE}}
+        ignore_error: true

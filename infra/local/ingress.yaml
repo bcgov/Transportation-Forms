@@ -9,7 +9,6 @@ spec:
   # In k3s (Rancher Desktop), traefik is the default ingress class.
   # We leave out className so the default takes it, or specify traefik.
   rules:
-  # ── Internal app (no host — responds to localhost / 127.0.0.1) ───────────
   - http:
       paths:
       - path: /
@@ -33,18 +32,3 @@ spec:
             name: transportation-forms-local-backend
             port:
               number: 8000
-  # ── Public portal (FEAT-0005 — host: forms-public.localhost) ─────────────
-  # Add to /etc/hosts (Linux/macOS) or C:\Windows\System32\drivers\etc\hosts (Windows):
-  #   127.0.0.1 forms-public.localhost
-  # All traffic enters the NGINX edge (public-frontend:3000); NGINX injects
-  # X-Internal-Auth and proxies /api/public/* to public-backend:8000 internally.
-  - host: forms-public.localhost
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: transportation-forms-local-public-frontend
-            port:
-              number: 3000
