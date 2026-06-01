@@ -162,11 +162,9 @@ def test_refresh_success_returns_new_access_token_and_updates_last_login(
     refresh_token = jwt_handler.generate_refresh_token(user_id=str(user.id))
 
     before_refresh = user.last_login
-    response = auth_client.post(
-        "/api/v1/auth/refresh",
-        json={},
-        cookies={"tf_refresh_token": refresh_token},
-    )
+    auth_client.cookies.set("tf_refresh_token", refresh_token)
+    response = auth_client.post("/api/v1/auth/refresh")
+    del auth_client.cookies["tf_refresh_token"]
 
     assert response.status_code == 200
     assert response.json()["access_token"]
@@ -183,11 +181,9 @@ def test_refresh_success_returns_new_access_token_and_updates_last_login(
 
 @pytest.mark.integration
 def test_refresh_invalid_token_returns_401(auth_client: TestClient):
-    response = auth_client.post(
-        "/api/v1/auth/refresh",
-        json={},
-        cookies={"tf_refresh_token": "not-a-token"},
-    )
+    auth_client.cookies.set("tf_refresh_token", "not-a-token")
+    response = auth_client.post("/api/v1/auth/refresh")
+    del auth_client.cookies["tf_refresh_token"]
 
     assert response.status_code == 401
 
@@ -211,12 +207,12 @@ def test_logout_forwards_refresh_token_and_writes_audit_log(
 
     monkeypatch.setattr(auth_routes.keycloak_service, "logout", _logout)
 
+    auth_client.cookies.set("tf_refresh_token", "kc-refresh-token")
     response = auth_client.post(
         "/api/v1/auth/logout",
-        json={},
         headers=_auth_headers_for_user(user, ["staff_viewer"]),
-        cookies={"tf_refresh_token": "kc-refresh-token"},
     )
+    del auth_client.cookies["tf_refresh_token"]
 
     assert response.status_code == 200
     assert captured["refresh_token"] == "kc-refresh-token"

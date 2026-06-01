@@ -92,12 +92,12 @@ def test_login_and_logout_audits_include_keycloak_id(
 
     monkeypatch.setattr(auth_routes.keycloak_service, "logout", lambda refresh_token: True)
 
+    audit_client.cookies.set("tf_refresh_token", "kc-refresh")
     logout = audit_client.post(
         "/api/v1/auth/logout",
-        json={},
         headers={"Authorization": f"Bearer {_access_token(user)}"},
-        cookies={"tf_refresh_token": "kc-refresh"},
     )
+    del audit_client.cookies["tf_refresh_token"]
     assert logout.status_code == 200
     # FEAT-0020: refresh_token is delivered via HttpOnly cookie, not in the response body.
     assert "refresh_token" not in callback_payload
@@ -133,11 +133,9 @@ def test_refresh_does_not_create_login_or_logout_audit(
 
     refresh_token = jwt_handler.generate_refresh_token(user_id=str(user.id))
 
-    response = audit_client.post(
-        "/api/v1/auth/refresh",
-        json={},
-        cookies={"tf_refresh_token": refresh_token},
-    )
+    audit_client.cookies.set("tf_refresh_token", refresh_token)
+    response = audit_client.post("/api/v1/auth/refresh")
+    del audit_client.cookies["tf_refresh_token"]
     assert response.status_code == 200
 
     auth_audits = db.query(AuditLog).filter(AuditLog.entity_type == "auth", AuditLog.user_id == user.id).all()
