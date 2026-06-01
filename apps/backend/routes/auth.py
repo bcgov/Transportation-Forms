@@ -117,7 +117,7 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         path=settings.AUTH_REFRESH_COOKIE_PATH,
         httponly=True,
         secure=settings.AUTH_COOKIE_SECURE,
-        samesite=cast("Literal['lax', 'strict', 'none']", settings.AUTH_REFRESH_COOKIE_SAMESITE),
+        samesite=cast("Literal['lax', 'strict', 'none']", (str(settings.AUTH_REFRESH_COOKIE_SAMESITE).lower() if str(settings.AUTH_REFRESH_COOKIE_SAMESITE).lower() in ("lax", "strict", "none") else "lax")),
     )
 
 
