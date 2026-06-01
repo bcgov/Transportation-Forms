@@ -548,15 +548,6 @@ async def logout(
         )
         user = db.query(User).filter(User.id == user_id).first()
 
-        cookie_value = http_request.cookies.get(settings.AUTH_REFRESH_COOKIE_NAME)
-        refresh_for_kc = _refresh_token_from_request(cookie_value, request.refresh_token)
-
-        if refresh_for_kc:
-            try:
-                keycloak_service.logout(refresh_for_kc)
-            except Exception as e:
-                logger.warning(f"KeyCloak logout failed: {str(e)}")
-
         ip_address, user_agent = _get_request_metadata(http_request)
         _create_auth_audit_log(
             db,

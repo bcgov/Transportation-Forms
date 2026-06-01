@@ -276,9 +276,8 @@ export async function handleAuthCallback() {
 }
 
 /**
- * Calls the backend logout endpoint (to invalidate the Keycloak session and
- * clear the HttpOnly refresh-token cookie), clears local session state, and
- * navigates to the home/welcome page.
+ * Calls the backend logout endpoint (to clear the HttpOnly refresh-token cookie),
+ * clears local session state, and navigates to the home/welcome page.
  *
  * FEAT-0020: The refresh token is no longer kept in localStorage; the backend
  * reads it from the HttpOnly cookie and clears that cookie on the response.

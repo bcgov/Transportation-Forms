@@ -53,6 +53,16 @@ vars:
   CRUNCHY_ACTION_REF: v2.1.0
   PGO_VERSION: 5.8.5
   POWERSHELL: pwsh
+  PS_BOILERPLATE: |
+    $ErrorActionPreference = "Stop"
+
+    function Invoke-CheckedCommand {
+      param([string]$FilePath, [string[]]$Arguments)
+      & $FilePath @Arguments
+      if ($LASTEXITCODE -ne 0) {
+        throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
+      }
+    }
 
 set: [errexit, pipefail]
 
@@ -108,15 +118,7 @@ tasks:
     cmds:
       - |
         {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
-          $ErrorActionPreference = "Stop"
-
-          function Invoke-CheckedCommand {
-            param([string]$FilePath, [string[]]$Arguments)
-            & $FilePath @Arguments
-            if ($LASTEXITCODE -ne 0) {
-              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
-            }
-          }
+          {{.PS_BOILERPLATE}}
 
           Write-Host "==> Installing or upgrading PGO operator..."
           Invoke-CheckedCommand "helm" @(
@@ -142,15 +144,7 @@ tasks:
     cmds:
       - |
         {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
-          $ErrorActionPreference = "Stop"
-
-          function Invoke-CheckedCommand {
-            param([string]$FilePath, [string[]]$Arguments)
-            & $FilePath @Arguments
-            if ($LASTEXITCODE -ne 0) {
-              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
-            }
-          }
+          {{.PS_BOILERPLATE}}
 
           $cachePath = "{{.CRUNCHY_CACHE}}"
           $expectedRef = "{{.CRUNCHY_ACTION_REF}}"
@@ -217,15 +211,7 @@ tasks:
     cmds:
       - |
         {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
-          $ErrorActionPreference = "Stop"
-
-          function Invoke-CheckedCommand {
-            param([string]$FilePath, [string[]]$Arguments)
-            & $FilePath @Arguments
-            if ($LASTEXITCODE -ne 0) {
-              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
-            }
-          }
+          {{.PS_BOILERPLATE}}
 
           function Get-KubernetesSecretValue {
             param([string]$SecretName, [string]$Key)
@@ -358,15 +344,7 @@ tasks:
         '
       - |
         {{.POWERSHELL}} -NoProfile -ExecutionPolicy Bypass -Command '
-          $ErrorActionPreference = "Stop"
-
-          function Invoke-CheckedCommand {
-            param([string]$FilePath, [string[]]$Arguments)
-            & $FilePath @Arguments
-            if ($LASTEXITCODE -ne 0) {
-              throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
-            }
-          }
+          {{.PS_BOILERPLATE}}
 
           $deployments = @(
             "{{.RELEASE_NAME}}-backend",
