@@ -4,7 +4,7 @@ import logging
 import secrets
 from datetime import datetime, timezone
 from uuid import UUID
-from typing import Optional
+from typing import Literal, Optional, cast
 from urllib.parse import urlparse
 from fastapi import APIRouter, HTTPException, status, Depends, Request, Response, Body
 from fastapi.responses import JSONResponse
@@ -36,15 +36,12 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     """Response for successful login.
 
-    The refresh token is intentionally NOT returned in the response body — it
-    is delivered out-of-band as an HttpOnly Secure SameSite cookie so that it
-    cannot be read by any JavaScript on the staff portal (FEAT-0020 / SEC-004).
-    The field is preserved (always empty) only for backward compatibility with
-    the existing response schema and any clients that still inspect it.
+    FEAT-0020 / SEC-004: The refresh token is NOT returned in the response body.
+    It is delivered as an HttpOnly Secure SameSite cookie so that JavaScript
+    cannot read it from localStorage or sessionStorage.
     """
 
     access_token: str
-    refresh_token: str = ""
     token_type: str
     expires_in: int
     user: dict
@@ -67,24 +64,19 @@ class CallbackRequest(BaseModel):
 class RefreshTokenRequest(BaseModel):
     """Request to refresh access token.
 
-    ``refresh_token`` is optional: the canonical source is the HttpOnly cookie
-    set at login time (FEAT-0020). A body-supplied value is only honoured as a
-    transitional fallback during the rollout window and will be removed in a
-    future release.
+    FEAT-0020: The canonical source for the refresh token is the HttpOnly
+    cookie. No body fields are accepted for security.
     """
-
-    refresh_token: Optional[str] = None
+    pass
 
 
 class LogoutRequest(BaseModel):
     """Request to logout.
 
-    ``refresh_token`` is optional: the canonical source is the HttpOnly cookie
-    set at login time (FEAT-0020). A body-supplied value is only honoured as a
-    transitional fallback.
+    FEAT-0020: The canonical source for the refresh token is the HttpOnly
+    cookie. No body fields are accepted for security.
     """
-
-    refresh_token: Optional[str] = None
+    pass
 
 
 # In-memory state storage (in production, use Redis or similar)
@@ -125,7 +117,7 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         path=settings.AUTH_REFRESH_COOKIE_PATH,
         httponly=True,
         secure=settings.AUTH_COOKIE_SECURE,
-        samesite=settings.AUTH_REFRESH_COOKIE_SAMESITE,
+        samesite=cast("Literal['lax', 'strict', 'none']", settings.AUTH_REFRESH_COOKIE_SAMESITE),
     )
 
 
@@ -136,24 +128,8 @@ def _clear_refresh_cookie(response: Response) -> None:
         path=settings.AUTH_REFRESH_COOKIE_PATH,
         httponly=True,
         secure=settings.AUTH_COOKIE_SECURE,
-        samesite=settings.AUTH_REFRESH_COOKIE_SAMESITE,
+        samesite=cast("Literal['lax', 'strict', 'none']", settings.AUTH_REFRESH_COOKIE_SAMESITE),
     )
-
-
-def _refresh_token_from_request(
-    cookie_value: Optional[str], body_value: Optional[str]
-) -> Optional[str]:
-    """Resolve the refresh token from the cookie first, body second.
-
-    The cookie is the canonical, JavaScript-inaccessible source (FEAT-0020).
-    Body fallback exists only for the migration window and will be removed in a
-    future release.
-    """
-    if cookie_value:
-        return cookie_value
-    if body_value:
-        return body_value
-    return None
 
 
 def _is_allowed_redirect_uri(uri: str) -> bool:
@@ -335,10 +311,10 @@ async def auth_callback(
             db.flush()
             logger.info(f"Created new user: {email}")
         else:
-            user.keycloak_id = keycloak_user_id
-            user.first_name = first_name
-            user.last_name = last_name
-            user.last_login = datetime.now(timezone.utc)
+            user.keycloak_id = keycloak_user_id  # type: ignore[assignment]
+            user.first_name = first_name  # type: ignore[assignment]
+            user.last_name = last_name  # type: ignore[assignment]
+            user.last_login = datetime.now(timezone.utc)  # type: ignore[assignment]
             logger.info(f"Updated existing user: {email}")
 
         # New-user bootstrap only — never overwrite DB-assigned portal roles.
@@ -378,20 +354,26 @@ async def auth_callback(
 
         db.commit()
         user = db.query(User).filter(User.id == user.id).first()
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Authentication failed",
+            )
 
         user_full_name = (
-            f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+            f"{user.first_name or ''} {user.last_name or ''}".strip() or str(user.email)
         )
         from backend.routes.admin_users import _active_user_roles
 
-        role_names = [ur.role.name for ur in _active_user_roles(user)]
+        active_roles = _active_user_roles(user)
+        role_names = [ur.role.name for ur in active_roles]
         all_permissions = list({
-            p for ur in _active_user_roles(user)
+            p for ur in active_roles
             for p in (ur.role.permissions or [])
         })
         app_tokens = keycloak_service.generate_app_tokens(
             user_id=str(user.id),
-            email=user.email,
+            email=str(user.email),
             name=user_full_name,
             roles=role_names,
             permissions=all_permissions,
@@ -406,12 +388,11 @@ async def auth_callback(
 
         return LoginResponse(
             access_token=app_tokens["access_token"],
-            refresh_token="",
             token_type=app_tokens["token_type"],
-            expires_in=app_tokens["expires_in"],
+            expires_in=int(app_tokens["expires_in"]),
             user={
                 "id": str(user.id),
-                "email": user.email,
+                "email": str(user.email),
                 "name": user_full_name,
                 "roles": role_names,
             },
@@ -446,40 +427,46 @@ async def refresh_token(
 
     This uses our application's refresh token (not KeyCloak's).
 
-    FEAT-0020: The refresh token is sourced from the HttpOnly cookie set at
-    login time. A body-supplied value is honoured only as a transitional
-    fallback during the rollout window.
+    FEAT-0020: The refresh token is exclusively sourced from the HttpOnly cookie
+    set at login time to prevent XSS exfiltration.
     """
     try:
-        cookie_value = http_request.cookies.get(settings.AUTH_REFRESH_COOKIE_NAME)
-        token_value = _refresh_token_from_request(cookie_value, request.refresh_token)
+        token_value = http_request.cookies.get(settings.AUTH_REFRESH_COOKIE_NAME)
         if not token_value:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh token missing",
             )
 
-        token_data = jwt_handler.validate_token(
-            token_value, token_type="refresh"
-        )
+        token_data = jwt_handler.validate_token(token_value, token_type="refresh")
+        if token_data is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token",
+            )
 
         user_id = (
             UUID(token_data.sub) if isinstance(token_data.sub, str) else token_data.sub
         )
         user = db.query(User).filter(User.id == user_id).first()
 
-        if not user or not user.is_active:
+        if user is None or not bool(user.is_active):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found or inactive",
             )
 
-        user.last_login = datetime.now(timezone.utc)
+        user.last_login = datetime.now(timezone.utc)  # type: ignore[assignment]
         db.commit()
         user = db.query(User).filter(User.id == user.id).first()
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Token refresh failed",
+            )
 
         user_full_name = (
-            f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+            f"{user.first_name or ''} {user.last_name or ''}".strip() or str(user.email)
         )
         from backend.routes.admin_users import _active_user_roles
 
@@ -488,7 +475,7 @@ async def refresh_token(
         all_permissions = list({p for ur in active_roles for p in (ur.role.permissions or [])})
         new_access_token = jwt_handler.generate_access_token(
             user_id=str(user.id),
-            email=user.email,
+            email=str(user.email),
             name=user_full_name,
             roles=role_names,
             permissions=all_permissions,
@@ -548,12 +535,24 @@ async def logout(
         )
         user = db.query(User).filter(User.id == user_id).first()
 
+        # Best-effort: forward the cookie value to Keycloak's end-session
+        # endpoint. The cookie holds the application JWT refresh token, not a
+        # Keycloak refresh token, so this call may be a no-op — but we still
+        # attempt it so that any valid Keycloak session bound to the same token
+        # subject is invalidated where possible.
+        token_value = http_request.cookies.get(settings.AUTH_REFRESH_COOKIE_NAME)
+        if token_value:
+            try:
+                keycloak_service.logout(token_value)
+            except Exception as e:
+                logger.warning(f"KeyCloak logout failed (best-effort): {str(e)}")
+
         ip_address, user_agent = _get_request_metadata(http_request)
         _create_auth_audit_log(
             db,
             action="LOGOUT",
             user=user,
-            keycloak_id=user.keycloak_id if user else None,
+            keycloak_id=str(user.keycloak_id) if user and user.keycloak_id is not None else None,
             ip_address=ip_address,
             user_agent=user_agent,
         )
