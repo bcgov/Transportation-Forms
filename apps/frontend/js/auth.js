@@ -66,6 +66,7 @@ function _saveAuthSession(accessToken, _refreshToken, user) {
   // delivered to the browser as an HttpOnly cookie by /auth/callback and is
   // not (and must not be) accessible to JavaScript. Remove any legacy value.
   localStorage.removeItem(AUTH_STORAGE_REFRESH);
+  localStorage.setItem(AUTH_STORAGE_ACCESS, accessToken);
   localStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(user || {}));
   setCurrentUser(user || null);
   window.dispatchEvent(new CustomEvent('auth:session-started'));
