@@ -27,6 +27,8 @@ _PERM_APPROVE = "form:approve"
 _PERM_APPROVE_SELF = "form:approve-self"  # FEAT-0007
 _PERM_REVIEW = "form:review"
 _PERM_ARCHIVE = "form:archive"
+_PERM_CREATE = "form:create"  # FEAT-0016
+_PERM_EDIT = "form:edit"  # FEAT-0016
 
 
 # ─── Pydantic models ──────────────────────────────────────────────────────────
@@ -44,6 +46,15 @@ class RejectRequest(BaseModel):
     """Reject request body."""
 
     reason_notes: Optional[str] = Field(default=None)
+
+
+class RevertRequest(BaseModel):
+    """Revert-to-draft request body (FEAT-0016).
+
+    ``reason_notes`` is mandatory; the service validates it is non-blank.
+    """
+
+    reason_notes: str = Field(...)
 
 
 class WorkflowHistoryItem(BaseModel):
@@ -295,6 +306,34 @@ async def unpublish_form(
 
     try:
         form = FormService.unpublish_form(db, UUID(form_id), UUID(current_user.sub))
+        return _to_status_response(form)
+    except Exception as exc:  # noqa: BLE001
+        _handle_workflow_error(exc)
+
+
+@router.post("/{form_id}/revert", response_model=WorkflowStatusResponse)
+async def revert_form_to_draft(
+    form_id: str,
+    request: RevertRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WorkflowStatusResponse:
+    """Revert a Published form back to Draft (FEAT-0016).
+
+    Requires both ``form:create`` and ``form:edit`` permissions.  A
+    non-blank ``reason_notes`` is mandatory.  On success the reverting
+    user becomes the form owner and the change is recorded in both
+    workflow history and the audit log.
+    """
+    _require_permissions(current_user, _PERM_CREATE, _PERM_EDIT)
+
+    try:
+        form = FormService.revert_form_to_draft(
+            db,
+            UUID(form_id),
+            UUID(current_user.sub),
+            request.reason_notes,
+        )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
         _handle_workflow_error(exc)

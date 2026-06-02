@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [Parameter(Mandatory=$true)]
     [string]$CachePath,
@@ -10,6 +8,8 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$ReleaseName
 )
+
+$ErrorActionPreference = "Stop"
 
 function Invoke-CheckedCommand {
     param([string]$FilePath, [string[]]$Arguments)

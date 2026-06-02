@@ -111,6 +111,11 @@ function _initWorkflowButtonListeners() {
         ?.addEventListener('click', _deleteFormFromEdit);
     document.getElementById('restoreFormBtn')
         ?.addEventListener('click', _restoreFormFromEdit);
+    // FEAT-0016: Unpublish button and modal confirm
+    document.getElementById('unpublishFormBtn')
+        ?.addEventListener('click', _openFormUnpublishModal);
+    document.getElementById('confirmFormUnpublishBtn')
+        ?.addEventListener('click', _confirmFormUnpublish);
 }
 
 /**
@@ -125,9 +130,10 @@ function _updateWorkflowButtons(status) {
     const archiveFormBtn = document.getElementById('archiveFormBtn');
     const deleteFormBtn = document.getElementById('deleteFormBtn');
     const restoreFormBtn = document.getElementById('restoreFormBtn');
+    const unpublishFormBtn = document.getElementById('unpublishFormBtn');
 
     // Default: hide all workflow extras
-    [submitForReviewBtn, approvePublishBtn, rejectFormBtn, archiveFormBtn, deleteFormBtn, restoreFormBtn].forEach(el => {
+    [submitForReviewBtn, approvePublishBtn, rejectFormBtn, archiveFormBtn, deleteFormBtn, restoreFormBtn, unpublishFormBtn].forEach(el => {
         if (el) el.style.display = 'none';
     });
 
@@ -164,6 +170,10 @@ function _updateWorkflowButtons(status) {
         if (saveDraftBtn) saveDraftBtn.style.display = 'none';
         if (archiveFormBtn && hasPermission('form:archive')) {
             archiveFormBtn.style.display = '';
+        }
+        // FEAT-0016: Unpublish button — requires both form:create and form:edit
+        if (unpublishFormBtn && hasPermission('form:create') && hasPermission('form:edit')) {
+            unpublishFormBtn.style.display = '';
         }
     } else if (status === 'archived') {
         if (saveDraftBtn) saveDraftBtn.style.display = 'none';
@@ -311,6 +321,65 @@ async function _archiveForm() {
         setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
     } catch (error) {
         showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// FEAT-0016: Open Unpublish confirmation modal
+function _openFormUnpublishModal() {
+    const reasonField = document.getElementById('formUnpublishReason');
+    const errorDiv = document.getElementById('formUnpublishError');
+    if (reasonField) {
+        reasonField.value = '';
+        reasonField.classList.remove('is-invalid');
+    }
+    if (errorDiv) errorDiv.style.display = 'none';
+    window.bootstrap?.Modal.getOrCreateInstance(
+        document.getElementById('formUnpublishModal')
+    )?.show();
+}
+
+// FEAT-0016: Confirm Unpublish — calls POST /{form_id}/revert
+async function _confirmFormUnpublish() {
+    if (!_currentFormId) return;
+    const reasonField = document.getElementById('formUnpublishReason');
+    const errorDiv = document.getElementById('formUnpublishError');
+    const reason = reasonField?.value?.trim() || '';
+
+    if (!reason) {
+        reasonField?.classList.add('is-invalid');
+        return;
+    }
+
+    const btn = document.getElementById('confirmFormUnpublishBtn');
+    btn.disabled = true;
+    if (errorDiv) errorDiv.style.display = 'none';
+
+    try {
+        const response = await fetch(`${API_BASE}/staff/forms/${_currentFormId}/revert`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${getAuthToken()}`,
+            },
+            body: JSON.stringify({ reason_notes: reason }),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to unpublish form');
+        }
+        window.bootstrap?.Modal.getOrCreateInstance(
+            document.getElementById('formUnpublishModal')
+        )?.hide();
+        // Stay on edit page — reload form so all UI reflects Draft state
+        await _loadFormForEdit(_currentFormId);
+        showAlert('Form has been unpublished and returned to Draft.', 'success');
+    } catch (error) {
+        if (errorDiv) {
+            errorDiv.textContent = 'Error: ' + error.message;
+            errorDiv.style.display = '';
+        }
     } finally {
         btn.disabled = false;
     }
