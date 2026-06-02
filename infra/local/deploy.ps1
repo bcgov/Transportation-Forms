@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [Parameter(Mandatory=$true)]
     [string]$ReleaseName,
@@ -13,6 +11,8 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$CrunchyRelease
 )
+
+$ErrorActionPreference = "Stop"
 
 function Invoke-CheckedCommand {
     param([string]$FilePath, [string[]]$Arguments)
@@ -151,7 +151,7 @@ try {
         Remove-Item -Force -ErrorAction SilentlyContinue $tempFile
     }
 
-    if (Test-Path $tempDir -PathType Container -and -not (Get-ChildItem -Force -Path $tempDir | Select-Object -First 1)) {
+    if ((Test-Path $tempDir -PathType Container) -and -not (Get-ChildItem -Force -Path $tempDir | Select-Object -First 1)) {
         Remove-Item -Force -ErrorAction SilentlyContinue $tempDir
     }
 }

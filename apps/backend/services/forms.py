@@ -48,7 +48,7 @@ class FormService:
     VALID_TRANSITIONS = {
         "draft": ["pending_review"],
         "pending_review": ["published", "draft"],
-        "published": ["archived"],
+        "published": ["archived", "draft"],  # FEAT-0016: "draft" added for revert
         "archived": ["published"],
     }
 
@@ -723,6 +723,91 @@ class FormService:
             to_status="draft",
             triggered_by_id=user_id,
         )
+
+    @staticmethod
+    def revert_form_to_draft(
+        db: Session,
+        form_id: UUID,
+        reverting_user_id: UUID,
+        reason_notes: str,
+    ) -> Form:
+        """Revert a Published form to Draft (FEAT-0016).
+
+        The reverting user becomes the new owner. Both the prior and new
+        ``created_by_id`` values are written to the AuditLog entry so that
+        AC7 / CONFLICT-03 (ownership-change audit trail) is satisfied.
+
+        Args:
+            db: Database session.
+            form_id: UUID of the form to revert.
+            reverting_user_id: UUID of the staff user performing the revert.
+            reason_notes: Mandatory non-blank justification for the revert.
+
+        Returns:
+            Updated Form object in Draft state.
+
+        Raises:
+            FormWorkflowValidationError: Reason is blank, or the form is not
+                in Published state.
+            FormNotFoundError: Form does not exist or has been soft-deleted.
+            FormWorkflowConflictError: Row lock could not be acquired.
+        """
+        if not reason_notes or not reason_notes.strip():
+            raise FormWorkflowValidationError(
+                "Revert reason (reason_notes) is required"
+            )
+
+        form = FormService._get_form_for_transition(db, form_id, lock=True)
+        from_status = form.status
+
+        # AC4: only Published forms may be reverted; pending_review → draft is
+        # a valid generic transition (reject flow) but must NOT be reachable here.
+        if from_status != "published":
+            raise FormWorkflowValidationError(
+                f"Invalid transition from '{from_status}' to 'draft': "
+                "revert is only permitted for Published forms"
+            )
+
+        prior_owner_id = form.created_by_id
+        cleaned_reason = reason_notes.strip()
+
+        workflow = FormWorkflow(
+            form_id=form.id,
+            action="revert",
+            from_status=from_status,
+            to_status="draft",
+            triggered_by_id=reverting_user_id,
+            reason_notes=cleaned_reason,
+        )
+        db.add(workflow)
+        db.flush()
+
+        form.status = "draft"
+        form.created_by_id = reverting_user_id
+        db.flush()
+
+        db.add(
+            AuditLog(
+                entity_type="forms",
+                entity_id=str(form.id),
+                action="WORKFLOW_TRANSITION",
+                user_id=reverting_user_id,
+                old_values={
+                    "status": from_status,
+                    "created_by_id": str(prior_owner_id),
+                },
+                new_values={
+                    "status": "draft",
+                    "action": "revert",
+                    "reason_notes": cleaned_reason,
+                    "created_by_id": str(reverting_user_id),
+                },
+            )
+        )
+
+        db.commit()
+        db.refresh(form)
+        return form
 
     @staticmethod
     def archive_form(

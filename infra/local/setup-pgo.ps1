@@ -1,9 +1,9 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [Parameter(Mandatory=$true)]
     [string]$PgoVersion
 )
+
+$ErrorActionPreference = "Stop"
 
 function Invoke-CheckedCommand {
     param([string]$FilePath, [string[]]$Arguments)
