@@ -77,13 +77,8 @@ data:
             proxy_cache_valid       200 5m;
             proxy_cache_use_stale   error timeout updating http_500 http_502 http_503 http_504;
             proxy_cache_lock        on;
-            # FEAT-0005 Gap A: honour upstream Cache-Control so endpoints that
-            # emit "private" / "no-store" (notably /forms/{n}/file) are never
-            # cached and always reach the FastAPI handler so the audit row is
-            # written on every download. List/detail/OG/sitemap continue to
-            # cache because they emit "public, max-age=...".
-            proxy_cache_bypass      $upstream_http_cache_control;
-            proxy_no_cache          $upstream_http_cache_control;
+            # NGINX proxy_cache already honors upstream Cache-Control (private/no-store)
+            # unless `proxy_ignore_headers Cache-Control` is configured, so no extra bypass rules are needed here.
         {{- end }}
             proxy_set_header  Host              $host;
             proxy_set_header  X-Real-IP         $remote_addr;
