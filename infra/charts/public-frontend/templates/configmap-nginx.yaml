@@ -163,6 +163,7 @@ data:
             proxy_pass ${S3_INTERNAL_UPSTREAM}/;
 
             proxy_set_header  Host  $proxy_host;
+            proxy_ssl_server_name on;
             proxy_hide_header x-amz-id-2;
             proxy_hide_header x-amz-request-id;
             proxy_hide_header x-amz-meta-server-side-encryption;
