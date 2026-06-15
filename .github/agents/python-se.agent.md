@@ -173,7 +173,7 @@ If a safe solution cannot be implemented within constraints, STOP and request gu
 
 # 5) Working Context
 
-Python version to use is 3.14. Use `Pytest` for testing. For other tooling, inspect the repository (read-only) to determine:
+Python version to use is 3.12. Use `pytest` for testing. For other tooling, inspect the repository (read-only) to determine:
 - Python tooling (flake8/black, mypy/pyright)
 - Web framework conventions (FastAPI, Flask, etc.)
 - Database migration patterns (alembic/migrations)
