@@ -118,16 +118,9 @@ try {
     # FEAT-0005 Gap A: NGINX /internal-s3/ proxy_pass needs <endpoint>/<bucket>
     # (path-style addressing). Concat the two .env values into a single file
     # so `--set-file` keeps the value out of process args / shell history.
-    $s3EndpointEnv = [System.Environment]::GetEnvironmentVariable("S3_ENDPOINT_URL")
-    $s3BucketEnv   = [System.Environment]::GetEnvironmentVariable("S3_BUCKET")
-    if ([string]::IsNullOrWhiteSpace($s3EndpointEnv) -or [string]::IsNullOrWhiteSpace($s3BucketEnv)) {
-        # Leave empty so the chart omits the /internal-s3/ location block.
-        $s3InternalUpstreamFile = Write-HelmValueFile "s3-internal-upstream.txt" ""
-    } else {
-        $s3EndpointRaw = $s3EndpointEnv.TrimEnd('/')
-        $s3BucketRaw   = $s3BucketEnv.Trim('/')
-        $s3InternalUpstreamFile = Write-HelmValueFile "s3-internal-upstream.txt" "$s3EndpointRaw/$s3BucketRaw"
-    }
+    $s3EndpointRaw = ([System.Environment]::GetEnvironmentVariable("S3_ENDPOINT_URL")).TrimEnd('/')
+    $s3BucketRaw   = ([System.Environment]::GetEnvironmentVariable("S3_BUCKET")).Trim('/')
+    $s3InternalUpstreamFile = Write-HelmValueFile "s3-internal-upstream.txt" "$s3EndpointRaw/$s3BucketRaw"
 
     Write-Host "==> Deploying application with Helm..."
     Invoke-CheckedCommand "helm" @(
