@@ -980,7 +980,12 @@ class FormService:
                 FormVersion.is_current.is_(True),
                 FormVersion.deleted_at.is_(None),
             ).update({"is_current": False}, synchronize_session=False)
+
             existing_fv.is_current = True
+            existing_fv.file_name = form.form_attachment_filename or object_key.split("/")[-1]
+            existing_fv.file_type = form.file_type or existing_fv.file_type or "unknown"
+            existing_fv.file_size = s3_service.get_object_size(object_key)
+            existing_fv.uploaded_by_id = uploaded_by_id
             db.flush()
             return
 
