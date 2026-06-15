@@ -77,6 +77,8 @@ data:
             proxy_cache_valid       200 5m;
             proxy_cache_use_stale   error timeout updating http_500 http_502 http_503 http_504;
             proxy_cache_lock        on;
+            # NGINX proxy_cache already honors upstream Cache-Control (private/no-store)
+            # unless `proxy_ignore_headers Cache-Control` is configured, so no extra bypass rules are needed here.
         {{- end }}
             proxy_set_header  Host              $host;
             proxy_set_header  X-Real-IP         $remote_addr;
@@ -142,16 +144,23 @@ data:
             proxy_pass http://upstream_public_backend;
         }
 
+    {{- if .Values.s3.internalUpstream }}
         # ── Internal-only S3 X-Accel-Redirect target ─────────────────────────
         # Marked `internal;` so external clients cannot hit it directly; only
         # public-backend's X-Accel-Redirect responses can pivot here.
+        #
+        # FEAT-0005 Gap A: this block is gated on a non-empty
+        # `s3.internalUpstream` value so an unset chart value omits the block
+        # entirely instead of rendering `proxy_pass ;` which would fail NGINX
+        # boot. Path-style addressing is expected — set `internalUpstream`
+        # to `<endpoint>/<bucket>` (e.g. `https://s3.example.com/my-bucket`).
         location /internal-s3/ {
             internal;
 
             # Strip the /internal-s3/ prefix and proxy to the configured S3
-            # endpoint. Rendered at boot from S3_INTERNAL_UPSTREAM.
-            rewrite ^/internal-s3/(.*)$ /$1 break;
-            proxy_pass ${S3_INTERNAL_UPSTREAM};
+            # endpoint + bucket. Rendered at boot from S3_INTERNAL_UPSTREAM.
+            # Using trailing slash replaces the matched prefix and preserves bucket path.
+            proxy_pass ${S3_INTERNAL_UPSTREAM}/;
 
             proxy_set_header  Host  $proxy_host;
             proxy_hide_header x-amz-id-2;
@@ -164,6 +173,7 @@ data:
 
             proxy_http_version 1.1;
         }
+    {{- end }}
 
         # ── SPA shell fallback — serve index.html for any unknown route ──────
         location / {

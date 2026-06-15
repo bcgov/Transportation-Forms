@@ -348,10 +348,18 @@ def download_public_form(
 
     # Compose the X-Accel-Redirect target.  The S3 object key comes
     # exclusively from the server-side row; never from the request.
+    #
+    # FEAT-0005 BUGFIX (2026-06-11): the previous implementation concatenated
+    # the raw ``s3_key`` into the header value, which broke NGINX's parsing
+    # whenever a legacy key contained spaces or other URL-unsafe characters
+    # (a space inside the header value silently truncates the URI at NGINX).
+    # We now percent-encode each path segment while preserving the ``/``
+    # separators so the header value is always a valid URI.
     prefix = settings.INTERNAL_S3_REDIRECT_PREFIX
     if not prefix.endswith("/"):
         prefix = prefix + "/"
-    redirect_target = prefix + row.s3_key.lstrip("/")
+    safe_key = quote(row.s3_key.lstrip("/"), safe="/")
+    redirect_target = prefix + safe_key
 
     # Audit BEFORE returning so a transport failure mid-flight still
     # produces a "user attempted download" trail.

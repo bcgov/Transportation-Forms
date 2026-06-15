@@ -7,7 +7,17 @@ error handling, and authorization checks.
 from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, status, Depends, Query, UploadFile, File
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    status,
+    Depends,
+    Query,
+    UploadFile,
+    File,
+    Request,
+)
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
@@ -15,8 +25,10 @@ from backend.auth.authorization import require_permission
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
+from backend.models import AuditLog
 from backend.services.forms import FormService
 from backend.services import s3_service
+from backend.services.s3_service import S3ObjectNotFound, MIME_TYPE_MAP
 
 # ============================================================================
 # Pydantic Models (Request/Response)
@@ -243,6 +255,35 @@ class FileUploadResponse(BaseModel):
     file_type: str  # FEAT-0002: derived file-type label (e.g. 'pdf', 'unknown')
 
 
+# ── Reverse MIME mapping for streaming download ──────────────────────────────
+# Maps the short file_type label (e.g. ``"pdf"``) back to a Content-Type value
+# for the streaming download endpoint.  Built from ``MIME_TYPE_MAP``; any
+# unknown label falls back to ``application/octet-stream`` so the browser
+# treats the response as an opaque attachment.
+_FILE_TYPE_TO_MIME: Dict[str, str] = {
+    short: mime for mime, short in MIME_TYPE_MAP.items()
+}
+
+
+def _safe_attachment_filename(filename: str) -> str:
+    """Return an RFC 6266-safe ``Content-Disposition`` header value.
+
+    Provides both the ASCII fallback and the UTF-8 percent-encoded form so
+    that filenames with Unicode characters survive intact in modern browsers
+    while remaining valid HTTP-1.1.  Mirrors the public-backend pattern
+    (FEAT-0005 ``apps/public-backend/routes/forms.py::_content_disposition``).
+    """
+    from urllib.parse import quote
+
+    base = filename or "form"
+    ascii_fallback = (
+        "".join(c if 32 <= ord(c) < 127 and c not in '"\\' else "_" for c in base)
+        or "form"
+    )
+    utf8 = quote(base, safe="")
+    return f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{utf8}'
+
+
 @router.post(
     "/upload", response_model=FileUploadResponse, status_code=status.HTTP_201_CREATED
 )
@@ -351,8 +392,7 @@ async def create_form(
 
 
 @router.get("/autocomplete", response_model=FormAutocompleteResponse)
-async def autocomplete_forms(
-    q: str = Query(
+async def autocomplete_forms(    q: str = Query(
         ..., min_length=2, description="Autocomplete query (minimum 2 characters)"
     ),
     max_suggestions: int = Query(
@@ -375,6 +415,146 @@ async def autocomplete_forms(
         max_suggestions=max_suggestions,
     )
     return FormAutocompleteResponse(query=q, suggestions=suggestions)
+
+
+@router.get("/{form_id}/file")
+async def download_form_attachment(
+    form_id: str,
+    request: Request,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Stream a form's uploaded attachment directly to the client.
+
+    Security contract (FEAT-0005 US-004 AC14, US-012 BR-001, BR-005):
+    * The S3 endpoint hostname, bucket name, object key, and any pre-signed
+      URL **never appear** in the response body or any response header.
+    * The backend fetches the object from S3 server-side and streams the
+      bytes back as a same-origin attachment (``Content-Disposition: attachment``).
+    * ``Cache-Control: private, no-store`` prevents intermediate or browser
+      caching of authenticated file payloads.
+    * Every successful download writes an ``AuditLog`` row with
+      ``action="FORM_DOWNLOAD"`` so privileged file access is traceable
+      to the authenticated staff user.
+
+    Authorization: requires ``form:read``.  Forms with
+    ``form_source != 'Download'`` or no ``form_attachment_url`` return 404.
+    """
+    user_perms = set(current_user.permissions or [])
+    if "form:read" not in user_perms:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
+    try:
+        form_uuid = UUID(form_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid form ID format",
+        )
+
+    form = FormService.get_form_by_id(db, form_uuid)
+    if not form:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Form not found",
+        )
+
+    if form.form_source != "Download" or not form.form_attachment_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No attachment found for this form",
+        )
+
+    object_key = FormService._extract_s3_object_key(form.form_attachment_url)
+    if not object_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No attachment found for this form",
+        )
+
+    # Resolve content type from the stored short-label (e.g. "pdf").
+    content_type = _FILE_TYPE_TO_MIME.get(
+        (form.file_type or "").lower(),
+        "application/octet-stream",
+    )
+
+    # Open the stream up-front so a missing-object error becomes a clean
+    # 404 *before* the StreamingResponse starts sending status/headers.
+    try:
+        body_iterator = s3_service.stream_object(object_key)
+        # Pull the first chunk to surface NoSuchKey/auth errors immediately.
+        first_chunk = next(body_iterator, b"")
+    except S3ObjectNotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No attachment found for this form",
+        )
+    except Exception:
+        # Generic safe message — do NOT leak boto3 / endpoint info.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not retrieve attachment",
+        )
+
+    def _chunks():
+        if first_chunk:
+            yield first_chunk
+        yield from body_iterator
+
+    filename = form.form_attachment_filename or "form"
+
+    # Audit AFTER successful S3 open and BEFORE handing to the response so
+    # the trail records the user's intent to download even if the connection
+    # is severed mid-stream.
+    try:
+        user_id = UUID(current_user.sub) if current_user.sub else None
+    except (ValueError, TypeError):
+        user_id = None
+
+    client_host = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent", "")[:500] or None
+
+    db.add(
+        AuditLog(
+            entity_type="forms",
+            entity_id=str(form.id),
+            action="FORM_DOWNLOAD",
+            user_id=user_id,
+            new_values={
+                "filename": filename,
+                "file_type": form.file_type,
+            },
+            ip_address=client_host,
+            user_agent=user_agent,
+        )
+    )
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        # Close S3 stream early if we fail before returning the response.
+        try:
+            body_iterator.close()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not record download audit",
+        )
+    headers = {
+        "Content-Disposition": _safe_attachment_filename(filename),
+        "Cache-Control": "private, no-store",
+        # Defence-in-depth: disable MIME sniffing on the rendered response.
+        "X-Content-Type-Options": "nosniff",
+    }
+
+    return StreamingResponse(
+        _chunks(),
+        media_type=content_type,
+        headers=headers,
+    )
 
 
 @router.get("/{form_id}", response_model=FormResponse)
