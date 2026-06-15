@@ -438,8 +438,7 @@ async def download_form_attachment(
       to the authenticated staff user.
 
     Authorization: requires ``form:read``.  Forms with
-    ``form_source != 'Download'`` or no ``form_attachment_url`` return 404
-    (no oracle that distinguishes "missing form" from "missing attachment").
+    ``form_source != 'Download'`` or no ``form_attachment_url`` return 404.
     """
     user_perms = set(current_user.permissions or [])
     if "form:read" not in user_perms:
