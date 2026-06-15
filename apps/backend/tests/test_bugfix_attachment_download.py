@@ -306,6 +306,22 @@ class TestStreamFormAttachment:
         # Error body must not name the key either.
         _assert_no_s3_leakage(resp)
 
+    @patch("backend.routes.forms.s3_service.stream_object")
+    def test_returns_502_when_other_s3_error_happens(
+        self, mock_stream, client, db, admin_user
+    ):
+        """If S3 raises an unexpected error, the endpoint returns 502 Bad Gateway without leaking details."""
+        mock_stream.side_effect = Exception("Some arbitrary error")
+        form = _make_download_form(db, admin_user.id)
+
+        resp = client.get(
+            f"/api/v1/forms/{form.id}/file",
+            headers={"Authorization": "Bearer admin"},
+        )
+        assert resp.status_code == 502
+        assert resp.json()["detail"] == "Could not retrieve attachment"
+        _assert_no_s3_leakage(resp)
+
     def test_returns_404_for_url_source_form(self, client, db, admin_user):
         """Endpoint returns 404 when the form has no S3 attachment."""
         form = _make_url_form(db, admin_user.id)
