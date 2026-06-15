@@ -530,8 +530,19 @@ async def download_form_attachment(
             user_agent=user_agent,
         )
     )
-    db.commit()
-
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        # Close S3 stream early if we fail before returning the response.
+        try:
+            body_iterator.close()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not record download audit",
+        )
     headers = {
         "Content-Disposition": _safe_attachment_filename(filename),
         "Cache-Control": "private, no-store",
