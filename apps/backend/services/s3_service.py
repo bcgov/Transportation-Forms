@@ -11,7 +11,7 @@ import json
 import uuid
 import logging
 import hashlib
-from typing import Tuple, Iterator, Optional
+from typing import Tuple, Iterator
 
 
 class S3ObjectNotFound(Exception):
