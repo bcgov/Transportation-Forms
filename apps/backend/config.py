@@ -1,7 +1,7 @@
 """Application configuration settings."""
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import model_validator, Field
+from pydantic import model_validator, Field, field_validator
 from typing import Optional
 
 
@@ -60,6 +60,16 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: str = Field(alias="S3_SECRET_KEY")
     S3_BUCKET: str = Field(alias="S3_BUCKET")
     S3_VERIFY_TLS: bool = True
+
+    @field_validator("S3_ENDPOINT_URL", mode="after")
+    @classmethod
+    def strip_endpoint_slashes(cls, v: str | None) -> str | None:
+        return v.rstrip("/") if v else v
+
+    @field_validator("S3_BUCKET", mode="after")
+    @classmethod
+    def strip_bucket_slashes(cls, v: str | None) -> str | None:
+        return v.strip("/") if v else v
     # Feature Flags
     ENABLE_SEMANTIC_SEARCH: bool = True
     ENABLE_EMAIL_NOTIFICATIONS: bool = False

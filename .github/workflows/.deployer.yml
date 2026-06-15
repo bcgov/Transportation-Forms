@@ -166,6 +166,14 @@ jobs:
               VALUES_OVERRIDE="-f ${CHART}/values-prod.yaml"
             fi
 
+            # Clean slashes from S3 parameters to prevent signing/routing errors on OpenShift
+            S3_ENDPOINT="${{ secrets.s3_endpoint_url }}"
+            S3_BUCKET="${{ secrets.s3_bucket }}"
+            S3_ENDPOINT_CLEAN="${S3_ENDPOINT%/}"
+            S3_BUCKET_CLEAN="${S3_BUCKET#/}"
+            S3_BUCKET_CLEAN="${S3_BUCKET_CLEAN%/}"
+            S3_UPSTREAM="${S3_ENDPOINT_CLEAN}/${S3_BUCKET_CLEAN}"
+
             helm upgrade --install "${RELEASE_NAME}" "${CHART}" \
               --namespace "${{ vars.OC_NAMESPACE }}" \
               -f "${CHART}/values.yaml" \
@@ -179,17 +187,17 @@ jobs:
               --set backend.secrets.secretKey="${{ secrets.secret_key }}" \
               --set-file backend.secrets.jwtPrivateKeyPem="${JWT_PRIVATE_KEY_FILE}" \
               --set-file backend.secrets.jwtPublicKeyPem="${JWT_PUBLIC_KEY_FILE}" \
-              --set backend.secrets.s3EndpointUrl="${{ secrets.s3_endpoint_url }}" \
+              --set backend.secrets.s3EndpointUrl="${S3_ENDPOINT_CLEAN}" \
               --set backend.secrets.s3AccessKey="${{ secrets.s3_access_key }}" \
               --set backend.secrets.s3SecretKey="${{ secrets.s3_secret_key }}" \
-              --set backend.secrets.s3Bucket="${{ secrets.s3_bucket }}" \
+              --set backend.secrets.s3Bucket="${S3_BUCKET_CLEAN}" \
               --set backend.secrets.keycloakServerUrl="${{ secrets.keycloak_server_url }}" \
               --set backend.secrets.keycloakRealm="${{ secrets.keycloak_realm }}" \
               --set backend.secrets.keycloakClientId="${{ secrets.keycloak_client_id }}" \
               --set backend.secrets.keycloakClientSecret="${{ secrets.keycloak_client_secret }}" \
               --set backend.secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
               --set backend.secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
-              --set "public-frontend.s3.internalUpstream=${{ secrets.s3_endpoint_url }}/${{ secrets.s3_bucket }}" \
+              --set "public-frontend.s3.internalUpstream=${S3_UPSTREAM}" \
               --set "public-frontend.publicBaseUrl=${{ inputs.public_forms_base_url }}" \
               --set "public-backend.publicBaseUrl=${{ inputs.public_forms_base_url }}" \
               ${{ inputs.params }} \
