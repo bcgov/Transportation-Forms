@@ -60,4 +60,10 @@ spec:
           port: 5353
         - protocol: TCP
           port: 5353
+    # → S3 endpoint (HTTPS)
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
 {{- end }}
