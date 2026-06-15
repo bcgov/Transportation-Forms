@@ -144,9 +144,16 @@ internalAuth:
   secretKey: secret
 
 # ── S3 internal upstream for X-Accel-Redirect /internal-s3/ ──────────────────
-# Empty in DEV (no S3 binding); TEST/PROD must set this to the in-cluster /
-# private S3 endpoint host. The path is rewritten by NGINX (/internal-s3/<key>
-# → <upstream>/<key>) and the location is marked `internal;` so external
-# clients cannot reach it directly.
+# Format: `<endpoint>/<bucket>` (path-style addressing — works for MinIO and
+# most S3-compatible gateways including BC Gov Object Storage).
+# Example:  https://nrs.objectstore.gov.bc.ca/my-bucket
+#
+# NGINX rewrites /internal-s3/<key> → <upstream>/<key>, so the bucket segment
+# MUST be included or the upstream request will land at the wrong path and
+# return 404 / AccessDenied.
+#
+# When this value is empty the entire /internal-s3/ location block is omitted
+# from the rendered config (defence against `proxy_pass ;` boot-failure).
+# The location is marked `internal;` so external clients cannot reach it.
 s3:
   internalUpstream: ""

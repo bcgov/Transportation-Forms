@@ -171,11 +171,11 @@ If a safe solution cannot be implemented within constraints, STOP and request gu
 
 ---
 
-# 5) Working Context (You Must Discover From Repo)
+# 5) Working Context
 
-Before finalizing design, inspect the repository (read-only) to determine:
-- Python version and tooling (pytest, ruff/flake8/black, mypy/pyright)
-- Web framework conventions (if backend)
+Python version to use is 3.14. Use `Pytest` for testing. For other tooling, inspect the repository (read-only) to determine:
+- Python tooling (flake8/black, mypy/pyright)
+- Web framework conventions (FastAPI, Flask, etc.)
 - Database migration patterns (alembic/migrations)
 - Existing security utilities and patterns (auth middleware, permission checks, validators)
 - Existing dependencies (to comply with “no new libs”)

@@ -101,9 +101,9 @@ function _render(article, f) {
     </dl>
 
     <div class="mt-4">
-      <button type="button" class="btn btn-primary" data-action="download" aria-label="Download ${escapeHtml(f.form_number || '')}${ft ? ` (${escapeHtml(ft)})` : ''}">
+      ${f.file ? `<button type="button" class="btn btn-primary" data-action="download" aria-label="Download ${escapeHtml(f.form_number || '')}${ft ? ` (${escapeHtml(ft)})` : ''}">
         Download form
-      </button>
+      </button>` : ''}
     </div>
   `;
 

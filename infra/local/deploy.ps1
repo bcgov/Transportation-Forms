@@ -115,6 +115,13 @@ try {
     $initialAdminEmailFile = Write-HelmValueFile "initial-admin-email.txt" ([System.Environment]::GetEnvironmentVariable("INITIAL_ADMIN_EMAIL"))
     $publicBaseUrlFile = Write-HelmValueFile "public-base-url.txt" "http://forms-public.localhost"
 
+    # FEAT-0005 Gap A: NGINX /internal-s3/ proxy_pass needs <endpoint>/<bucket>
+    # (path-style addressing). Concat the two .env values into a single file
+    # so `--set-file` keeps the value out of process args / shell history.
+    $s3EndpointRaw = [System.Environment]::GetEnvironmentVariable("S3_ENDPOINT_URL").TrimEnd('/')
+    $s3BucketRaw   = [System.Environment]::GetEnvironmentVariable("S3_BUCKET").Trim('/')
+    $s3InternalUpstreamFile = Write-HelmValueFile "s3-internal-upstream.txt" "$s3EndpointRaw/$s3BucketRaw"
+
     Write-Host "==> Deploying application with Helm..."
     Invoke-CheckedCommand "helm" @(
         "upgrade", "--install", $ReleaseName, $Chart,
@@ -139,7 +146,7 @@ try {
         "--set-file", "backend.secrets.keycloakClientSecret=$keycloakClientSecretFile",
         "--set-file", "backend.secrets.keycloakRedirectUri=$keycloakRedirectUriFile",
         "--set-file", "backend.secrets.initialAdminEmail=$initialAdminEmailFile",
-        "--set-file", "public-frontend.s3.internalUpstream=$s3EndpointFile",
+        "--set-file", "public-frontend.s3.internalUpstream=$s3InternalUpstreamFile",
         "--set-file", "public-frontend.publicBaseUrl=$publicBaseUrlFile",
         "--set-file", "public-backend.publicBaseUrl=$publicBaseUrlFile",
         "--set-string", "public-backend.resources.app.limits.memory=512Mi",

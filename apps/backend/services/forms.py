@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, asc, text
+from sqlalchemy import desc, asc, text, func as sa_func
 from sqlalchemy.exc import OperationalError
 
 from backend.models import (
@@ -16,6 +16,7 @@ from backend.models import (
     FormWorkflow,
     AuditLog,
     FormNumberReservation,
+    FormVersion,
 )
 from backend.services import s3_service
 
@@ -479,6 +480,28 @@ class FormService:
         if "business_area_id" in kwargs:
             form.business_area_id = kwargs["business_area_id"]
 
+        # FEAT-0005 BUGFIX (2026-06-11): when the attachment changes on an
+        # already-published form, the `form_versions` row that backs the
+        # ``public_forms_v`` database view becomes stale (its s3_key now
+        # points at the deleted S3 object).  The public download endpoint
+        # then resolves a key that no longer exists → NGINX returns 404.
+        #
+        # Re-sync the current FormVersion so the public-portal download
+        # path always reflects the latest attachment.  No-op when the form
+        # is not published or when the attachment field was not part of
+        # this update.
+        _attachment_fields_changed = bool(
+            {"form_attachment_url", "form_source", "form_attachment_filename", "file_type"}
+            & set(kwargs.keys())
+        )
+        if _attachment_fields_changed and form.status == "published":
+            if form.form_source == "Download" and form.form_attachment_url:
+                FormService._sync_form_version(db, form, updated_by_id)
+            else:
+                # Attachment cleared OR source switched away from Download →
+                # retire any current FormVersion so /file returns 404 cleanly.
+                FormService._retire_current_form_version(db, form)
+
         db.commit()
         db.refresh(form)
 
@@ -627,6 +650,10 @@ class FormService:
                 },
             )
         )
+
+        # Sync FormVersion so public_forms_v can resolve the file for download.
+        if to_status == "published":
+            FormService._sync_form_version(db, form, triggered_by_id)
 
         db.commit()
         db.refresh(form)
@@ -908,6 +935,100 @@ class FormService:
 
         match = re.search(r"(uploads/[^?#]+)", url)
         return match.group(1) if match else None
+
+    @staticmethod
+    def _sync_form_version(db: Session, form: Form, uploaded_by_id: UUID) -> None:
+        """Create or reactivate a ``form_versions`` row when a form is published.
+
+        The ``public_forms_v`` DB view resolves file metadata from
+        ``form_versions`` (``is_current = True``), not from
+        ``forms.form_attachment_url``.  This method bridges that gap by
+        ensuring a current ``FormVersion`` row always exists for any
+        ``Download``-source form when it enters the ``published`` state.
+
+        Edge-cases handled:
+        * First publish          → insert a new ``FormVersion`` row.
+        * Re-publish, same file  → reactivate the existing row (avoids the
+                                   ``s3_key`` unique-constraint violation).
+        * Re-publish, new file   → retire the old current row, insert fresh.
+        * Non-Download forms     → no-op (form_source != 'Download').
+        """
+        if form.form_source != "Download" or not form.form_attachment_url:
+            return
+
+        object_key = FormService._extract_s3_object_key(form.form_attachment_url)
+        if not object_key:
+            return
+
+        # If a FormVersion with this exact S3 key already exists for this form,
+        # simply re-flag it as current to avoid the unique-constraint on s3_key.
+        existing_fv = (
+            db.query(FormVersion)
+            .filter(
+                FormVersion.form_id == form.id,
+                FormVersion.s3_key == object_key,
+                FormVersion.deleted_at.is_(None),
+            )
+            .first()
+        )
+
+        if existing_fv:
+            # Retire any *other* current version for this form.
+            db.query(FormVersion).filter(
+                FormVersion.form_id == form.id,
+                FormVersion.s3_key != object_key,
+                FormVersion.is_current.is_(True),
+                FormVersion.deleted_at.is_(None),
+            ).update({"is_current": False}, synchronize_session=False)
+            existing_fv.is_current = True
+            db.flush()
+            return
+
+        # Retire any existing current version before inserting the new one.
+        db.query(FormVersion).filter(
+            FormVersion.form_id == form.id,
+            FormVersion.is_current.is_(True),
+            FormVersion.deleted_at.is_(None),
+        ).update({"is_current": False}, synchronize_session=False)
+
+        max_ver = (
+            db.query(sa_func.max(FormVersion.version_number))
+            .filter(FormVersion.form_id == form.id)
+            .scalar()
+        ) or 0
+
+        file_size = s3_service.get_object_size(object_key)
+        fv = FormVersion(
+            form_id=form.id,
+            version_number=max_ver + 1,
+            s3_key=object_key,
+            file_name=form.form_attachment_filename or object_key.split("/")[-1],
+            file_size=file_size,
+            file_type=form.file_type or "unknown",
+            is_current=True,
+            uploaded_by_id=uploaded_by_id,
+        )
+        db.add(fv)
+        db.flush()
+
+    @staticmethod
+    def _retire_current_form_version(db: Session, form: Form) -> None:
+        """Mark every current ``FormVersion`` for ``form`` as no longer current.
+
+        Used when a published form's attachment is *removed* (or its
+        ``form_source`` changes away from ``Download``) so that the
+        ``public_forms_v`` DB view stops resolving a stale ``s3_key``.
+
+        This is a soft retire (``is_current = False``).  The history row is
+        retained for auditability; the public download endpoint will then
+        return 404 (no attached file) for the form.
+        """
+        db.query(FormVersion).filter(
+            FormVersion.form_id == form.id,
+            FormVersion.is_current.is_(True),
+            FormVersion.deleted_at.is_(None),
+        ).update({"is_current": False}, synchronize_session=False)
+        db.flush()
 
     @staticmethod
     def _audit_log(

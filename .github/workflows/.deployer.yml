@@ -189,7 +189,7 @@ jobs:
               --set backend.secrets.keycloakClientSecret="${{ secrets.keycloak_client_secret }}" \
               --set backend.secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
               --set backend.secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
-              --set "public-frontend.s3.internalUpstream=${{ secrets.s3_endpoint_url }}" \
+              --set "public-frontend.s3.internalUpstream=${{ secrets.s3_endpoint_url }}/${{ secrets.s3_bucket }}" \
               --set "public-frontend.publicBaseUrl=${{ inputs.public_forms_base_url }}" \
               --set "public-backend.publicBaseUrl=${{ inputs.public_forms_base_url }}" \
               ${{ inputs.params }} \
