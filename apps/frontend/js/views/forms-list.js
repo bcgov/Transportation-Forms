@@ -527,7 +527,7 @@ async function _viewForm(formId) {
         if (downloadBtn) {
             downloadBtn.addEventListener('click', () => {
                 _downloadFormAttachment(downloadBtn.dataset.formId, form.form_attachment_filename);
-            }, { once: true });
+            });
         }
 
         // eslint-disable-next-line no-undef
