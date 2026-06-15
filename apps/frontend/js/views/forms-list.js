@@ -520,8 +520,8 @@ async function _viewForm(formId) {
             </dl>
         `;
 
-        // Wire download-attachment button (uses fetch to get a pre-signed URL,
-        // avoiding the problem of navigating to a raw S3 object key).
+        // Wire download-attachment button (streams the bytes from the admin API
+        // to avoid navigating directly to a raw S3 object key).
         const downloadBtn = document.getElementById('formModalBody')
             ?.querySelector('[data-action="download-attachment"]');
         if (downloadBtn) {
