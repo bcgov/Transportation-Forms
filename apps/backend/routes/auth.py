@@ -395,6 +395,7 @@ async def auth_callback(
                 "email": str(user.email),
                 "name": user_full_name,
                 "roles": role_names,
+                "permissions": all_permissions,
             },
         )
 
