@@ -12,6 +12,7 @@ import {
   isAuthenticated,
   isAdminUser,
   hasPortalRoles,
+  hasPermission,
   updateAuthUi,
   handleAuthCallback,
   startLogin,
@@ -68,6 +69,9 @@ export function hideAllViews() {
     'usersView',
     'userDetailView',
     'accessRequestsView',
+    'businessAreasView',
+    'businessAreaCreateView',
+    'businessAreaDetailView',
     'prefixesView',
     'prefixCreateView',
     'prefixDetailView',
@@ -94,6 +98,7 @@ const _ROUTE_LINK_MAP = {
   users: 'usersLink',
   'user-detail': 'usersLink',
   'access-requests': 'accessRequestsLink',
+  'business-areas': 'businessAreasLink',
   prefixes: 'prefixesLink',
   'prefix-create': 'prefixesLink',
   'prefix-detail': 'prefixesLink',
@@ -130,6 +135,8 @@ export function isAdminRoute(path) {
     path.startsWith('/users/') ||
     path === ROUTES.ACCESS_REQUESTS ||
     path.startsWith('/access-requests/') ||
+    path === ROUTES.BUSINESS_AREAS ||
+    path.startsWith('/business-areas/') ||
     path === ROUTES.PREFIXES ||
     path === ROUTES.PREFIX_CREATE ||
     path.startsWith('/prefixes/')
@@ -163,15 +170,22 @@ export async function routeHandler(path, params = {}) {
   }
 
   // ── Admin guard ───────────────────────────────────────────────────────────
-  if (isAuthenticated() && isAdminRoute(path) && !isAdminUser()) {
-    showAlert('You do not have permission to access that page.', 'warning');
-    window.history.replaceState({}, '', ROUTES.HOME);
-    _currentRoute = 'list';
-    _routeParams = {};
-    const { showListView } = await import('./views/list.js');
-    await showListView();
-    updateNavbar();
-    return;
+  if (isAuthenticated() && isAdminRoute(path)) {
+    const isBusinessAreaRoute = path === ROUTES.BUSINESS_AREAS || path.startsWith('/business-areas/');
+    const canManageBA = hasPermission('business_area:create') || hasPermission('business_area:edit') || hasPermission('business_area:manage');
+    
+    const isAllowed = isAdminUser() || (isBusinessAreaRoute && canManageBA);
+    
+    if (!isAllowed) {
+      showAlert('You do not have permission to access that page.', 'warning');
+      window.history.replaceState({}, '', ROUTES.HOME);
+      _currentRoute = 'list';
+      _routeParams = {};
+      const { showListView } = await import('./views/list.js');
+      await showListView();
+      updateNavbar();
+      return;
+    }
   }
 
   // ── Route dispatch ─────────────────────────────────────────────────────────
@@ -269,6 +283,33 @@ export async function routeHandler(path, params = {}) {
     _routeParams = {};
     const { showAccessRequestsView } = await import('./views/access-requests.js');
     await showAccessRequestsView();
+
+  } else if (path === ROUTES.BUSINESS_AREAS) {
+    _currentRoute = 'business-areas';
+    _routeParams = {};
+    const { showBusinessAreasAdminView } = await import('./views/admin/business-areas.js');
+    await showBusinessAreasAdminView();
+
+  } else if (path.startsWith('/business-areas/')) {
+    const areaId = path.replace('/business-areas/', '').replace(/\/$/, '');
+    if (areaId && areaId === 'new') {
+        _currentRoute = 'business-area-create';
+        _routeParams = {};
+        const { showBusinessAreaCreateView } = await import('./views/admin/business-areas.js');
+        await showBusinessAreaCreateView();
+    } else if (areaId) {
+        _currentRoute = 'business-area-detail';
+        _routeParams = { areaId };
+        const { showBusinessAreaDetailView } = await import('./views/admin/business-areas.js');
+        await showBusinessAreaDetailView(areaId);
+    } else {
+        // Trailing slash with no ID: treat as the list view.
+        window.history.replaceState({}, '', ROUTES.BUSINESS_AREAS);
+        _currentRoute = 'business-areas';
+        _routeParams = {};
+        const { showBusinessAreasAdminView } = await import('./views/admin/business-areas.js');
+        await showBusinessAreasAdminView();
+    }
 
   } else if (path.startsWith('/reservations/')) {
     const reservationId = path.replace('/reservations/', '');

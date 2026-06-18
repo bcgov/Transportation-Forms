@@ -68,7 +68,6 @@ LEFT JOIN form_number_reservations fnr
 LEFT JOIN business_areas ba
     ON f.business_area_id = ba.id
    AND ba.deleted_at IS NULL
-   AND ba.is_active = True
 LEFT JOIN form_versions fv
     ON fv.form_id = f.id
    AND fv.is_current = True
@@ -177,7 +176,7 @@ def creator(db: Session) -> User:
 
 
 def _make_ba(db: Session, *, name: str) -> BusinessArea:
-    ba = BusinessArea(id=uuid.uuid4(), name=name, is_active=True)
+    ba = BusinessArea(id=uuid.uuid4(), name=name)
     db.add(ba)
     db.flush()
     return ba
