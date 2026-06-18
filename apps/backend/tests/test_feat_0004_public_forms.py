@@ -738,7 +738,7 @@ class TestDatabaseView:
         assert resp.json()["items"][0]["business_area"] is None
 
     def test_view_inactive_ba_is_null(self, public_client, db, _creator):
-        pass
+        pytest.skip("BusinessArea.is_active has been removed; inactive business areas are no longer a supported state.")
 
     def test_view_deleted_ba_is_null(self, public_client, db, _creator):
         ba = _make_ba(db, name="Del BA",
