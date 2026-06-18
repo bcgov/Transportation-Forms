@@ -486,7 +486,7 @@ class TestListPublicForms:
     def test_form_with_inactive_ba_has_null_business_area(
         self, public_client, db, _creator
     ):
-        pass
+        pytest.skip("BusinessArea.is_active has been removed; inactive business areas are no longer a supported state.")
 
     def test_form_with_deleted_ba_has_null_business_area(
         self, public_client, db, _creator
