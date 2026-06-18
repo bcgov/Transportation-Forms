@@ -340,7 +340,10 @@ export function updateAuthUi() {
       const mainNavLinks = document.getElementById('mainNavLinks');
       if (mainNavLinks) mainNavLinks.style.display = '';
       if (navAccordion) navAccordion.style.display = '';
-      if (adminAccordionItem) adminAccordionItem.style.display = isAdminUser() ? '' : 'none';
+        const canManageBA = hasPermission('business_area:create') || hasPermission('business_area:edit') || hasPermission('business_area:manage') || isAdminUser();
+        if (adminAccordionItem) adminAccordionItem.style.display = canManageBA ? '' : 'none';
+        const baLink = document.getElementById('businessAreasLink');
+        if (baLink) baLink.style.display = canManageBA ? '' : 'none';
     } else {
       if (navDropdownContainer) navDropdownContainer.style.display = 'none';
       const mainNavLinks = document.getElementById('mainNavLinks');

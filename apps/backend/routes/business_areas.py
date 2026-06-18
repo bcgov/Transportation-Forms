@@ -25,9 +25,6 @@ class BusinessAreaResponse(BaseModel):
 
     id: str
     name: str
-    description: str | None
-    sort_order: int
-    is_active: bool
 
 # ============================================================================
 # Router
@@ -53,10 +50,9 @@ async def list_business_areas(
     areas = (
         db.query(BusinessArea)
         .filter(
-            BusinessArea.is_active.is_(True),
             BusinessArea.deleted_at.is_(None),
         )
-        .order_by(BusinessArea.sort_order, BusinessArea.name)
+        .order_by(BusinessArea.name)
         .all()
     )
 
@@ -64,9 +60,6 @@ async def list_business_areas(
         BusinessAreaResponse(
             id=str(area.id),
             name=area.name,
-            description=area.description,
-            sort_order=area.sort_order,
-            is_active=area.is_active,
         )
         for area in areas
     ]

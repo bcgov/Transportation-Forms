@@ -489,7 +489,6 @@ LEFT JOIN form_number_reservations fnr
 LEFT JOIN business_areas ba
     ON f.business_area_id = ba.id
    AND ba.deleted_at IS NULL
-   AND ba.is_active = True
 LEFT JOIN form_versions fv
     ON fv.form_id = f.id
    AND fv.is_current = True
@@ -571,7 +570,7 @@ def _og_seed(
     is_public=True,
 ):
     """Seed the minimum rows needed to exercise /forms/{n}/og."""
-    ba = BusinessArea(id=uuid.uuid4(), name=f"OG BA {uuid.uuid4().hex[:4]}", is_active=True)
+    ba = BusinessArea(id=uuid.uuid4(), name=f"OG BA {uuid.uuid4().hex[:4]}")
     db.add(ba)
     db.flush()
 

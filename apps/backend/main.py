@@ -22,6 +22,7 @@ from backend.routes import (
     access_requests,
     admin_users,
 )
+from backend.routes.business_areas_admin import router as business_areas_admin_router
 from backend.routes.prefixes import public_router as prefixes_public_router
 from backend.routes.prefixes import admin_router as prefixes_admin_router
 from backend.routes.reservations import router as reservations_router
@@ -34,6 +35,21 @@ logger = structlog.get_logger()
 # Initialise S3 object storage bucket on startup (idempotent — safe to run every boot)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Seed default roles so that any new permissions added to DEFAULT_ROLES are
+    # reflected in the database without requiring a manual migration step.
+    try:
+        from backend.database import SessionLocal
+        from backend.seeds.default_roles import seed_default_roles
+
+        db = SessionLocal()
+        try:
+            seed_default_roles(db)
+            logger.info("default_roles_seeded")
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("default_roles_seed_failed", error=str(exc))
+
     try:
         import anyio
 
@@ -114,6 +130,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(forms.router, prefix="/api/v1")
 app.include_router(workflow.router, prefix="/api/v1")
 app.include_router(business_areas.router, prefix="/api/v1")
+app.include_router(business_areas_admin_router, prefix="/api/v1")
 app.include_router(roles.router, prefix="/api/v1")
 app.include_router(access_requests.router, prefix="/api/v1")
 app.include_router(admin_users.router, prefix="/api/v1")

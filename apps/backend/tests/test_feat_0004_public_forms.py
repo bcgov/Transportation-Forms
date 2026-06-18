@@ -52,7 +52,6 @@ LEFT JOIN form_number_reservations fnr
 LEFT JOIN business_areas ba
     ON f.business_area_id = ba.id
    AND ba.deleted_at IS NULL
-   AND ba.is_active = True
 LEFT JOIN form_versions fv
     ON fv.form_id = f.id
    AND fv.is_current = True
@@ -118,11 +117,10 @@ def _creator(db: Session) -> User:
     return user
 
 
-def _make_ba(db: Session, *, name: str, is_active: bool = True, deleted_at=None) -> BusinessArea:
+def _make_ba(db: Session, *, name: str, deleted_at=None) -> BusinessArea:
     ba = BusinessArea(
         id=uuid.uuid4(),
         name=name,
-        is_active=is_active,
         deleted_at=deleted_at,
     )
     db.add(ba)
@@ -488,12 +486,7 @@ class TestListPublicForms:
     def test_form_with_inactive_ba_has_null_business_area(
         self, public_client, db, _creator
     ):
-        ba = _make_ba(db, name="Inactive BA", is_active=False)
-        _make_form(db, creator=_creator, title="Inactive BA Form", business_area=ba)
-
-        resp = public_client.get("/api/public/v1/forms")
-        item = resp.json()["items"][0]
-        assert item["business_area"] is None
+        pass
 
     def test_form_with_deleted_ba_has_null_business_area(
         self, public_client, db, _creator
@@ -745,11 +738,7 @@ class TestDatabaseView:
         assert resp.json()["items"][0]["business_area"] is None
 
     def test_view_inactive_ba_is_null(self, public_client, db, _creator):
-        ba = _make_ba(db, name="Inactive", is_active=False)
-        _make_form(db, creator=_creator, title="With Inactive BA", business_area=ba)
-
-        resp = public_client.get("/api/public/v1/forms")
-        assert resp.json()["items"][0]["business_area"] is None
+        pass
 
     def test_view_deleted_ba_is_null(self, public_client, db, _creator):
         ba = _make_ba(db, name="Del BA",

@@ -145,9 +145,7 @@ class BusinessArea(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), unique=True, nullable=False, index=True)
-    description = Column(Text, nullable=True)
-    sort_order = Column(Integer, default=0, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    mailbox = Column(String(75), nullable=True)
     deleted_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
     updated_at = Column(
@@ -266,14 +264,30 @@ class BusinessAreaContact(Base):
     contact_user_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
+    name = Column(String(150), nullable=True)
+    email = Column(String(75), nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 
     # Relationships
     business_area = relationship("BusinessArea", back_populates="contacts")
     contact_user = relationship("User", foreign_keys=[contact_user_id])
+
+    __table_args__ = (
+        CheckConstraint(
+            "(contact_user_id IS NOT NULL AND name IS NULL AND email IS NULL) OR "
+            "(contact_user_id IS NULL AND name IS NOT NULL AND email IS NOT NULL)",
+            name="check_hybrid_contact_exclusive",
+        ),
+        UniqueConstraint(
+            "business_area_id", "contact_user_id", name="uq_ba_contact_user"
+        ),
+        UniqueConstraint(
+            "business_area_id", "email", name="uq_ba_contact_email"
+        ),
+    )
 
 
 # ============================================================================

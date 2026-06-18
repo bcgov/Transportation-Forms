@@ -30,7 +30,19 @@ async def root():
 @app.get("/approvals")
 @app.get("/my-reservations")
 @app.get("/edit/{form_id}")
-async def spa_routes(form_id: str = ""):
+@app.get("/dashboard")
+@app.get("/roles")
+@app.get("/roles/{role_id}")
+@app.get("/users")
+@app.get("/users/{user_id}")
+@app.get("/access-requests")
+@app.get("/business-areas")
+@app.get("/business-areas/new")
+@app.get("/business-areas/{area_id}")
+@app.get("/prefixes")
+@app.get("/prefixes/new")
+@app.get("/prefixes/{prefix_id}")
+async def spa_routes(form_id: str = "", role_id: str = "", user_id: str = "", area_id: str = "", prefix_id: str = ""):
     """Serve the SPA index page for client-side routes."""
     index_path = os.path.join(frontend_dir, "index.html")
     if os.path.exists(index_path):

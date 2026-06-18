@@ -22,6 +22,7 @@ export const ROUTES = {
   USERS: '/users',
   USER_DETAIL: '/users/:id',
   ACCESS_REQUESTS: '/access-requests',
+  BUSINESS_AREAS: '/business-areas',
   PREFIXES: '/prefixes',
   PREFIX_CREATE: '/prefixes/new',
   PREFIX_DETAIL: '/prefixes/:id',

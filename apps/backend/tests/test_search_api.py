@@ -42,9 +42,6 @@ def _create_business_area(db, name: str) -> BusinessArea:
     area = BusinessArea(
         id=uuid.uuid4(),
         name=name,
-        description=f"{name} area",
-        sort_order=0,
-        is_active=True,
     )
     db.add(area)
     db.flush()
