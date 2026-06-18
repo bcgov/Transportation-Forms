@@ -285,6 +285,14 @@ async def add_contact(
     current_user: TokenData = Depends(get_current_user),
     _=Depends(require_permission("business_areas", "update")),
 ):
+    area = (
+        db.query(BusinessArea)
+        .filter(BusinessArea.id == area_id, BusinessArea.deleted_at.is_(None))
+        .first()
+    )
+    if not area:
+        raise HTTPException(status_code=404, detail="Business Area not found")
+
     if req.contact_user_id:
         existing = db.query(BusinessAreaContact).filter(
             BusinessAreaContact.business_area_id == area_id,
