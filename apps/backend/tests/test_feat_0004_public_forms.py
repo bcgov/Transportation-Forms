@@ -486,10 +486,14 @@ class TestListPublicForms:
     def test_form_with_inactive_ba_has_null_business_area(
         self, public_client, db, _creator
     ):
+<<<<<<< HEAD
         pytest.skip(
             "FEAT-0025 removed BusinessArea.is_active; the inactive state "
             "no longer exists. See test_form_with_deleted_ba_has_null_business_area."
         )
+=======
+        pytest.skip("BusinessArea.is_active has been removed; inactive business areas are no longer a supported state.")
+>>>>>>> 72487811ee56153e46aa1c347508de8e6602f319
 
     def test_form_with_deleted_ba_has_null_business_area(
         self, public_client, db, _creator
@@ -741,10 +745,14 @@ class TestDatabaseView:
         assert resp.json()["items"][0]["business_area"] is None
 
     def test_view_inactive_ba_is_null(self, public_client, db, _creator):
+<<<<<<< HEAD
         pytest.skip(
             "FEAT-0025 removed BusinessArea.is_active; the inactive state "
             "no longer exists. See test_view_deleted_ba_is_null."
         )
+=======
+        pytest.skip("BusinessArea.is_active has been removed; inactive business areas are no longer a supported state.")
+>>>>>>> 72487811ee56153e46aa1c347508de8e6602f319
 
     def test_view_deleted_ba_is_null(self, public_client, db, _creator):
         ba = _make_ba(db, name="Del BA",
