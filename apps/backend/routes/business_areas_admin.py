@@ -14,7 +14,6 @@ from backend.models import BusinessArea, BusinessAreaContact, Form
 from backend.auth.authorization import require_permission
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-import re
 
 router = APIRouter(
     prefix="/admin/business-areas",
