@@ -418,7 +418,7 @@ function _renderContactsTable(contacts, canEdit = true) {
               <td>${escapeHtml(c.name || '-')}</td>
               <td>${escapeHtml(c.email || '-')}</td>
               ${canEdit ? `<td class="text-end">
-                 <button class="btn btn-sm btn-outline-danger" data-action="remove-contact" data-id="${c.id}"><i class="fas fa-times"></i> Remove</button>
+                 <button class="btn btn-sm btn-outline-danger" data-action="remove-contact" data-id="${escapeHtml(c.id)}"><i class="fas fa-times"></i> Remove</button>
               </td>` : ''}
             </tr>`,
             )
