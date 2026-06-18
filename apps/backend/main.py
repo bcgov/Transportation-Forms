@@ -32,24 +32,16 @@ from backend.routes.stats import router as stats_router
 logger = structlog.get_logger()
 
 
-# Initialise S3 object storage bucket on startup (idempotent — safe to run every boot)
+# Initialise S3 object storage bucket on startup (idempotent — safe to run every boot).
+#
+# Note: default role/permission seeding is intentionally NOT performed here.
+# Seeding writes are owned by the migrations job (see
+# ``apps/backend/migrations/entrypoint.sh``) so that:
+#   * failures fail the deployment fast instead of being silently logged
+#   * request-serving pods don't compete for write access on boot
+#   * startup latency is bounded and unrelated to schema/role drift
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # Seed default roles so that any new permissions added to DEFAULT_ROLES are
-    # reflected in the database without requiring a manual migration step.
-    try:
-        from backend.database import SessionLocal
-        from backend.seeds.default_roles import seed_default_roles
-
-        db = SessionLocal()
-        try:
-            seed_default_roles(db)
-            logger.info("default_roles_seeded")
-        finally:
-            db.close()
-    except Exception as exc:
-        logger.warning("default_roles_seed_failed", error=str(exc))
-
     try:
         import anyio
 

@@ -171,11 +171,24 @@ export async function routeHandler(path, params = {}) {
 
   // ── Admin guard ───────────────────────────────────────────────────────────
   if (isAuthenticated() && isAdminRoute(path)) {
-    const isBusinessAreaRoute = path === ROUTES.BUSINESS_AREAS || path.startsWith('/business-areas/');
-    const canManageBA = hasPermission('business_area:create') || hasPermission('business_area:edit') || hasPermission('business_area:manage');
-    
-    const isAllowed = isAdminUser() || (isBusinessAreaRoute && canManageBA);
-    
+    // Business Area admin pages are accessible to non-admin users that hold
+    // the matching backend permission. Mirror the API contract precisely so
+    // the SPA never surfaces a page the API will subsequently 403:
+    //   * /business-areas/new           → business_area:create
+    //   * /business-areas, /business-areas/{id} → business_area:manage
+    const isBusinessAreaCreateRoute = path === `${ROUTES.BUSINESS_AREAS}/new`;
+    const isBusinessAreaListOrDetail =
+      !isBusinessAreaCreateRoute &&
+      (path === ROUTES.BUSINESS_AREAS || path.startsWith('/business-areas/'));
+
+    const canCreateBA = hasPermission('business_area:create');
+    const canManageBA = hasPermission('business_area:manage');
+
+    const isAllowed =
+      isAdminUser() ||
+      (isBusinessAreaCreateRoute && canCreateBA) ||
+      (isBusinessAreaListOrDetail && canManageBA);
+
     if (!isAllowed) {
       showAlert('You do not have permission to access that page.', 'warning');
       window.history.replaceState({}, '', ROUTES.HOME);
