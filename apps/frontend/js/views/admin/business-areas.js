@@ -407,7 +407,7 @@ function _renderLinkedFormsTable(forms) {
             .map(
               f => `
             <tr>
-              <td><a href="/edit/${f.id}" target="_blank">${escapeHtml(f.form_number)}</a></td>
+              <td><a href="/edit/${f.id}" target="_blank" rel="noopener noreferrer">${escapeHtml(f.form_number)}</a></td>
               <td>${escapeHtml(f.title)}</td>
               <td><span class="badge bg-info">${escapeHtml(f.status)}</span></td>
             </tr>`,
