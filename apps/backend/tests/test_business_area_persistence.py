@@ -55,8 +55,7 @@ def business_area(db):
     ba = BusinessArea(
         id=uuid.uuid4(),
         name=f"Highways-{uuid.uuid4().hex[:6]}",
-        description="Test business area",
-        is_active=True,
+        mailbox="test@example.com",
     )
     db.add(ba)
     db.flush()

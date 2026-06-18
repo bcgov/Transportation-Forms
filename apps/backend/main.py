@@ -22,6 +22,7 @@ from backend.routes import (
     access_requests,
     admin_users,
 )
+from backend.routes.business_areas_admin import router as business_areas_admin_router
 from backend.routes.prefixes import public_router as prefixes_public_router
 from backend.routes.prefixes import admin_router as prefixes_admin_router
 from backend.routes.reservations import router as reservations_router
@@ -31,7 +32,14 @@ from backend.routes.stats import router as stats_router
 logger = structlog.get_logger()
 
 
-# Initialise S3 object storage bucket on startup (idempotent — safe to run every boot)
+# Initialise S3 object storage bucket on startup (idempotent — safe to run every boot).
+#
+# Note: default role/permission seeding is intentionally NOT performed here.
+# Seeding writes are owned by the migrations job (see
+# ``apps/backend/migrations/entrypoint.sh``) so that:
+#   * failures fail the deployment fast instead of being silently logged
+#   * request-serving pods don't compete for write access on boot
+#   * startup latency is bounded and unrelated to schema/role drift
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     try:
@@ -114,6 +122,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(forms.router, prefix="/api/v1")
 app.include_router(workflow.router, prefix="/api/v1")
 app.include_router(business_areas.router, prefix="/api/v1")
+app.include_router(business_areas_admin_router, prefix="/api/v1")
 app.include_router(roles.router, prefix="/api/v1")
 app.include_router(access_requests.router, prefix="/api/v1")
 app.include_router(admin_users.router, prefix="/api/v1")

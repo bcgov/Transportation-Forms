@@ -340,7 +340,39 @@ export function updateAuthUi() {
       const mainNavLinks = document.getElementById('mainNavLinks');
       if (mainNavLinks) mainNavLinks.style.display = '';
       if (navAccordion) navAccordion.style.display = '';
-      if (adminAccordionItem) adminAccordionItem.style.display = isAdminUser() ? '' : 'none';
+
+      // ── Admin link visibility ──────────────────────────────────────────
+      // Each admin link is gated on the granular permission(s) that govern
+      // the corresponding API surface. The accordion item itself is shown
+      // when the user can access *any* admin link, otherwise it is hidden
+      // so non-admin users don't see disabled/forbidden navigation entries.
+      const isAdmin = isAdminUser();
+
+      const canManageBA =
+        isAdmin ||
+        hasPermission('business_area:create') ||
+        hasPermission('business_area:edit') ||
+        hasPermission('business_area:delete') ||
+        hasPermission('business_area:manage');
+
+      const adminLinkVisibility = {
+        rolesLink: isAdmin,
+        usersLink: isAdmin,
+        accessRequestsLink: isAdmin,
+        prefixesLink: isAdmin,
+        businessAreasLink: canManageBA,
+      };
+
+      let anyAdminLinkVisible = false;
+      for (const [linkId, visible] of Object.entries(adminLinkVisibility)) {
+        const el = document.getElementById(linkId);
+        if (el) el.style.display = visible ? '' : 'none';
+        if (visible) anyAdminLinkVisible = true;
+      }
+
+      if (adminAccordionItem) {
+        adminAccordionItem.style.display = anyAdminLinkVisible ? '' : 'none';
+      }
     } else {
       if (navDropdownContainer) navDropdownContainer.style.display = 'none';
       const mainNavLinks = document.getElementById('mainNavLinks');
