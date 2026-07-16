@@ -27,6 +27,8 @@ from backend.routes.prefixes import public_router as prefixes_public_router
 from backend.routes.prefixes import admin_router as prefixes_admin_router
 from backend.routes.reservations import router as reservations_router
 from backend.routes.stats import router as stats_router
+from backend.routes.cms_pages import admin_router as cms_pages_admin_router
+from backend.routes.cms_redirects import admin_router as cms_redirects_admin_router
 
 # Configure logging
 logger = structlog.get_logger()
@@ -138,6 +140,8 @@ app.include_router(prefixes_public_router, prefix="/api/v1")
 app.include_router(prefixes_admin_router, prefix="/api/v1")
 app.include_router(reservations_router, prefix="/api/v1")
 app.include_router(stats_router, prefix="/api/v1")
+app.include_router(cms_pages_admin_router, prefix="/api/v1")
+app.include_router(cms_redirects_admin_router, prefix="/api/v1")
 
 
 @app.get("/{path:path}")

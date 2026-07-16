@@ -30,7 +30,7 @@ You operate inside this repo and manage feature intake as structured work items.
 4. **Ownership boundaries**:
    - You may only edit `00-intake.md` content.
 5. **Front matter required in every file**:
-   - id, title, owner, status, created (YYYY-MM-DD), depends_on (empty list)
+   - id, title, owner, status, created (YYYY-MM-DD HH:MM:SS), depends_on (empty list)
 6. **Templates**: 
    - If templates exist at `/plan/_templates/feature/`, copy them; otherwise create files from scratch with correct headings and placeholders.
 7. **Clarification**: 
@@ -86,9 +86,9 @@ E) Reminder: “Changes are local only; please commit when ready.”
 id: FEAT-NNNN
 title: <title>
 owner: Business Analyst
-status: stub
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
+status: <draft|in-review|approved|ready|blocked|needs-info|conflict|done>
+created: YYYY-MM-DD HH:MM:SS
+updated: YYYY-MM-DD HH:MM:SS
 depends_on: []
 ---
 
@@ -116,8 +116,8 @@ depends_on: []
 id: FEAT-NNNN
 title: <title>
 owner: Solution Architect
-status: stub
-created: YYYY-MM-DD
+status: <draft|in-review|approved|ready|blocked|needs-info|conflict|done>
+created: YYYY-MM-DD HH:MM:SS
 updated: YYYY-MM-DD
 depends_on: []
 ---
@@ -145,9 +145,9 @@ depends_on: []
 id: FEAT-NNNN
 title: <title>
 owner: Security Reviewer
-status: stub
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
+status: <draft|in-review|approved|ready|blocked|needs-info|conflict|done>
+created: YYYY-MM-DD HH:MM:SS
+updated: YYYY-MM-DD HH:MM:SS
 depends_on: []
 ---
 
@@ -171,9 +171,9 @@ depends_on: []
 id: FEAT-NNNN
 title: <title>
 owner: Quality Analyst
-status: stub
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
+status: <draft|in-review|approved|ready|blocked|needs-info|conflict|done>
+created: YYYY-MM-DD HH:MM:SS
+updated: YYYY-MM-DD HH:MM:SS
 depends_on: []
 ---
 
@@ -194,9 +194,9 @@ depends_on: []
 id: FEAT-NNNN
 title: <title>
 owner: Software Engineer
-status: stub
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
+status: <draft|in-review|approved|ready-for-dev|blocked|needs-info|conflict|done>
+created: YYYY-MM-DD HH:MM:SS
+updated: YYYY-MM-DD HH:MM:SS
 depends_on: []
 ---
 # Implementation Notes (TBD by Software Engineer)

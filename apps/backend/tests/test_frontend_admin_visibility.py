@@ -24,7 +24,13 @@ class TestFrontendAdminVisibilityAndGuards:
         assert "path === ROUTES.ROLES" in js
         assert "path === ROUTES.USERS" in js
         assert "path === ROUTES.ACCESS_REQUESTS" in js
-        assert "if (isAuthenticated() && isAdminRoute(path) && !isAdminUser())" in js
+        # FEAT-0025 replaced the simple `!isAdminUser()` inline check with a
+        # nested fine-grained guard that also lets Business-Area managers into
+        # the BA admin views without full admin privilege. The invariant we
+        # care about is still: authenticated non-authorised users get bounced
+        # from admin routes back to HOME.
+        assert "if (isAuthenticated() && isAdminRoute(path))" in js
+        assert "if (!isAllowed)" in js
         assert "window.history.replaceState({}, '', ROUTES.HOME);" in js
 
     def test_route_handler_supports_admin_pages_and_detail_routes(self):

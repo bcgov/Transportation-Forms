@@ -26,6 +26,10 @@ export const ROUTES = {
   PREFIXES: '/prefixes',
   PREFIX_CREATE: '/prefixes/new',
   PREFIX_DETAIL: '/prefixes/:id',
+  CMS_PAGES: '/admin/cms/pages',
+  CMS_PAGE_NEW: '/admin/cms/pages/new',
+  CMS_PAGE_EDIT: '/admin/cms/pages/:id',
+  CMS_REDIRECTS: '/admin/cms/redirects',
 };
 
 export const STATUS_LABELS = {

@@ -77,15 +77,42 @@ WHERE f.status     = 'published'
   AND f.deleted_at IS NULL;
 """
 
+# FEAT-0026 — CMS views (used by /pages, /redirects, /cms/media, sitemap).
+_CMS_PAGES_VIEW_DDL = """\
+CREATE OR REPLACE VIEW public_cms_pages_v AS
+SELECT
+    id, slug, title, meta_description, body_html,
+    show_in_nav, nav_order, updated_at
+FROM cms_pages
+WHERE deleted_at IS NULL;
+"""
+
+_CMS_REDIRECTS_VIEW_DDL = """\
+CREATE OR REPLACE VIEW public_cms_redirects_v AS
+SELECT
+    r.id AS redirect_id,
+    r.from_slug,
+    r.to_page_id,
+    p.slug AS to_slug,
+    r.created_at
+FROM cms_page_redirects r
+INNER JOIN cms_pages p ON r.to_page_id = p.id
+WHERE p.deleted_at IS NULL;
+"""
+
 
 @pytest.fixture(scope="session")
 def _public_view_v2(_test_engine):
     with _test_engine.connect() as conn:
         conn.execute(text(_VIEW_DDL_V2))
+        conn.execute(text(_CMS_PAGES_VIEW_DDL))
+        conn.execute(text(_CMS_REDIRECTS_VIEW_DDL))
         conn.commit()
     yield
     with _test_engine.connect() as conn:
-        conn.execute(text("DROP VIEW IF EXISTS public_forms_v"))
+        conn.execute(text("DROP VIEW IF EXISTS public_cms_redirects_v CASCADE"))
+        conn.execute(text("DROP VIEW IF EXISTS public_cms_pages_v CASCADE"))
+        conn.execute(text("DROP VIEW IF EXISTS public_forms_v CASCADE"))
         conn.commit()
 
 
