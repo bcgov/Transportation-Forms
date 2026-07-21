@@ -75,6 +75,10 @@ export function hideAllViews() {
     'prefixesView',
     'prefixCreateView',
     'prefixDetailView',
+    'cmsPageNewView',
+    'cmsPagesListView',
+    'cmsPageEditView',
+    'cmsRedirectsView',
   ];
   for (const id of viewIds) {
     const el = document.getElementById(id);
@@ -102,6 +106,10 @@ const _ROUTE_LINK_MAP = {
   prefixes: 'prefixesLink',
   'prefix-create': 'prefixesLink',
   'prefix-detail': 'prefixesLink',
+  'cms-page-new': 'cmsPagesLink',
+  'cms-pages-list': 'cmsPagesLink',
+  'cms-page-edit': 'cmsPagesLink',
+  'cms-redirects': 'cmsRedirectsLink',
 };
 
 /**
@@ -139,7 +147,10 @@ export function isAdminRoute(path) {
     path.startsWith('/business-areas/') ||
     path === ROUTES.PREFIXES ||
     path === ROUTES.PREFIX_CREATE ||
-    path.startsWith('/prefixes/')
+    path.startsWith('/prefixes/') ||
+    path === ROUTES.CMS_PAGES ||
+    path === ROUTES.CMS_PAGE_NEW ||
+    path.startsWith('/admin/cms/')
   );
 }
 
@@ -184,10 +195,21 @@ export async function routeHandler(path, params = {}) {
     const canCreateBA = hasPermission('business_area:create');
     const canManageBA = hasPermission('business_area:manage');
 
+    // CMS admin pages (pages + redirects) are gated on ``cms:manage`` —
+    // the same permission the backend requires (see ``routes/cms_pages.py``).
+    // Users holding this permission (e.g. the ``content_editor`` role) must
+    // be allowed through even without the full admin role.
+    const isCmsRoute =
+      path === ROUTES.CMS_PAGES ||
+      path === ROUTES.CMS_PAGE_NEW ||
+      path.startsWith('/admin/cms/');
+    const canManageCms = hasPermission('cms:manage');
+
     const isAllowed =
       isAdminUser() ||
       (isBusinessAreaCreateRoute && canCreateBA) ||
-      (isBusinessAreaListOrDetail && canManageBA);
+      (isBusinessAreaListOrDetail && canManageBA) ||
+      (isCmsRoute && canManageCms);
 
     if (!isAllowed) {
       showAlert('You do not have permission to access that page.', 'warning');
@@ -357,6 +379,33 @@ export async function routeHandler(path, params = {}) {
       _routeParams = { prefixId };
       const { showPrefixDetailView } = await import('./views/prefixes.js');
       await showPrefixDetailView(prefixId);
+    }
+
+  } else if (path === ROUTES.CMS_PAGE_NEW) {
+    _currentRoute = 'cms-page-new';
+    _routeParams = {};
+    const { showCmsPageNewView } = await import('./views/admin/cms-page-new.js');
+    await showCmsPageNewView();
+
+  } else if (path === ROUTES.CMS_PAGES) {
+    _currentRoute = 'cms-pages-list';
+    _routeParams = {};
+    const { showCmsPagesListView } = await import('./views/admin/cms-pages.js');
+    await showCmsPagesListView();
+
+  } else if (path === ROUTES.CMS_REDIRECTS) {
+    _currentRoute = 'cms-redirects';
+    _routeParams = {};
+    const { showCmsRedirectsView } = await import('./views/admin/cms-redirects.js');
+    await showCmsRedirectsView();
+
+  } else if (path.startsWith('/admin/cms/pages/')) {
+    const pageId = path.replace('/admin/cms/pages/', '');
+    if (pageId && pageId !== 'new') {
+      _currentRoute = 'cms-page-edit';
+      _routeParams = { pageId };
+      const { showCmsPageEditView } = await import('./views/admin/cms-page-edit.js');
+      await showCmsPageEditView(pageId);
     }
 
   } else {

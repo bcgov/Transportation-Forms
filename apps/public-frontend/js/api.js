@@ -106,3 +106,63 @@ export function downloadFormFile(formNumber) {
 
 /** Test-only: clear the in-memory ETag cache. */
 export function _clearEtagCache() { _etagCache.clear(); }
+
+
+// ---------------------------------------------------------------------------
+// FEAT-0026 — public CMS endpoints
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the nav-visible CMS page list (US-012).
+ * Uses same ETag revalidation as forms. Returns [] on empty catalogue.
+ *
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<Array<{slug: string, title: string, nav_order: number|null}>>}
+ */
+export async function fetchCmsNavPages(signal) {
+  const { data } = await fetchJson('/pages', { signal });
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Fetch a single CMS page detail (US-011).
+ * Returns null when the backend responds 404 (used by the catch-all
+ * view to hand off to the redirect-follow path in US-013).
+ *
+ * @param {string} slug
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<{slug:string,title:string,meta_description:string|null,body_html:string,updated_at:string|null}|null>}
+ */
+export async function fetchCmsPage(slug, signal) {
+  try {
+    const { data } = await fetchJson(
+      `/pages/${encodeURIComponent(slug)}`,
+      { signal, useEtag: false },
+    );
+    return data;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * Resolve a slug against the redirect map (US-013).
+ * Returns the destination slug or null when there is no redirect.
+ *
+ * @param {string} slug
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<string|null>}
+ */
+export async function fetchCmsRedirect(slug, signal) {
+  try {
+    const { data } = await fetchJson(
+      `/redirects/${encodeURIComponent(slug)}`,
+      { signal, useEtag: false },
+    );
+    return data && typeof data.to_slug === 'string' ? data.to_slug : null;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}

@@ -31,6 +31,7 @@ from problem import problem_response
 from routes.forms import router as forms_router
 from routes.business_areas import router as business_areas_router
 from routes.sitemap import router as sitemap_router
+from routes.cms import router as cms_router
 
 # ---------- Logging ----------
 configure_logging()
@@ -166,3 +167,4 @@ def readiness(db: Session = Depends(get_db)):
 app.include_router(forms_router)
 app.include_router(business_areas_router)
 app.include_router(sitemap_router)
+app.include_router(cms_router)

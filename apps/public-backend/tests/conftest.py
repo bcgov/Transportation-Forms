@@ -95,6 +95,30 @@ _CREATE_TABLE_SQL = text("""
     )
 """)
 
+# FEAT-0026 — CMS views (mirrored as tables under SQLite for tests).
+_CREATE_CMS_PAGES_SQL = text("""
+    CREATE TABLE IF NOT EXISTS public_cms_pages_v (
+        id               TEXT PRIMARY KEY,
+        slug             TEXT NOT NULL,
+        title            TEXT NOT NULL,
+        meta_description TEXT,
+        body_html        TEXT NOT NULL,
+        show_in_nav      INTEGER NOT NULL DEFAULT 0,
+        nav_order        INTEGER,
+        updated_at       DATETIME
+    )
+""")
+
+_CREATE_CMS_REDIRECTS_SQL = text("""
+    CREATE TABLE IF NOT EXISTS public_cms_redirects_v (
+        redirect_id TEXT PRIMARY KEY,
+        from_slug   TEXT NOT NULL,
+        to_page_id  TEXT NOT NULL,
+        to_slug     TEXT NOT NULL,
+        created_at  DATETIME
+    )
+""")
+
 
 @pytest.fixture(scope="session")
 def sqlite_engine():
@@ -109,6 +133,8 @@ def sqlite_engine():
     )
     with engine.connect() as conn:
         conn.execute(_CREATE_TABLE_SQL)
+        conn.execute(_CREATE_CMS_PAGES_SQL)
+        conn.execute(_CREATE_CMS_REDIRECTS_SQL)
         conn.commit()
     yield engine
     engine.dispose()
@@ -116,7 +142,7 @@ def sqlite_engine():
 
 @pytest.fixture()
 def db(sqlite_engine):
-    """Yield a Session; truncate public_forms_v after each test for isolation."""
+    """Yield a Session; truncate all CMS + forms tables after each test."""
     _SessionLocal = sessionmaker(bind=sqlite_engine, autocommit=False, autoflush=False)
     session = _SessionLocal()
     yield session
@@ -124,6 +150,8 @@ def db(sqlite_engine):
     # Truncate test data so tests remain isolated.
     with sqlite_engine.connect() as conn:
         conn.execute(text("DELETE FROM public_forms_v"))
+        conn.execute(text("DELETE FROM public_cms_pages_v"))
+        conn.execute(text("DELETE FROM public_cms_redirects_v"))
         conn.commit()
 
 

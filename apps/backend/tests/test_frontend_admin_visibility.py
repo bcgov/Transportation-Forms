@@ -77,3 +77,53 @@ class TestFrontendAdminVisibilityAndGuards:
             "requestAccessPanel must not carry 'd-flex' — Bootstrap !important "
             "overrides JS style.display='none' and makes the panel permanently visible"
         )
+
+    def test_cms_admin_routes_are_guarded_by_cms_manage_permission(self):
+        """CMS admin routes must honour ``cms:manage`` (matches backend contract).
+
+        The backend ``routes/cms_pages.py`` gates every write on
+        ``require_permission("cms", "manage")``. The SPA router guard
+        MUST accept the same permission so a ``content_editor`` role
+        (which has ``cms:manage`` but is not a full admin) is not bounced
+        back to HOME.
+        """
+        js = (FRONTEND_INDEX.parent / "js" / "router.js").read_text(encoding="utf-8")
+
+        # CMS routes are enumerated as admin routes so the guard block runs.
+        assert "path === ROUTES.CMS_PAGES" in js
+        assert "path === ROUTES.CMS_PAGE_NEW" in js
+        assert "path.startsWith('/admin/cms/')" in js
+
+        # And the guard grants access on ``cms:manage`` — not admin-only.
+        assert "hasPermission('cms:manage')" in js
+
+    def test_cms_admin_nav_links_are_gated_by_cms_manage_permission(self):
+        """CMS admin nav links must be gated on ``cms:manage``.
+
+        Otherwise BA-only managers see CMS links they can't use, and
+        ``cms:manage``-only users don't see the CMS links at all.
+        """
+        html = FRONTEND_INDEX.read_text(encoding="utf-8")
+        auth_js = (FRONTEND_INDEX.parent / "js" / "auth.js").read_text(encoding="utf-8")
+
+        # Link elements exist so JS can toggle their visibility.
+        assert 'id="cmsPagesLink"' in html
+        assert 'id="cmsRedirectsLink"' in html
+
+        # auth.js drives visibility from ``cms:manage`` (or admin).
+        assert "hasPermission('cms:manage')" in auth_js
+        assert "cmsPagesLink:" in auth_js
+        assert "cmsRedirectsLink:" in auth_js
+
+    def test_spa_server_serves_cms_admin_routes(self):
+        """The SPA server MUST list ``/admin/cms/*`` routes.
+
+        Without them, direct navigation or a page refresh on a CMS admin
+        URL returns a backend 404 instead of the SPA shell.
+        """
+        app_py = (FRONTEND_INDEX.parent / "app.py").read_text(encoding="utf-8")
+
+        assert '@app.get("/admin/cms/pages")' in app_py
+        assert '@app.get("/admin/cms/pages/new")' in app_py
+        assert '@app.get("/admin/cms/pages/{page_id}")' in app_py
+        assert '@app.get("/admin/cms/redirects")' in app_py

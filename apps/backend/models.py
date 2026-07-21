@@ -648,3 +648,108 @@ class AccessRequest(Base):
             name="ck_access_request_status",
         ),
     )
+
+
+# ============================================================================
+# TABLE 16-18: cms_pages, cms_page_revisions, cms_page_redirects (FEAT-0026)
+# Mini-CMS that powers the public Forms Portal information pages.  Pages are
+# soft-deleted (single partial unique index on the active slug).  Revisions
+# are immutable and inserted on every create/update.  Redirects map retired
+# slugs to surviving pages.
+# ============================================================================
+class CmsPage(Base):
+    __tablename__ = "cms_pages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    slug = Column(
+        String(80), nullable=False, index=True
+    )  # URL-safe, lowercase, hyphen-separated; uniqueness enforced for active rows
+    title = Column(String(120), nullable=False)
+    meta_description = Column(String(180), nullable=True)
+    body_html = Column(Text, nullable=False)  # Sanitized HTML (post-nh3) only
+    show_in_nav = Column(Boolean, nullable=False, default=True, index=True)
+    nav_order = Column(Integer, nullable=True)  # Manual ordering within nav
+    created_by_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    updated_by_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+    updated_at = Column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    # Relationships
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    updated_by = relationship("User", foreign_keys=[updated_by_id])
+    revisions = relationship(
+        "CmsPageRevision",
+        back_populates="page",
+        cascade="all, delete-orphan",
+        order_by="CmsPageRevision.edited_at.desc()",
+    )
+    redirects = relationship(
+        "CmsPageRedirect",
+        back_populates="to_page",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_cms_pages_slug_active",
+            "slug",
+            unique=True,
+            postgresql_where=sa_text("deleted_at IS NULL"),
+        ),
+        Index("ix_cms_pages_nav", "show_in_nav", "nav_order"),
+    )
+
+
+class CmsPageRevision(Base):
+    __tablename__ = "cms_page_revisions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    page_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("cms_pages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    title = Column(String(120), nullable=False)
+    slug = Column(String(80), nullable=False)
+    meta_description = Column(String(180), nullable=True)
+    body_html = Column(Text, nullable=False)
+    edited_by_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    edited_at = Column(
+        DateTime, server_default=func.now(), nullable=False, index=True
+    )
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    # Relationships
+    page = relationship("CmsPage", back_populates="revisions")
+    edited_by = relationship("User", foreign_keys=[edited_by_id])
+
+    __table_args__ = (
+        Index("ix_cms_page_revisions_page_edited_at", "page_id", "edited_at"),
+    )
+
+
+class CmsPageRedirect(Base):
+    __tablename__ = "cms_page_redirects"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    from_slug = Column(String(80), nullable=False, unique=True, index=True)
+    to_page_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("cms_pages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    # Relationships
+    to_page = relationship("CmsPage", back_populates="redirects")

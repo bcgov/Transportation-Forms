@@ -30,7 +30,8 @@ class TestDatabaseSeeds:
         seed_roles(seeded_db)
         seed_roles(seeded_db)
         roles = seeded_db.query(Role).filter(Role.is_system == True).all()
-        assert len(roles) == 4 # admin, reviewer, staff_manager, staff_viewer
+        # admin, reviewer, staff_manager, staff_viewer, content_editor (FEAT-0026)
+        assert len(roles) == 5
 
     def test_seed_prefixes_successful(self, seeded_db: Session):
         seed_prefixes(seeded_db)

@@ -355,12 +355,21 @@ export function updateAuthUi() {
         hasPermission('business_area:delete') ||
         hasPermission('business_area:manage');
 
+      // CMS admin surfaces are gated on ``cms:manage`` — the same
+      // permission the backend requires. Users with only ``cms:manage``
+      // (e.g. ``content_editor``) MUST see the CMS links even without
+      // full admin role, and admin-only users without ``cms:manage``
+      // still see them via ``isAdmin``.
+      const canManageCms = isAdmin || hasPermission('cms:manage');
+
       const adminLinkVisibility = {
         rolesLink: isAdmin,
         usersLink: isAdmin,
         accessRequestsLink: isAdmin,
         prefixesLink: isAdmin,
         businessAreasLink: canManageBA,
+        cmsPagesLink: canManageCms,
+        cmsRedirectsLink: canManageCms,
       };
 
       let anyAdminLinkVisible = false;

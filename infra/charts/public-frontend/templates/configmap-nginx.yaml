@@ -67,6 +67,129 @@ data:
             try_files $uri /index.html;
         }
 
+        # ── FEAT-0026 US-011 AC2 — Bot-UA → CMS page OG re-route ─────────────
+        # Any recognised crawler hitting /{slug} (lowercase kebab-case, single
+        # segment, not a reserved top-level path) is transparently served the
+        # server-rendered OG page. Slug syntax is enforced by the location
+        # regex — anything that doesn't match falls through to the SPA
+        # fallback. Reserved prefixes (/forms/, /assets/, /api/, /vendor/,
+        # /robots.txt, /sitemap.xml, /css/, /js/, /fonts/) are matched by
+        # earlier location blocks and never reach here.
+        location ~ ^/(?<cms_slug>[a-z0-9]+(?:-[a-z0-9]+)*)/?$ {
+            if ($is_bot) {
+                rewrite ^/[a-z0-9]+(?:-[a-z0-9]+)*/?$ /api/public/v1/pages/$cms_slug/og last;
+            }
+            try_files $uri /index.html;
+        }
+
+        # ── FEAT-0026 US-017 / US-018 — CMS human path (cache-bypass + tighter limits) ─
+        # Human anonymous reads bypass the edge cache so editor changes are
+        # visible on the next hit (US-017 BR-01). Rate limiting is tightened
+        # to 120 r/m per IP + burst 60 + 20 concurrent conns per IP so the
+        # cache-bypass cannot be weaponised (US-018 BR-01..BR-04).
+
+        location = /api/public/v1/pages {
+            limit_req         zone=cms_public burst=60 nodelay;
+            limit_conn        cms_conn 20;
+            limit_req_status  429;
+            limit_conn_status 429;
+            add_header        Retry-After 30 always;
+
+            # No proxy_cache directive → edge cache is bypassed for the nav
+            # list. FastAPI still returns Cache-Control public max-age=60
+            # so downstream browser + CDN caches can still hold it briefly.
+            proxy_set_header  Host              $host;
+            proxy_set_header  X-Real-IP         $remote_addr;
+            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-Proto $scheme;
+            proxy_set_header  X-Request-ID      $request_id;
+            proxy_set_header  X-Internal-Auth   $internal_auth_value;
+
+            proxy_hide_header Set-Cookie;
+            proxy_hide_header X-Powered-By;
+            proxy_hide_header Server;
+
+            proxy_http_version 1.1;
+            proxy_pass http://upstream_public_backend;
+        }
+
+        location ~ ^/api/public/v1/pages/[^/]+$ {
+            limit_req         zone=cms_public burst=60 nodelay;
+            limit_conn        cms_conn 20;
+            limit_req_status  429;
+            limit_conn_status 429;
+            add_header        Retry-After 30 always;
+
+            # No proxy_cache directive → edge cache is bypassed for page
+            # detail requests. FastAPI returns Cache-Control private,no-cache
+            # so browsers revalidate every request.
+            proxy_set_header  Host              $host;
+            proxy_set_header  X-Real-IP         $remote_addr;
+            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-Proto $scheme;
+            proxy_set_header  X-Request-ID      $request_id;
+            proxy_set_header  X-Internal-Auth   $internal_auth_value;
+
+            proxy_hide_header Set-Cookie;
+            proxy_hide_header X-Powered-By;
+            proxy_hide_header Server;
+
+            proxy_http_version 1.1;
+            proxy_pass http://upstream_public_backend;
+        }
+
+        location ~ ^/api/public/v1/redirects/[^/]+$ {
+            limit_req         zone=cms_public burst=60 nodelay;
+            limit_conn        cms_conn 20;
+            limit_req_status  429;
+            limit_conn_status 429;
+            add_header        Retry-After 30 always;
+
+            # No proxy_cache directive; FastAPI returns Cache-Control:no-store.
+            proxy_set_header  Host              $host;
+            proxy_set_header  X-Real-IP         $remote_addr;
+            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-Proto $scheme;
+            proxy_set_header  X-Request-ID      $request_id;
+            proxy_set_header  X-Internal-Auth   $internal_auth_value;
+
+            proxy_hide_header Set-Cookie;
+            proxy_hide_header X-Powered-By;
+            proxy_hide_header Server;
+
+            proxy_http_version 1.1;
+            proxy_pass http://upstream_public_backend;
+        }
+
+        # CMS OG endpoint — bot/sitemap path, held at edge for 24h (US-017 BR-02).
+        location ~ ^/api/public/v1/pages/[^/]+/og$ {
+            limit_req         zone=cms_public burst=60 nodelay;
+            limit_conn        cms_conn 20;
+            limit_req_status  429;
+            limit_conn_status 429;
+            add_header        Retry-After 30 always;
+
+        {{- if .Values.cache.enabled }}
+            proxy_cache             public_cache;
+            proxy_cache_key         "$scheme$request_method$host$request_uri";
+            proxy_cache_valid       200 24h;
+            proxy_cache_use_stale   error timeout updating http_500 http_502 http_503 http_504;
+        {{- end }}
+            proxy_set_header  Host              $host;
+            proxy_set_header  X-Real-IP         $remote_addr;
+            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-Proto $scheme;
+            proxy_set_header  X-Request-ID      $request_id;
+            proxy_set_header  X-Internal-Auth   $internal_auth_value;
+
+            proxy_hide_header Set-Cookie;
+            proxy_hide_header X-Powered-By;
+            proxy_hide_header Server;
+
+            proxy_http_version 1.1;
+            proxy_pass http://upstream_public_backend;
+        }
+
         # ── Public read-only API — proxied to FastAPI ────────────────────────────
         location /api/public/v1/ {
             limit_req         zone=public burst=20 nodelay;
@@ -95,14 +218,14 @@ data:
             proxy_pass http://upstream_public_backend;
         }
 
-        # Sitemap-specific cache override (1h).
+        # Sitemap-specific cache override (24h — bot/sitemap path per US-017 BR-02).
         location = /api/public/v1/sitemap.xml {
             limit_req         zone=public burst=20 nodelay;
             limit_req_status  429;
 
             proxy_cache             public_cache;
             proxy_cache_key         "$scheme$request_method$host$request_uri";
-            proxy_cache_valid       200 1h;
+            proxy_cache_valid       200 24h;
             proxy_cache_use_stale   error timeout updating http_500 http_502 http_503 http_504;
 
             proxy_set_header  Host              $host;

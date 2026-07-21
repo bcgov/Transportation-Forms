@@ -4,12 +4,17 @@
  * Routes:
  *   /                       → home view
  *   /forms/{form_number}    → detail view
- *   anything else           → 404 view (US-006 AC9)
+ *   /{slug}                 → CMS page view (FEAT-0026 US-011),
+ *                             falls back to redirect + 404 (US-013)
+ *   unmatched / bogus       → 404 view (US-006 AC9)
+ *
+ * The CMS catch-all is registered LAST and only fires for paths whose
+ * leading segment is not in ``CMS_RESERVED_TOP_SEGMENTS``.
  */
 
-import { ROUTES } from './constants.js';
+import { ROUTES, CMS_RESERVED_TOP_SEGMENTS } from './constants.js';
 
-const VIEWS = ['homeView', 'detailView', 'notFoundView'];
+const VIEWS = ['homeView', 'detailView', 'cmsPageView', 'notFoundView'];
 
 function _hideAll() {
   for (const id of VIEWS) {
@@ -23,13 +28,27 @@ function _show(id) {
   if (el) el.removeAttribute('hidden');
 }
 
+/**
+ * Public: switch the visible section to the 404 view and fire the
+ * registered not-found handler. Used by ``views/cms-page.js`` when a
+ * slug does not match a page or a redirect. Does NOT change the URL —
+ * the address bar keeps the attempted path so the visitor can see it.
+ */
+export async function showNotFound() {
+  _hideAll();
+  _show('notFoundView');
+  if (_onNotFoundShow) await _onNotFoundShow();
+}
+
 let _onHomeShow = null;
 let _onDetailShow = null;
+let _onCmsPageShow = null;
 let _onNotFoundShow = null;
 
-export function registerRoutes({ onHome, onDetail, onNotFound }) {
+export function registerRoutes({ onHome, onDetail, onCmsPage, onNotFound }) {
   _onHomeShow = onHome;
   _onDetailShow = onDetail;
+  _onCmsPageShow = onCmsPage;
   _onNotFoundShow = onNotFound;
 }
 
@@ -61,8 +80,38 @@ export async function dispatch() {
     return;
   }
 
+  // FEAT-0026 US-011 catch-all: /{slug} for CMS pages.
+  // Only single-segment lowercase kebab-case paths are eligible; the
+  // CMS page view itself re-validates via CMS_SLUG_RE before hitting
+  // the network.
+  const cmsSlug = _extractCmsSlugCandidate(path);
+  if (cmsSlug) {
+    _show('cmsPageView');
+    if (_onCmsPageShow) await _onCmsPageShow(cmsSlug);
+    return;
+  }
+
   _show('notFoundView');
   if (_onNotFoundShow) await _onNotFoundShow();
+}
+
+/**
+ * Return the candidate slug for a path like ``/{slug}`` or
+ * ``/{slug}/`` when its leading segment is not reserved and there is
+ * no second segment. Returns ``null`` otherwise.
+ */
+function _extractCmsSlugCandidate(path) {
+  if (!path || path === '/' || !path.startsWith('/')) return null;
+  const trimmed = path.replace(/\/+$/, ''); // drop trailing slash
+  if (!trimmed) return null;
+  const rest = trimmed.slice(1); // drop leading /
+  if (rest.includes('/')) return null; // multi-segment paths are not CMS pages
+  if (CMS_RESERVED_TOP_SEGMENTS.has(rest)) return null;
+  try {
+    return decodeURIComponent(rest);
+  } catch {
+    return null;
+  }
 }
 
 /**
