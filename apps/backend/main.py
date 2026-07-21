@@ -34,7 +34,14 @@ from backend.routes.cms_redirects import admin_router as cms_redirects_admin_rou
 logger = structlog.get_logger()
 
 
-# Initialise S3 object storage bucket on startup (idempotent — safe to run every boot)
+# Initialise S3 object storage bucket on startup (idempotent — safe to run every boot).
+#
+# Note: default role/permission seeding is intentionally NOT performed here.
+# Seeding writes are owned by the migrations job (see
+# ``apps/backend/migrations/entrypoint.sh``) so that:
+#   * failures fail the deployment fast instead of being silently logged
+#   * request-serving pods don't compete for write access on boot
+#   * startup latency is bounded and unrelated to schema/role drift
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Seed default roles so that any new permissions added to DEFAULT_ROLES are

@@ -7,6 +7,7 @@ from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -14,7 +15,6 @@ from backend.models import BusinessArea, BusinessAreaContact, Form
 from backend.auth.authorization import require_permission
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-import re
 
 router = APIRouter(
     prefix="/admin/business-areas",
@@ -69,20 +69,48 @@ async def list_admin_business_areas(
     db: Session = Depends(get_db),
     _=Depends(require_permission("business_areas", "manage")),
 ):
-    """List business areas for admin view."""
-    areas = db.query(BusinessArea).filter(BusinessArea.deleted_at.is_(None)).order_by(BusinessArea.name).all()
-    results = []
-    for area in areas:
-        results.append(
-            BusinessAreaAdminResponse(
-                id=str(area.id),
-                name=area.name,
-                mailbox=area.mailbox,
-                contact_count=len(area.contacts),
-                linked_forms_count=len(area.forms),
-            )
+    """List business areas for admin view.
+
+    Aggregates contact/linked-form counts at the SQL layer (correlated
+    subqueries) so we avoid the N+1 / collection-materialisation pattern
+    of evaluating ``len(area.contacts)`` / ``len(area.forms)`` per row.
+    """
+    contact_count_sq = (
+        db.query(func.count(BusinessAreaContact.id))
+        .filter(BusinessAreaContact.business_area_id == BusinessArea.id)
+        .correlate(BusinessArea)
+        .scalar_subquery()
+    )
+    linked_forms_count_sq = (
+        db.query(func.count(Form.id))
+        .filter(Form.business_area_id == BusinessArea.id)
+        .correlate(BusinessArea)
+        .scalar_subquery()
+    )
+
+    rows = (
+        db.query(
+            BusinessArea.id,
+            BusinessArea.name,
+            BusinessArea.mailbox,
+            contact_count_sq.label("contact_count"),
+            linked_forms_count_sq.label("linked_forms_count"),
         )
-    return results
+        .filter(BusinessArea.deleted_at.is_(None))
+        .order_by(BusinessArea.name)
+        .all()
+    )
+
+    return [
+        BusinessAreaAdminResponse(
+            id=str(row.id),
+            name=row.name,
+            mailbox=row.mailbox,
+            contact_count=int(row.contact_count or 0),
+            linked_forms_count=int(row.linked_forms_count or 0),
+        )
+        for row in rows
+    ]
 
 @router.post("", response_model=BusinessAreaAdminResponse, status_code=status.HTTP_201_CREATED)
 async def create_business_area(
@@ -202,10 +230,20 @@ async def delete_business_area(
 ):
     from backend.services.business_areas_admin_service import BusinessAreaAdminService
     try:
-        result = BusinessAreaAdminService.delete_business_area(db, str(area_id), current_user, str(replacement_id) if replacement_id else None)
+        result = BusinessAreaAdminService.delete_business_area(
+            db,
+            str(area_id),
+            current_user,
+            str(replacement_id) if replacement_id else None,
+        )
         return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as exc:
+        # Mirror restore_business_area: surface "not found" as 404 so
+        # client error handling stays consistent across endpoints.
+        message = str(exc)
+        if message == "Business Area not found":
+            raise HTTPException(status_code=404, detail=message)
+        raise HTTPException(status_code=400, detail=message)
 
 @router.get("/{area_id}/forms", response_model=List[LinkedFormResponse])
 async def list_linked_forms(
@@ -247,6 +285,14 @@ async def add_contact(
     current_user: TokenData = Depends(get_current_user),
     _=Depends(require_permission("business_areas", "update")),
 ):
+    area = (
+        db.query(BusinessArea)
+        .filter(BusinessArea.id == area_id, BusinessArea.deleted_at.is_(None))
+        .first()
+    )
+    if not area:
+        raise HTTPException(status_code=404, detail="Business Area not found")
+
     if req.contact_user_id:
         existing = db.query(BusinessAreaContact).filter(
             BusinessAreaContact.business_area_id == area_id,

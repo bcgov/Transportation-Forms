@@ -4,12 +4,12 @@
 
 import { API_BASE, ROUTES, STATUS_LABELS } from '../../constants.js';
 import { escapeHtml, formatDateTime, showAlert, getErrorDetail } from '../../utils.js';
-import { getAuthToken } from '../../auth.js';
+import { getAuthToken, hasPermission, isAdminUser } from '../../auth.js';
 
-// ── Module-private state ──────────────────────────────────────────────────────
+// ── Module-private state ───────────────────────────────────────────────
 let _currentAreaDetail = null;
 
-// ── Internal helpers ──────────────────────────────────────────────────────────
+// ── Internal helpers ───────────────────────────────────────────────────
 
 function _authHeaders(extra = {}) {
   return { Authorization: `Bearer ${getAuthToken()}`, ...extra };
@@ -19,13 +19,36 @@ function _jsonHeaders() {
   return _authHeaders({ 'Content-Type': 'application/json' });
 }
 
+// Mirror the backend permission contract for Business Areas. Keep these in
+// lockstep with ``apps/backend/routes/business_areas_admin.py`` and the
+// ``RESOURCE_ACTION_PERMISSIONS['business_areas']`` mapping in
+// ``apps/backend/auth/permissions.py``.
+function _canCreateBA() {
+  return isAdminUser() || hasPermission('business_area:create');
+}
+function _canEditBA() {
+  return isAdminUser() || hasPermission('business_area:edit');
+}
+function _canDeleteBA() {
+  return isAdminUser() || hasPermission('business_area:delete');
+}
+
 // ── List view ─────────────────────────────────────────────────────────────────
 
 export async function showBusinessAreasAdminView() {
   document.getElementById('businessAreasView').style.display = 'block';
   document.getElementById('pageTitle').textContent = 'Business Areas - BC Gov';
   _wireBusinessAreasAdminView();
+  _applyListViewPermissions();
   await loadBusinessAreasList();
+}
+
+// Hide the "New Business Area" button when the current user lacks the
+// ``business_area:create`` permission so the SPA never surfaces an action
+// the API will subsequently 403.
+function _applyListViewPermissions() {
+  const newBtn = document.getElementById('businessAreasNewBtn');
+  if (newBtn) newBtn.style.display = _canCreateBA() ? '' : 'none';
 }
 
 function _wireBusinessAreasAdminView() {
@@ -250,6 +273,35 @@ async function _loadBusinessAreaDetail(baId) {
 
 function _renderDetail(container, detail) {
   const hasLinked = detail.linked_forms_count > 0;
+  const canEdit = _canEditBA();
+  const canDelete = _canDeleteBA();
+
+  const deleteBtnHtml = canDelete
+    ? `<button class="btn btn-sm btn-outline-danger" type="button" data-action="delete-ba"><i class="fas fa-trash"></i> Delete</button>`
+    : '';
+  const saveBtnHtml = canEdit
+    ? `<button class="btn btn-bc-primary" type="button" data-action="save-ba"><i class="fas fa-save"></i> Save Changes</button>`
+    : '';
+  const nameInputAttrs = canEdit ? '' : 'disabled';
+  const mailboxInputAttrs = canEdit ? '' : 'disabled';
+  const addContactFormHtml = canEdit
+    ? `
+        <div class="mb-3">
+          <form id="addBaContactForm" class="row g-2 align-items-end">
+             <div class="col-md-4">
+               <label class="form-label mb-0 small">Name</label>
+               <input class="form-control form-control-sm" id="newContactName" placeholder="Name" maxlength="150" required>
+             </div>
+             <div class="col-md-4">
+               <label class="form-label mb-0 small">Email</label>
+               <input class="form-control form-control-sm" id="newContactEmail" type="email" placeholder="Email" maxlength="75" required>
+             </div>
+             <div class="col-md-4">
+               <button type="button" class="btn btn-sm btn-primary" data-action="add-contact">Add Contact</button>
+             </div>
+          </form>
+        </div>`
+    : '';
 
   container.innerHTML = `
     <!-- Config card -->
@@ -257,22 +309,22 @@ function _renderDetail(container, detail) {
       <div class="card-header d-flex justify-content-between align-items-center">
         <span><strong>${escapeHtml(detail.name)}</strong></span>
         <div class="d-flex gap-2">
-          <button class="btn btn-sm btn-outline-danger" type="button" data-action="delete-ba"><i class="fas fa-trash"></i> Delete</button>
+          ${deleteBtnHtml}
         </div>
       </div>
       <div class="card-body">
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label">Name</label>
-            <input id="editBaName" class="form-control" value="${escapeHtml(detail.name)}" maxlength="75">
+            <input id="editBaName" class="form-control" value="${escapeHtml(detail.name)}" maxlength="75" ${nameInputAttrs}>
           </div>
           <div class="col-md-6">
             <label class="form-label">Mailbox</label>
-            <input id="editBaMailbox" class="form-control" type="email" value="${escapeHtml(detail.mailbox || '')}" maxlength="75">
+            <input id="editBaMailbox" class="form-control" type="email" value="${escapeHtml(detail.mailbox || '')}" maxlength="75" ${mailboxInputAttrs}>
           </div>
         </div>
         <div class="mt-3">
-          <button class="btn btn-bc-primary" type="button" data-action="save-ba"><i class="fas fa-save"></i> Save Changes</button>
+          ${saveBtnHtml}
         </div>
       </div>
     </div>
@@ -290,24 +342,8 @@ function _renderDetail(container, detail) {
     </ul>
     <div class="tab-content border border-top-0 rounded-bottom p-3 mb-4">
       <div class="tab-pane fade show active" id="pane-contacts" role="tabpanel">
-        
-        <div class="mb-3">
-          <form id="addBaContactForm" class="row g-2 align-items-end">
-             <div class="col-md-4">
-               <label class="form-label mb-0 small">Name</label>
-               <input class="form-control form-control-sm" id="newContactName" placeholder="Name" maxlength="150" required>
-             </div>
-             <div class="col-md-4">
-               <label class="form-label mb-0 small">Email</label>
-               <input class="form-control form-control-sm" id="newContactEmail" type="email" placeholder="Email" maxlength="75" required>
-             </div>
-             <div class="col-md-4">
-               <button type="button" class="btn btn-sm btn-primary" data-action="add-contact">Add Contact</button>
-             </div>
-          </form>
-        </div>
-
-        ${_renderContactsTable(detail.contacts)}
+        ${addContactFormHtml}
+        ${_renderContactsTable(detail.contacts, canEdit)}
       </div>
       <div class="tab-pane fade" id="pane-forms" role="tabpanel">
         ${_renderLinkedFormsTable(detail.linked_forms)}
@@ -315,20 +351,23 @@ function _renderDetail(container, detail) {
     </div>
   `;
 
-  // Wire actions
-  container.querySelector('[data-action="save-ba"]')
-    ?.addEventListener('click', () => _saveBusinessArea());
-  container.querySelector('[data-action="delete-ba"]')
-    ?.addEventListener('click', () => _deleteBusinessArea());
-  container.querySelector('[data-action="add-contact"]')
-    ?.addEventListener('click', () => _addContact());
-    
-  container.querySelectorAll('[data-action="remove-contact"]').forEach(btn => {
-    btn.addEventListener('click', (e) => _removeContact(e.target.closest('button').dataset.id));
-  });
+  // Wire actions — only attach handlers for controls that are actually rendered.
+  if (canEdit) {
+    container.querySelector('[data-action="save-ba"]')
+      ?.addEventListener('click', () => _saveBusinessArea());
+    container.querySelector('[data-action="add-contact"]')
+      ?.addEventListener('click', () => _addContact());
+    container.querySelectorAll('[data-action="remove-contact"]').forEach(btn => {
+      btn.addEventListener('click', (e) => _removeContact(e.target.closest('button').dataset.id));
+    });
+  }
+  if (canDelete) {
+    container.querySelector('[data-action="delete-ba"]')
+      ?.addEventListener('click', () => _deleteBusinessArea());
+  }
 
-  // Reassignment Modal logic
-  if (!document.getElementById('baDeleteModal')) {
+  // Reassignment Modal logic — only useful when the user can delete.
+  if (canDelete && !document.getElementById('baDeleteModal')) {
     const modalHtml = `
       <div class="modal fade" id="baDeleteModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
@@ -356,10 +395,11 @@ function _renderDetail(container, detail) {
   }
 }
 
-function _renderContactsTable(contacts) {
+function _renderContactsTable(contacts, canEdit = true) {
   if (!contacts.length) {
     return '<p class="text-muted mb-0">No contacts assigned.</p>';
   }
+  const headerActions = canEdit ? '<th class="text-end">Actions</th>' : '';
   return `
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle mb-0">
@@ -367,7 +407,7 @@ function _renderContactsTable(contacts) {
           <tr>
             <th>Name</th>
             <th>Email</th>
-            <th class="text-end">Actions</th>
+            ${headerActions}
           </tr>
         </thead>
         <tbody>
@@ -377,9 +417,9 @@ function _renderContactsTable(contacts) {
             <tr>
               <td>${escapeHtml(c.name || '-')}</td>
               <td>${escapeHtml(c.email || '-')}</td>
-              <td class="text-end">
-                 <button class="btn btn-sm btn-outline-danger" data-action="remove-contact" data-id="${c.id}"><i class="fas fa-times"></i> Remove</button>
-              </td>
+              ${canEdit ? `<td class="text-end">
+                 <button class="btn btn-sm btn-outline-danger" data-action="remove-contact" data-id="${escapeHtml(c.id)}"><i class="fas fa-times"></i> Remove</button>
+              </td>` : ''}
             </tr>`,
             )
             .join('')}
@@ -407,7 +447,7 @@ function _renderLinkedFormsTable(forms) {
             .map(
               f => `
             <tr>
-              <td><a href="/edit/${f.id}" target="_blank">${escapeHtml(f.form_number)}</a></td>
+              <td><a href="/edit/${escapeHtml(f.id)}" target="_blank" rel="noopener noreferrer">${escapeHtml(f.form_number)}</a></td>
               <td>${escapeHtml(f.title)}</td>
               <td><span class="badge bg-info">${escapeHtml(f.status)}</span></td>
             </tr>`,
@@ -449,63 +489,85 @@ async function _deleteBusinessArea() {
   if (!_currentAreaDetail?.id) return;
 
   const count = _currentAreaDetail.linked_forms_count;
-  
+
   if (count === 0) {
       if (!confirm(`Are you sure you want to permanently delete "${_currentAreaDetail.name}"?`)) return;
       await _executeDelete(_currentAreaDetail.id);
-  } else {
-      // Show modal for Reassignment / Soft-delete
-      const myModalEl = document.getElementById('baDeleteModal');
-      const myModal = new bootstrap.Modal(myModalEl);
-      
-      const msg = document.getElementById('baDeleteModalMessage');
-      msg.textContent = `This Business Area is referenced by ${count} forms.\nPlease choose an action:`;
-      
-      const select = document.getElementById('baDeleteModalTarget');
-      select.innerHTML = '<option value="">-- Select Target --</option>' + _currentAreaDetail.allAreas
-          .filter(a => a.id !== _currentAreaDetail.id)
-          .map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
-          
-      document.getElementById('baDeleteModalReassignGroup').style.display = 'block';
-      const btnSoft = document.getElementById('baDeleteModalSoft');
-      const btnHard = document.getElementById('baDeleteModalHard');
-      
-      btnSoft.style.display = 'inline-block';
-      btnHard.textContent = 'Reassign & Delete';
-      
-      const _cleanupListeners = () => {
-         btnSoft.replaceWith(btnSoft.cloneNode(true));
-         btnHard.replaceWith(btnHard.cloneNode(true));
-      };
-      
-      _cleanupListeners();
-      
-      myModalEl.addEventListener('hidden.bs.modal', _cleanupListeners, { once: true });
-      
-      document.getElementById('baDeleteModalSoft').addEventListener('click', async () => {
-          myModal.hide();
-          await _executeDelete(_currentAreaDetail.id);
-      });
-      
-      document.getElementById('baDeleteModalHard').addEventListener('click', async () => {
-          const targetId = document.getElementById('baDeleteModalTarget').value;
-          if (!targetId) {
-             showAlert('Please select a target Business Area for reassignment.', 'warning');
-             return;
-          }
-          myModal.hide();
-          await _executeDelete(_currentAreaDetail.id, targetId);
-      });
-      
-      myModal.show();
+      return;
   }
+
+  // Show modal for Reassignment / Soft-delete.
+  //
+  // The previous implementation tried to "reset" stale click handlers on the
+  // static modal buttons by cloning them, but the ``hidden.bs.modal``
+  // listener still referenced the *original* (now-detached) clones, so
+  // subsequent opens accumulated handlers on the live buttons and could
+  // trigger multiple DELETE requests per click. We now resolve the buttons
+  // by id at attach-time (against the current DOM), use ``{ once: true }``
+  // listeners scoped to a single open, and tear them down on
+  // ``hidden.bs.modal`` so each open is fully isolated.
+  const modalEl = document.getElementById('baDeleteModal');
+  const modal = new bootstrap.Modal(modalEl);
+
+  const msg = document.getElementById('baDeleteModalMessage');
+  msg.textContent = `This Business Area is referenced by ${count} forms.\nPlease choose an action:`;
+
+  const select = document.getElementById('baDeleteModalTarget');
+  select.innerHTML = '<option value="">-- Select Target --</option>' + _currentAreaDetail.allAreas
+      .filter(a => a.id !== _currentAreaDetail.id)
+      .map(a => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`).join('');
+
+  document.getElementById('baDeleteModalReassignGroup').style.display = 'block';
+
+  // Resolve the live button nodes (they may have been replaced by a previous
+  // open) and configure their visible state for this scenario.
+  let btnSoft = document.getElementById('baDeleteModalSoft');
+  let btnHard = document.getElementById('baDeleteModalHard');
+  // Defensive: replace any prior listeners bound by an earlier open.
+  btnSoft.replaceWith(btnSoft.cloneNode(true));
+  btnHard.replaceWith(btnHard.cloneNode(true));
+  btnSoft = document.getElementById('baDeleteModalSoft');
+  btnHard = document.getElementById('baDeleteModalHard');
+
+  btnSoft.style.display = 'inline-block';
+  btnHard.textContent = 'Reassign & Delete';
+
+  const onSoft = async () => {
+      modal.hide();
+      await _executeDelete(_currentAreaDetail.id);
+  };
+  const onHard = async () => {
+      const targetId = document.getElementById('baDeleteModalTarget').value;
+      if (!targetId) {
+          showAlert('Please select a target Business Area for reassignment.', 'warning');
+          return;
+      }
+      modal.hide();
+      await _executeDelete(_currentAreaDetail.id, targetId);
+  };
+
+  btnSoft.addEventListener('click', onSoft, { once: true });
+  btnHard.addEventListener('click', onHard, { once: true });
+
+  // When the modal closes (Cancel, Esc, backdrop, or after a hide() call),
+  // strip any handler that didn't fire so the next open starts clean.
+  modalEl.addEventListener(
+    'hidden.bs.modal',
+    () => {
+      btnSoft.removeEventListener('click', onSoft);
+      btnHard.removeEventListener('click', onHard);
+    },
+    { once: true },
+  );
+
+  modal.show();
 }
 
 async function _executeDelete(id, replacementId = null) {
     try {
-        let url = `${API_BASE}/admin/business-areas/${id}`;
+        let url = `${API_BASE}/admin/business-areas/${encodeURIComponent(id)}`;
         if (replacementId) {
-            url += `?replacement_id=${replacementId}`;
+            url += `?replacement_id=${encodeURIComponent(replacementId)}`;
         }
         const response = await fetch(url, {
           method: 'DELETE',
