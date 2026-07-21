@@ -42,7 +42,18 @@ async def root():
 @app.get("/prefixes")
 @app.get("/prefixes/new")
 @app.get("/prefixes/{prefix_id}")
-async def spa_routes(form_id: str = "", role_id: str = "", user_id: str = "", area_id: str = "", prefix_id: str = ""):
+@app.get("/admin/cms/pages")
+@app.get("/admin/cms/pages/new")
+@app.get("/admin/cms/pages/{page_id}")
+@app.get("/admin/cms/redirects")
+async def spa_routes(
+    form_id: str = "",
+    role_id: str = "",
+    user_id: str = "",
+    area_id: str = "",
+    prefix_id: str = "",
+    page_id: str = "",
+):
     """Serve the SPA index page for client-side routes."""
     index_path = os.path.join(frontend_dir, "index.html")
     if os.path.exists(index_path):

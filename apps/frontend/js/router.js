@@ -195,10 +195,21 @@ export async function routeHandler(path, params = {}) {
     const canCreateBA = hasPermission('business_area:create');
     const canManageBA = hasPermission('business_area:manage');
 
+    // CMS admin pages (pages + redirects) are gated on ``cms:manage`` —
+    // the same permission the backend requires (see ``routes/cms_pages.py``).
+    // Users holding this permission (e.g. the ``content_editor`` role) must
+    // be allowed through even without the full admin role.
+    const isCmsRoute =
+      path === ROUTES.CMS_PAGES ||
+      path === ROUTES.CMS_PAGE_NEW ||
+      path.startsWith('/admin/cms/');
+    const canManageCms = hasPermission('cms:manage');
+
     const isAllowed =
       isAdminUser() ||
       (isBusinessAreaCreateRoute && canCreateBA) ||
-      (isBusinessAreaListOrDetail && canManageBA);
+      (isBusinessAreaListOrDetail && canManageBA) ||
+      (isCmsRoute && canManageCms);
 
     if (!isAllowed) {
       showAlert('You do not have permission to access that page.', 'warning');
