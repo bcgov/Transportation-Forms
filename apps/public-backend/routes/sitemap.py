@@ -1,8 +1,9 @@
 """GET /api/public/v1/sitemap.xml — dynamic sitemap (FEAT-0005 / US-014 AC10).
 
-Lists the home page and every published+public form's deep URL.  Output
-conforms to the sitemap.org 0.9 schema.  The XML is built by hand
-(html.escape / xml.sax.saxutils.escape) — no new dependencies.
+Lists the home page, every published+public form's deep URL, and every
+CMS page (FEAT-0026 US-015).  Output conforms to the sitemap.org 0.9
+schema.  The XML is built by hand (html.escape / xml.sax.saxutils.escape)
+— no new dependencies.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from sqlalchemy.orm import Session
 from config import settings
 from database import get_db
 from http_cache import compute_etag, etag_matches
-from models import PublicForm
+from models import PublicCmsPage, PublicForm
 
 router = APIRouter(tags=["public-sitemap"])
 
@@ -32,10 +33,15 @@ def _origin(request: Request) -> str:
 def sitemap_xml(request: Request, db: Session = Depends(get_db)):
     origin = _origin(request)
 
-    rows = (
+    form_rows = (
         db.query(PublicForm.form_number, PublicForm.updated_at)
         .filter(PublicForm.form_number.isnot(None))
         .order_by(PublicForm.form_number.asc())
+        .all()
+    )
+    cms_rows = (
+        db.query(PublicCmsPage.slug, PublicCmsPage.updated_at)
+        .order_by(PublicCmsPage.slug.asc())
         .all()
     )
 
@@ -44,8 +50,21 @@ def sitemap_xml(request: Request, db: Session = Depends(get_db)):
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
         f"<url><loc>{xml_escape(origin)}/</loc></url>",
     ]
-    for form_number, updated_at in rows:
+    for form_number, updated_at in form_rows:
         loc = f"{origin}/forms/{quote(form_number, safe='')}"
+        if updated_at is not None:
+            parts.append(
+                f"<url><loc>{xml_escape(loc)}</loc>"
+                f"<lastmod>{xml_escape(updated_at.date().isoformat())}</lastmod></url>"
+            )
+        else:
+            parts.append(f"<url><loc>{xml_escape(loc)}</loc></url>")
+
+    # CMS pages (FEAT-0026 US-015).  We emit ``<lastmod>`` here because
+    # the CMS-provided ``updated_at`` is always present on non-deleted
+    # rows (the view filters ``deleted_at IS NULL``).
+    for slug, updated_at in cms_rows:
+        loc = f"{origin}/{quote(slug, safe='')}"
         if updated_at is not None:
             parts.append(
                 f"<url><loc>{xml_escape(loc)}</loc>"

@@ -150,7 +150,15 @@ def _test_engine():
     engine = create_engine(TEST_DATABASE_URL, echo=False)
     # Drop views that depend on tables before dropping tables themselves.
     with engine.connect() as conn:
+        conn.execute(text("DROP VIEW IF EXISTS public_cms_redirects_v CASCADE"))
+        conn.execute(text("DROP VIEW IF EXISTS public_cms_media_v CASCADE"))
+        conn.execute(text("DROP VIEW IF EXISTS public_cms_pages_v CASCADE"))
         conn.execute(text("DROP VIEW IF EXISTS public_forms_v CASCADE"))
+        # FEAT-0026 remediation plan v2 (2026-07-16) — cms_media was
+        # removed from the ORM. Any residual table from a pre-migration-020
+        # test DB must be dropped explicitly, otherwise its FK to users
+        # blocks Base.metadata.drop_all() below.
+        conn.execute(text("DROP TABLE IF EXISTS cms_media CASCADE"))
         conn.commit()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)

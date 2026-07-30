@@ -27,6 +27,8 @@ from backend.routes.prefixes import public_router as prefixes_public_router
 from backend.routes.prefixes import admin_router as prefixes_admin_router
 from backend.routes.reservations import router as reservations_router
 from backend.routes.stats import router as stats_router
+from backend.routes.cms_pages import admin_router as cms_pages_admin_router
+from backend.routes.cms_redirects import admin_router as cms_redirects_admin_router
 
 # Configure logging
 logger = structlog.get_logger()
@@ -42,6 +44,21 @@ logger = structlog.get_logger()
 #   * startup latency is bounded and unrelated to schema/role drift
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Seed default roles so that any new permissions added to DEFAULT_ROLES are
+    # reflected in the database without requiring a manual migration step.
+    try:
+        from backend.database import SessionLocal
+        from backend.seeds.default_roles import seed_default_roles
+
+        db = SessionLocal()
+        try:
+            seed_default_roles(db)
+            logger.info("default_roles_seeded")
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("default_roles_seed_failed", error=str(exc))
+
     try:
         import anyio
 
@@ -130,6 +147,8 @@ app.include_router(prefixes_public_router, prefix="/api/v1")
 app.include_router(prefixes_admin_router, prefix="/api/v1")
 app.include_router(reservations_router, prefix="/api/v1")
 app.include_router(stats_router, prefix="/api/v1")
+app.include_router(cms_pages_admin_router, prefix="/api/v1")
+app.include_router(cms_redirects_admin_router, prefix="/api/v1")
 
 
 @app.get("/{path:path}")

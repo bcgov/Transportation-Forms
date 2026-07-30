@@ -81,6 +81,12 @@ class Permission(str, Enum):
     FORM_NUMBER_PREFIX_DELETE = "form_number_prefix:delete"
     FORM_NUMBER_PREFIX_ARCHIVE = "form_number_prefix:archive"
 
+    # CMS Management Permissions (FEAT-0026 US-010)
+    # Single permission gating the entire CMS admin surface (pages, media,
+    # redirects).  Held by the seeded ``content_editor`` role and may be
+    # granted to other roles (e.g., admin) via the existing role-management UI.
+    CMS_MANAGE = "cms:manage"
+
     # System Configuration Permissions
     SYSTEM_CONFIG = "system:config"
     SYSTEM_HEALTH = "system:health"
@@ -148,6 +154,8 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.FORM_NUMBER_PREFIX_UPDATE,
             Permission.FORM_NUMBER_PREFIX_DELETE,
             Permission.FORM_NUMBER_PREFIX_ARCHIVE,
+            # CMS management (FEAT-0026 US-010 — admin holds CMS_MANAGE by default)
+            Permission.CMS_MANAGE,
             # System configuration
             Permission.SYSTEM_CONFIG,
             Permission.SYSTEM_HEALTH,
@@ -224,6 +232,16 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.RESERVATION_CREATE,
             Permission.RESERVATION_READ,
             Permission.RESERVATION_SUBMIT,
+        ],
+    },
+    # FEAT-0026 US-010 — Content Editor role: holds exactly CMS_MANAGE.
+    # Seeded by Alembic migration 017; updates here keep the in-memory
+    # default in sync with the DB seed for ``seed_default_roles``.
+    "content_editor": {
+        "description": "Content Editor for the public Forms Portal mini-CMS",
+        "is_system": True,
+        "permissions": [
+            Permission.CMS_MANAGE,
         ],
     },
 }
@@ -395,6 +413,15 @@ RESOURCE_ACTION_PERMISSIONS: Dict[str, Dict[str, str]] = {
         "update": Permission.FORM_NUMBER_PREFIX_UPDATE,
         "delete": Permission.FORM_NUMBER_PREFIX_DELETE,
         "archive": Permission.FORM_NUMBER_PREFIX_ARCHIVE,
+    },
+    # FEAT-0026 — single ``cms:manage`` permission gates every CMS admin action.
+    # Every (resource="cms", action=...) maps to CMS_MANAGE.
+    "cms": {
+        "manage": Permission.CMS_MANAGE,
+        "create": Permission.CMS_MANAGE,
+        "read": Permission.CMS_MANAGE,
+        "update": Permission.CMS_MANAGE,
+        "delete": Permission.CMS_MANAGE,
     },
 }
 

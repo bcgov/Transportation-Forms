@@ -43,6 +43,17 @@
     </div>
   </header>
 
+  <!-- CMS-driven navbar (FEAT-0026 US-012). Populated by
+       ./js/components/cms-navbar.js from GET /api/public/v1/pages.
+       Hidden until at least one nav-visible page exists so the empty
+       state does not surface an empty <nav>. -->
+  <nav id="cmsNav" role="navigation" aria-label="Site pages"
+       class="bcgov-cms-nav bg-light border-bottom" hidden>
+    <div class="container">
+      <ul id="cmsNavList" class="nav nav-pills py-2 mb-0"></ul>
+    </div>
+  </nav>
+
   <main id="mainContent" tabindex="-1">
     <!-- HOME view (US-001 / US-005 / US-006) -->
     <section id="homeView" class="view" aria-labelledby="homeHeading">
@@ -127,12 +138,24 @@
       </div>
     </section>
 
-    <!-- 404 view (US-006 AC8/AC9) -->
+    <!-- CMS PAGE view (FEAT-0026 US-011) -->
+    <section id="cmsPageView" class="view" hidden aria-labelledby="cmsPageHeading">
+      <div class="container py-4">
+        <article id="cmsPageContent" aria-busy="false">
+          <h1 id="cmsPageHeading" class="visually-hidden">Page</h1>
+        </article>
+      </div>
+    </section>
+
+    <!-- 404 view (US-006 AC8/AC9 + FEAT-0026 US-013 AC5) -->
     <section id="notFoundView" class="view" hidden aria-labelledby="notFoundHeading">
       <div class="container py-5 text-center">
-        <h1 id="notFoundHeading">Form not found</h1>
-        <p class="lead">We couldn’t find what you were looking for.</p>
-        <p><a href="/" class="btn btn-primary">&larr; Back to all forms</a></p>
+        <h1 id="notFoundHeading">Page not found</h1>
+        <p class="lead">We couldn&rsquo;t find what you were looking for.</p>
+        <p class="mb-4">
+          <a href="/" class="btn btn-primary">&larr; Home</a>
+          <a href="/" class="btn btn-outline-secondary ms-2">Browse forms</a>
+        </p>
       </div>
     </section>
   </main>
