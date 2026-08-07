@@ -12,8 +12,9 @@ import {
     formatReservationStatus,
     getFormNumberDisplay,
 } from '../utils.js';
-import { getAuthToken } from '../auth.js';
+import { getAuthToken, hasPermission } from '../auth.js';
 import { openFormViewPopup } from '../shared/form-view-popup.js';
+import { openReservationViewPopup } from '../shared/reservation-view-popup.js';
 
 // Module-private state
 let _actionReservationId = null;
@@ -82,6 +83,17 @@ function _attachDelegatedListeners() {
             const refreshBtn = e.target.closest('[data-action="refresh-approvals"]');
             if (refreshBtn) {
                 loadPendingApprovals();
+                return;
+            }
+
+            // FEAT-0027 US-007 — open the compact reservation View popup.
+            const reservationViewBtn = e.target.closest('[data-action="reservation-view"]');
+            if (reservationViewBtn) {
+                e.stopPropagation();
+                openReservationViewPopup({
+                    reservationId: reservationViewBtn.dataset.id,
+                    openerElement: reservationViewBtn,
+                });
                 return;
             }
 
@@ -155,6 +167,22 @@ function _attachDelegatedListeners() {
         _refreshAfterAction();
     });
 
+    // FEAT-0027 US-007 — the reservation View popup hands each action back here
+    // so it reuses the SAME confirmation modal + server flow as the inline
+    // controls (CC-BR-04). This module owns those modals.
+    document.addEventListener('reservation-view-popup:approve', (e) => {
+        const { reservationId, formNumber } = e?.detail || {};
+        if (reservationId) openApproveModal(reservationId, formNumber);
+    });
+    document.addEventListener('reservation-view-popup:request-changes', (e) => {
+        const reservationId = e?.detail?.reservationId;
+        if (reservationId) openRequestChangesModal(reservationId);
+    });
+    document.addEventListener('reservation-view-popup:reject', (e) => {
+        const reservationId = e?.detail?.reservationId;
+        if (reservationId) openRejectModal(reservationId);
+    });
+
     _ensureModalListeners();
 }
 
@@ -209,6 +237,14 @@ export async function loadPendingApprovals() {
 
         // ── Reservation requests section ──────────────────────────────────
         if (reservationItems.length > 0) {
+            // FEAT-0027 US-007 — gate the inline action controls by the same
+            // reservation permissions the popup uses. Booleans are hoisted so
+            // they are evaluated once for the whole section.
+            const canApprove = hasPermission('reservation:approve');
+            const canRequestChanges = hasPermission('reservation:request_changes');
+            const canReject = hasPermission('reservation:reject');
+            const noPermTitle = "You don't have permission to perform this action";
+
             html += `<h5 class="text-muted mt-2 mb-2"><i class="fas fa-hashtag"></i> Form Number Reservations</h5>`;
             html += reservationItems.map(r => `
                 <div class="card reservation-card pending-card"
@@ -232,23 +268,33 @@ export async function loadPendingApprovals() {
                             </div>
                             <div class="col-md-4 text-end">
                                 <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary"
+                                            data-action="reservation-view"
+                                            data-id="${escapeHtml(r.id)}"
+                                            title="View Details"
+                                            aria-label="View reservation ${escapeHtml(r.full_form_number)}">
+                                        <i class="fas fa-eye"></i> View
+                                    </button>
                                     <button class="btn btn-success"
                                             data-action="open-approve"
                                             data-id="${escapeHtml(r.id)}"
                                             data-form-number="${escapeHtml(r.full_form_number)}"
-                                            title="Approve">
+                                            ${canApprove ? '' : 'disabled'}
+                                            title="${canApprove ? 'Approve' : noPermTitle}">
                                         <i class="fas fa-check"></i> Approve
                                     </button>
                                     <button class="btn btn-warning"
                                             data-action="open-request-changes"
                                             data-id="${escapeHtml(r.id)}"
-                                            title="Request Changes">
+                                            ${canRequestChanges ? '' : 'disabled'}
+                                            title="${canRequestChanges ? 'Request Changes' : noPermTitle}">
                                         <i class="fas fa-edit"></i> Changes
                                     </button>
                                     <button class="btn btn-danger"
                                             data-action="open-reject"
                                             data-id="${escapeHtml(r.id)}"
-                                            title="Reject">
+                                            ${canReject ? '' : 'disabled'}
+                                            title="${canReject ? 'Reject' : noPermTitle}">
                                         <i class="fas fa-times"></i> Reject
                                     </button>
                                 </div>
