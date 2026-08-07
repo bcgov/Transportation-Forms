@@ -37,10 +37,46 @@ main { flex: 1 0 auto; }
 .bcgov-header { background: #003366; color: #fff; border-bottom: 2px solid #fcba19; }
 .bcgov-header a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
 .ministry-name { color: #fff; }
+/*
+ * Header logo (US-003). Only `height` is set; `width: auto` explicitly preserves
+ * the asset's natural aspect ratio (AC1) and prevents any inherited `width:100%`
+ * from a parent flex/grid from squishing it. `max-width: 100%` guarantees the
+ * logo never overflows the header container on narrow viewports (AC4), and the
+ * xs-breakpoint override reduces height so the logo + brand text fit at 320px
+ * without introducing a horizontal scrollbar.
+ 
 .bcgov-header-logo {
-    height: 60px;
+    height: 40px;
+    width: auto;
+    max-width: 100%;
     margin-right: 2rem;
     flex-shrink: 0;
+}
+@media (max-width: 500px) {
+  .bcgov-header-logo {
+    height: 40px;
+    width:auto;
+    margin-right: 1rem;
+  }
+}
+*/
+.bcgov-header h4
+{
+  font-size: 1.4rem;
+}
+.bcgov-header-logo {
+    height: auto;
+    width: auto;
+    max-height: 50px; /* cap height on larger screens */
+    max-width: 100%; /* on small screens, width becomes the limit */
+    display: block;
+}
+@media (max-width: 500px) {
+  .bcgov-header-logo {
+    height: 50px;
+    width:auto;
+    margin-right: 1rem;
+  }
 }
 
 /* Sticky search */
@@ -60,21 +96,43 @@ form-card {
 }
 form-card .form-card__header { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
 form-card .form-card__num { font-weight: 700; color: #003366; }
+/*
+ * US-004 — form number rendered as an anchor. Inherit the theme link
+ * treatment (colour + underline) so the affordance matches every other
+ * primary link on the public portal.
+ */
+form-card a.form-card__num { color: #1a5a96; text-decoration: underline; }
+form-card a.form-card__num:hover,
+form-card a.form-card__num:focus { color: #003366; text-decoration: underline; }
 form-card .form-card__title {
   margin: 0;
   font-size: 1.125rem;
   overflow-wrap: anywhere; /* US-007 AC16 — long titles reflow at 320px */
   word-break: break-word;  /* fallback for browsers without overflow-wrap:anywhere */
 }
+/*
+ * US-001 — description on the public list MUST wrap inside its container at
+ * every breakpoint (AC1) rather than truncate. `overflow-wrap: anywhere` and
+ * `word-break: break-word` together cover the long-unbroken-token case (AC2).
+ * Note: BR-02 explicitly forbids single-line ellipsis truncation on the
+ * public list — that behaviour is scoped to the internal Forms list only.
+ */
 form-card .form-card__desc {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
   max-width: 100%;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 form-card .form-card__actions { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem; }
 form-card .badge { background: #e0e7ef; color: #003366; padding: 0.15rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; }
+/*
+ * US-002 — Download pill. `.btn.btn-primary.rounded-pill` inherits the
+ * theme's primary background, border-radius, padding, and focus styles from
+ * the vendored BC Bootstrap; no one-off token is introduced here (AC2).
+ * The margin-left auto keeps the button on the right edge of the row when
+ * the effective-date time element sits on the left.
+ */
+form-card .form-card__download { margin-left: auto; }
 form-card a:focus-visible,
 form-card button:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
 

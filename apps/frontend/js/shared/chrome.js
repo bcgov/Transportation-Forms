@@ -17,7 +17,7 @@
  *   - AC3: includes a "Skip to main content" link
  *   - AC11: works without JS — the host index.html may render a static
  *           fallback header that this module replaces in-place when JS runs.
- */
+ 
 
 const HEADER_HTML = `
   <a class="visually-hidden-focusable skip-link" href="#mainContent">Skip to main content</a>
@@ -37,7 +37,7 @@ const HEADER_HTML = `
  * @param {HTMLElement} target - the element to replace innerHTML of (e.g. <header id="siteHeader">)
  * @param {object} [opts]
  * @param {string} [opts.appName] - human-readable app label shown next to the logo
- */
+ 
 export function renderHeader(target, opts = {}) {
   if (!target) return;
   const appName = (opts.appName || 'BC Government').replace(/[<>&"]/g, c => ({
@@ -47,3 +47,4 @@ export function renderHeader(target, opts = {}) {
 }
 
 export default { renderHeader };
+*/

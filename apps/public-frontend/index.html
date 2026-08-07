@@ -33,14 +33,26 @@
 
   <!-- Shared header (US-010). Rendered by ./js/shared/chrome.js when JS is on;
        static markup below is a progressive-enhancement fallback (US-010 AC11). -->
-  <header id="siteHeader" role="banner" class="bcgov-header">
+ <!-- <header id="siteHeader" role="banner" class="bcgov-header">
     <div class="container d-flex align-items-center py-2">
       <a href="/" class="d-flex align-items-center text-decoration-none" aria-label="BC Government — home">
+     
         <img src="/assets/bc-gov-transportation-logo.png" alt="" class="bcgov-header-logo">
         <span class="visually-hidden">BC Transportation and Transit</span>
       </a>
       <h4 class="text-white m-0">Transportation Forms</h4>
     </div>
+  </header> -->
+  <header id="siteHeader" role="banner">
+  <div class="bcgov-header" role="banner">
+    <div class="container d-flex flex-column flex-sm-row align-items-start align-items-sm-center py-2">
+      <a href="/" class="d-flex align-items-center text-decoration-none" aria-label="BC Government — home">
+        <img src="/assets/bc-gov-transportation-logo.png" class="bcgov-header-logo">
+        <span class="visually-hidden">BC Transportation and Transit Public Forms</span>
+      </a>
+      <h4 class="ms-0 ms-sm-3 mt-1 mt-sm-0 mb-0 fw-bold align-self-center align-self-sm-auto text-center mt-3 mt-sm-0">Public Forms</h4>
+    </div>
+  </div>
   </header>
 
   <!-- CMS-driven navbar (FEAT-0026 US-012). Populated by
@@ -50,7 +62,7 @@
   <nav id="cmsNav" role="navigation" aria-label="Site pages"
        class="bcgov-cms-nav bg-light border-bottom" hidden>
     <div class="container">
-      <ul id="cmsNavList" class="nav nav-pills py-2 mb-0"></ul>
+      <ul id="cmsNavList" class="nav nav-pills flex-nowrap overflow-x-auto text-nowrap py-2 mb-0"></ul>
     </div>
   </nav>
 
@@ -58,7 +70,7 @@
     <!-- HOME view (US-001 / US-005 / US-006) -->
     <section id="homeView" class="view" aria-labelledby="homeHeading">
       <div class="container py-4">
-        <h1 id="homeHeading" class="visually-hidden">Public Forms</h1>
+        <h1 id="homeHeading" class="visually-hidden">Transportation Forms</h1>
 
         <div class="hero text-center mb-4">
           <h2 class="display-6">Find a transportation form</h2>
@@ -72,7 +84,7 @@
               <div class="col-12 col-md-12">
                 <label for="searchInput" class="form-label">Search forms</label>
                 <input id="searchInput" type="search" class="form-control form-control-lg" placeholder="Search forms…" aria-describedby="searchHelp" maxlength="100" autofocus>
-                <div id="searchHelp" class="form-text">Search for forms here</div>
+                
               </div>                
               <div class="row col-12 col-md-12">
                 <div class="col-6 col-md-3">
