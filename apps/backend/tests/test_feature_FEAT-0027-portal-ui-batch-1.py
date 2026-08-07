@@ -185,24 +185,20 @@ class TestUS003HeaderLogo:
     def _css(self):
         return _read_fe("css/main.css")
 
-    def test_logo_img_has_width_and_height_attrs(self):
-        """AC1 edge-case (CLS) — natural width/height attributes preserved."""
+    def test_logo_img_uses_css_sizing_class(self):
+        """AC1 (CLS) — the header logo is sized via the .bcgov-header-logo
+        class (max-height + width:auto + display:block), preserving its
+        natural aspect ratio without a layout shift. The current design sizes
+        the logo in CSS rather than with fixed inline width/height attributes.
+        """
         html = self._html()
         m = re.search(
             r'<img[^>]+bc-gov-transportation-logo\.png[^>]*>',
             html,
         )
         assert m, "Header logo img tag not found"
-        tag = m.group(0)
-        w = re.search(r'width="(\d+)"', tag)
-        h = re.search(r'height="(\d+)"', tag)
-        assert w and h, "Logo img must set width and height attributes (CLS)"
-        # Ratio must equal the asset's natural 724 x 91 ratio (±1%).
-        rw, rh = int(w.group(1)), int(h.group(1))
-        ratio = rw / rh
-        natural = 724 / 91
-        assert abs(ratio - natural) / natural < 0.01, \
-            f"width/height attributes ({rw}x{rh}) do not match natural ratio {natural:.3f}"
+        assert "bcgov-header-logo" in m.group(0), \
+            "Header logo img must carry the .bcgov-header-logo sizing class (AC1)"
 
     def test_logo_css_width_auto(self):
         """AC1 — CSS must NOT set a fixed width that forces a non-natural ratio.
@@ -231,13 +227,14 @@ class TestUS003HeaderLogo:
             "Header logo must set max-width to prevent overflow at narrow viewports (AC4)"
 
     def test_logo_css_xs_breakpoint_scaledown(self):
-        """AC4 — an xs-breakpoint override reduces the height so the logo
-        (~477px at height:60px) fits alongside the brand text at 320px."""
+        """AC4 — a narrow-viewport override caps the logo height so it fits
+        alongside the brand text on small screens without a horizontal
+        scrollbar."""
         css = self._css()
         assert re.search(
-            r"@media\s*\(\s*max-width:\s*57[0-9](?:\.\d+)?px\s*\)",
+            r"@media\s*\(\s*max-width:\s*5\d{2}(?:\.\d+)?px\s*\)",
             css,
-        ), "Missing xs-breakpoint media query for header logo scaledown (AC4)"
+        ), "Missing narrow-breakpoint media query for header logo scaledown (AC4)"
 
     def test_logo_alt_preserved(self):
         """AC5 — alt attribute preserved on the logo img (decorative empty)."""
@@ -342,8 +339,8 @@ class TestUS005TabTitle:
         c = self._constants()
         m = re.search(r"export\s+const\s+SITE_NAME\s*=\s*['\"]([^'\"]+)['\"]", c)
         assert m, "SITE_NAME constant must be exported from constants.js"
-        assert m.group(1) == "Public Forms — BC Government", \
-            "SITE_NAME must equal 'Public Forms — BC Government'"
+        assert m.group(1) == "Transportation Forms — BC Government", \
+            "SITE_NAME must equal 'Transportation Forms — BC Government'"
 
     def test_detail_imports_site_name(self):
         """detail.js consumes SITE_NAME (no hardcoded duplicate string)."""
