@@ -34,7 +34,7 @@ main { flex: 1 0 auto; }
 .bcgov-footer a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
 
 /* Header */
-.bcgov-header { background: #003366; color: #fff; border-bottom: 2px solid #fcba19; }
+.bcgov-header { background: #003366; color: #fff; border-bottom: 2px solid #fcba19; padding-top:10px !important; padding-bottom:10px !important; }
 .bcgov-header a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
 .ministry-name { color: #fff; }
 /*
@@ -44,25 +44,10 @@ main { flex: 1 0 auto; }
  * logo never overflows the header container on narrow viewports (AC4), and the
  * xs-breakpoint override reduces height so the logo + brand text fit at 320px
  * without introducing a horizontal scrollbar.
- 
-.bcgov-header-logo {
-    height: 40px;
-    width: auto;
-    max-width: 100%;
-    margin-right: 2rem;
-    flex-shrink: 0;
-}
-@media (max-width: 500px) {
-  .bcgov-header-logo {
-    height: 40px;
-    width:auto;
-    margin-right: 1rem;
-  }
-}
-*/
+ */
 .bcgov-header h4
 {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
 }
 .bcgov-header-logo {
     height: auto;

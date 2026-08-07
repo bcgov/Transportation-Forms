@@ -17,7 +17,7 @@
  * we additionally only read the allow-listed fields below).
  */
 
-import { escapeHtml, formatDate, formatFileType, truncate, byteLength } from '../utils.js';
+import { escapeHtml, formatDate, formatFileType, byteLength } from '../utils.js';
 import { HISTORY_STATE_CAP_BYTES } from '../constants.js';
 import { downloadFormFile } from '../api.js';
 
@@ -58,17 +58,31 @@ class FormCard extends HTMLElement {
 
     const num = f.form_number || '—';
     const title = f.title || '';
-    const desc = truncate(f.description || '', 160);
+    // US-001 — no client-side truncation on public list; description wraps in CSS.
+    const desc = f.description || '';
     const ba = f.business_area || '';
     const ft = formatFileType(f.file_type);
     const eff = formatDate(f.effective_date);
     const hasNumber = !!f.form_number;
 
+    // US-004 — form number rendered as a hyperlink to the same canonical
+    // details URL used by "View more" (AC1/AC2). When form_number is null
+    // we fall back to a plain span (no navigable target). Uses a native
+    // `<a href>` so middle-click / Ctrl-click open in a new tab (AC6).
+    // The URL literal is inlined in each template so the shape
+    // `href="/forms/..."` is a stable, greppable anchor.
+    const routeState = hasNumber ? escapeHtml(JSON.stringify(this._stateForDetail(f))) : '';
+    const formNumberEl = hasNumber
+      ? `<a class="form-card__num" href="/forms/${encodeURIComponent(f.form_number)}"
+            data-route-state='${routeState}'
+            aria-label="Open details for form ${escapeHtml(num)}">${escapeHtml(num)}</a>`
+      : `<span class="form-card__num">${escapeHtml(num)}</span>`;
+
     // "View more" is a real anchor (AC3); when form_number is null it's a
     // disabled span with aria-disabled (AC2).
     const viewMore = hasNumber
-      ? `<a class="form-card__more" href="/forms/${escapeHtml(f.form_number)}"
-            data-route-state='${escapeHtml(JSON.stringify(this._stateForDetail(f)))}'>View more</a>`
+      ? `<a class="form-card__more" href="/forms/${encodeURIComponent(f.form_number)}"
+            data-route-state='${routeState}'>View more</a>`
       : `<span class="form-card__more text-muted" aria-disabled="true"
               title="Form number not yet assigned">View more</span>`;
 
@@ -76,17 +90,19 @@ class FormCard extends HTMLElement {
       ? `Download ${escapeHtml(num)}${ft ? ` (${escapeHtml(ft)})` : ''}`
       : 'Download (unavailable)';
 
-    // Download is its own tab stop (AC6). Use a <button> not inside the
-    // "View more" anchor to keep the two stops distinct.
+    // US-002 — themed pill Download button. Reuses the vendored BC Bootstrap
+    // `.btn.btn-primary.rounded-pill` classes (no one-off style). The button
+    // is its own tab stop separate from the form-number and "View more"
+    // links so keyboard users hit each affordance in visual order.
     const downloadBtn = hasNumber
-      ? `<button type="button" class="btn btn-link p-0 form-card__download"
-                data-action="download" aria-label="${downloadLabel}">⬇</button>`
-      : `<button type="button" class="btn btn-link p-0 form-card__download"
-                disabled aria-disabled="true" aria-label="${downloadLabel}">⬇</button>`;
+      ? `<button type="button" class="btn btn-primary btn-sm rounded-pill form-card__download"
+                data-action="download" aria-label="${downloadLabel}">Download</button>`
+      : `<button type="button" class="btn btn-primary btn-sm rounded-pill form-card__download"
+                disabled aria-disabled="true" aria-label="${downloadLabel}">Download</button>`;
 
     this.innerHTML = `
       <div class="form-card__header">
-        <span class="form-card__num">${escapeHtml(num)}</span>
+        ${formNumberEl}
         ${ba ? `<span class="text-muted">·</span><span class="form-card__ba">${escapeHtml(ba)}</span>` : ''}
         ${ft ? `<span class="badge ms-auto">${escapeHtml(ft)}</span>` : ''}
       </div>

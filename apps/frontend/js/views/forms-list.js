@@ -3,7 +3,6 @@
 import { API_BASE, ROUTES } from '../constants.js';
 import {
     escapeHtml,
-    formatDateTime,
     showAlert,
     showSpinner,
     getErrorDetail,
@@ -17,6 +16,7 @@ import {
 } from './business-areas.js';
 import { hasPermission, getAuthToken, isAdminUser } from '../auth.js';
 import { getCurrentUser } from '../state.js';
+import { openFormViewPopup } from '../shared/form-view-popup.js';
 
 // ── Module-private pagination state ──────────────────────────────────────────
 let _currentSkip = 0;
@@ -307,7 +307,7 @@ function _handleFormsListClick(e) {
     const restoreBtn = e.target.closest('[data-action="restore-form"]');
 
     if (viewBtn) {
-        _viewForm(viewBtn.dataset.formId);
+        _viewForm(viewBtn.dataset.formId, viewBtn);
     } else if (deleteBtn) {
         _deleteForm(deleteBtn.dataset.formId, deleteBtn.dataset.formTitle);
     } else if (submitBtn) {
@@ -442,99 +442,14 @@ function _selectSearchSuggestion(value) {
 
 // ── Form card actions ─────────────────────────────────────────────────────────
 
-async function _viewForm(formId) {
-    try {
-        const response = await fetch(`${API_BASE}/forms/${formId}`);
-        if (!response.ok) throw new Error('Form not found');
-        const form = await response.json();
-
-        document.getElementById('formModalTitle').textContent = form.title;
-        document.getElementById('formModalBody').innerHTML = `
-            <dl class="row">
-                <dt class="col-sm-3">Title:</dt>
-                <dd class="col-sm-9">${escapeHtml(form.title)}</dd>
-
-                <dt class="col-sm-3">Form Number:</dt>
-                <dd class="col-sm-9">${escapeHtml(getFormNumberDisplay(form))}</dd>
-
-                <dt class="col-sm-3">Description:</dt>
-                <dd class="col-sm-9">${escapeHtml(form.description || 'N/A')}</dd>
-
-                <dt class="col-sm-3">Status:</dt>
-                <dd class="col-sm-9"><span class="badge bg-info">${escapeHtml(form.status)}</span></dd>
-
-                <dt class="col-sm-3">Public:</dt>
-                <dd class="col-sm-9">${form.is_public ? 'Yes' : 'No'}</dd>
-
-                <dt class="col-sm-3">Does this form collect personal info?</dt>
-                <dd class="col-sm-9">${escapeHtml(form.collects_personal_info || 'No')}</dd>
-
-                <dt class="col-sm-3">Form Source:</dt>
-                <dd class="col-sm-9">${escapeHtml(form.form_source || 'N/A')}</dd>
-
-                ${form.form_source === 'URL' ? `
-                <dt class="col-sm-3">Source URL:</dt>
-                <dd class="col-sm-9">
-                    <a href="${escapeHtml(form.form_source_url)}" target="_blank" rel="noopener noreferrer">
-                        ${escapeHtml(form.form_source_url)}
-                    </a>
-                </dd>
-                ` : ''}
-
-                ${form.form_source === 'Download' ? `
-                <dt class="col-sm-3">Attachment:</dt>
-                <dd class="col-sm-9">
-                    <button type="button" class="btn btn-link p-0"
-                        data-action="download-attachment"
-                        data-form-id="${escapeHtml(form.id)}">
-                        <i class="fas fa-download"></i>
-                        ${escapeHtml(form.form_attachment_filename || 'Download')}
-                    </button>
-                </dd>
-                ` : ''}
-
-                ${form.file_type ? `
-                <dt class="col-sm-3">File Type:</dt>
-                <dd class="col-sm-9">${escapeHtml(form.file_type)}</dd>
-                ` : ''}
-
-                <dt class="col-sm-3">Business Area:</dt>
-                <dd class="col-sm-9">
-                    ${form.business_area
-                        ? `<span class="badge bg-primary me-1">${escapeHtml(form.business_area.name)}</span>`
-                        : 'None'}
-                </dd>
-
-                <dt class="col-sm-3">Keywords:</dt>
-                <dd class="col-sm-9">
-                    ${form.keywords?.length
-                        ? form.keywords.map(k => escapeHtml(k)).join(', ')
-                        : 'None'}
-                </dd>
-
-                <dt class="col-sm-3">Created:</dt>
-                <dd class="col-sm-9">${formatDateTime(form.created_at)}</dd>
-
-                <dt class="col-sm-3">Updated:</dt>
-                <dd class="col-sm-9">${formatDateTime(form.updated_at)}</dd>
-            </dl>
-        `;
-
-        // Wire download-attachment button (streams the bytes from the admin API
-        // to avoid navigating directly to a raw S3 object key).
-        const downloadBtn = document.getElementById('formModalBody')
-            ?.querySelector('[data-action="download-attachment"]');
-        if (downloadBtn) {
-            downloadBtn.addEventListener('click', () => {
-                _downloadFormAttachment(downloadBtn.dataset.formId, form.form_attachment_filename);
-            });
-        }
-
-        // eslint-disable-next-line no-undef
-        new bootstrap.Modal(document.getElementById('formModal')).show();
-    } catch (error) {
-        showAlert('Error loading form: ' + error.message, 'danger');
-    }
+async function _viewForm(formId, openerElement = null) {
+    // FEAT-0027 US-006 / US-008 — delegate to the shared View Details popup
+    // component so the same UI is presented from every entry point.
+    await openFormViewPopup({
+        formId,
+        mode: 'default',
+        openerElement,
+    });
 }
 
 async function _deleteForm(formId, formTitle) {
@@ -816,61 +731,3 @@ function _closeFilterDropdown() {
     _setFilterDropdownVisible(false);
 }
 
-/**
- * Stream the form's attachment from the admin API into a Blob and trigger a
- * download via a hidden anchor.
- *
- * SECURITY: this endpoint streams the file bytes directly from the backend;
- * no S3 URL, bucket name, object key, or pre-signed URL is exposed to the
- * browser at any point.  The Authorization header is automatically attached
- * by the API fetch interceptor for any URL under `/api/v1/`.
- *
- * The server sets `Content-Disposition: attachment; filename="…"`.  We
- * parse the filename from the header when available so the saved file
- * matches the original upload, and fall back to the supplied label.
- */
-async function _downloadFormAttachment(formId, fallbackFilename) {
-    let objectUrl = null;
-    try {
-        const response = await fetch(`${API_BASE}/forms/${formId}/file`, {
-            headers: { Authorization: `Bearer ${getAuthToken()}` },
-        });
-        if (!response.ok) {
-            // Try to surface RFC-7807 / detail message if present without
-            // leaking binary payloads back to the user.
-            let detail = '';
-            try {
-                const ct = response.headers.get('content-type') || '';
-                if (ct.includes('json')) {
-                    const body = await response.json();
-                    detail = body.detail || body.title || '';
-                }
-            } catch { /* ignore */ }
-            throw new Error(detail || `Download failed (${response.status})`);
-        }
-
-        const blob = await response.blob();
-        objectUrl = URL.createObjectURL(blob);
-
-        // Prefer the server-supplied filename from Content-Disposition.
-        const disposition = response.headers.get('content-disposition') || '';
-        const match = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(disposition);
-        const filename = (match && decodeURIComponent(match[1])) || fallbackFilename || 'attachment';
-
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = filename;
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    } catch (error) {
-        showAlert('Error downloading attachment: ' + error.message, 'danger');
-    } finally {
-        // Always release the object URL to avoid leaking blob memory.
-        if (objectUrl) {
-            // Defer revoke until after the browser has started the download.
-            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-        }
-    }
-}

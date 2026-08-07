@@ -51,6 +51,15 @@ export async function navigateTo(path, params = {}) {
 // ─── View helpers ─────────────────────────────────────────────────────────────
 
 /**
+ * Loose UUID shape check for the FEAT-0027 US-008 deep-link. Anything that
+ * fails this test collapses into the same "not found / no permission" toast
+ * as a 404 / 403 response so callers cannot distinguish the failure branches.
+ */
+function _isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+/**
  * Hides every top-level view element by ID so that only the active view
  * needs to set itself visible.
  */
@@ -172,6 +181,14 @@ export async function routeHandler(path, params = {}) {
 
   // ── Unauthenticated guard ──────────────────────────────────────────────────
   if (!isAuthenticated() && path !== ROUTES.CALLBACK) {
+    // FEAT-0027 US-008 AC9 — remember the deep-link target so the app can
+    // resume there once the user completes the login flow. Uses the same
+    // sessionStorage key already consumed by auth.js on callback.
+    if (path && path !== ROUTES.HOME && path.startsWith('/forms/')) {
+      try {
+        sessionStorage.setItem('tf_return_url', path);
+      } catch (_e) { /* ignore quota / private-mode errors */ }
+    }
     _currentRoute = 'welcome';
     _routeParams = {};
     const { showWelcomeView } = await import('./views/welcome.js');
@@ -254,6 +271,25 @@ export async function routeHandler(path, params = {}) {
     _routeParams = {};
     const { showListView } = await import('./views/list.js');
     await showListView();
+
+  } else if (path.startsWith('/forms/')) {
+    // FEAT-0027 US-008 — deep-link `/forms/<form_uuid>` opens the Forms list
+    // and auto-opens the View Details popup for that form. All failure branches
+    // (invalid UUID, form does not exist, caller lacks form:read) surface the
+    // SAME generic toast to avoid the information leak in CC-BR-05 / AC7 / AC8.
+    const formId = path.replace('/forms/', '').replace(/\/$/, '');
+    _currentRoute = 'list';
+    _routeParams = { deepLinkFormId: formId };
+    const { showListView } = await import('./views/list.js');
+    await showListView();
+    const { openFormViewPopup, DEEPLINK_DENIED_TOAST } =
+      await import('./shared/form-view-popup.js');
+    const { showNotification } = await import('./utils.js');
+    if (!formId || !_isUuidLike(formId)) {
+      showNotification(DEEPLINK_DENIED_TOAST, 'warning');
+    } else {
+      await openFormViewPopup({ formId });
+    }
 
   } else if (path === ROUTES.CALLBACK) {
     // OIDC authorization_code callback — auth.js dispatches 'auth:callback-complete'
@@ -429,8 +465,17 @@ export function initRouter() {
   // auth.js signals that the session has expired / user signed out → go home.
   window.addEventListener('auth:navigate-home', () => navigateTo(ROUTES.HOME));
 
-  // auth.js signals that the OIDC callback exchange completed → go to dashboard.
-  window.addEventListener('auth:callback-complete', () => navigateTo(ROUTES.DASHBOARD));
+  // auth.js signals that the OIDC callback exchange completed → resume at
+  // the return URL (FEAT-0027 US-008 AC9) if auth.js has replaced the browser
+  // URL with a stored deep-link, otherwise fall back to the dashboard.
+  window.addEventListener('auth:callback-complete', () => {
+    const currentPath = window.location.pathname;
+    if (currentPath && currentPath !== ROUTES.HOME && currentPath !== ROUTES.CALLBACK) {
+      routeHandler(currentPath);
+    } else {
+      navigateTo(ROUTES.DASHBOARD);
+    }
+  });
 
   // Browser back / forward buttons.
   window.addEventListener('popstate', () => routeHandler(window.location.pathname));

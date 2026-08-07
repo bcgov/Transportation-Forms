@@ -5,6 +5,13 @@
 
 export const API_BASE = '/api/public/v1';
 
+/**
+ * Public site brand string. Used for the `<title>` chunk after the form
+ * identifier (US-005) and shared with existing SEO metadata so the tab
+ * title never drifts from the site brand.
+ */
+export const SITE_NAME = 'Transportation Forms — BC Government';
+
 export const ROUTES = {
   HOME: '/',
   FORM_DETAIL_PREFIX: '/forms/',

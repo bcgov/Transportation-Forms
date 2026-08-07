@@ -13,6 +13,7 @@ import {
     getFormNumberDisplay,
 } from '../utils.js';
 import { getAuthToken } from '../auth.js';
+import { openFormViewPopup } from '../shared/form-view-popup.js';
 
 // Module-private state
 let _actionReservationId = null;
@@ -124,9 +125,35 @@ function _attachDelegatedListeners() {
             if (formRejectBtn) {
                 e.stopPropagation();
                 _openFormRejectModal(formRejectBtn.dataset.formId);
+                return;
+            }
+
+            // FEAT-0027 US-006 — open the shared View Details popup for a
+            // Form Approval Request row.
+            const formViewBtn = e.target.closest('[data-action="form-view"]');
+            if (formViewBtn) {
+                e.stopPropagation();
+                openFormViewPopup({
+                    formId: formViewBtn.dataset.formId,
+                    mode: 'approvals',
+                    requesterName: formViewBtn.dataset.requester || null,
+                    submittedAt: formViewBtn.dataset.submittedAt || null,
+                    openerElement: formViewBtn,
+                });
             }
         });
     }
+
+    // FEAT-0027 US-006 — the shared popup dispatches these events so this
+    // module (owner of _actionFormId and the reject modal wiring) stays in
+    // control of the transactional state.
+    document.addEventListener('form-view-popup:reject-request', (e) => {
+        const formId = e?.detail?.formId;
+        if (formId) _actionFormId = formId;
+    });
+    document.addEventListener('form-view-popup:action-complete', () => {
+        _refreshAfterAction();
+    });
 
     _ensureModalListeners();
 }
@@ -257,6 +284,15 @@ export async function loadPendingApprovals() {
                             </div>
                             <div class="col-md-3 text-end">
                                 <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary"
+                                            data-action="form-view"
+                                            data-form-id="${escapeHtml(f.form_id)}"
+                                            data-requester="${escapeHtml(f.submitted_by || '')}"
+                                            data-submitted-at="${escapeHtml(f.submitted_at || '')}"
+                                            title="View Details"
+                                            aria-label="View form ${escapeHtml(f.form_number || '')}">
+                                        <i class="fas fa-eye"></i> View
+                                    </button>
                                     <button class="btn btn-success"
                                             data-action="form-approve"
                                             data-form-id="${escapeHtml(f.form_id)}"

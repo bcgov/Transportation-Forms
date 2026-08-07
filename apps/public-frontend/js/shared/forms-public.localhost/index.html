@@ -17,15 +17,15 @@
   <!-- Default OG / Twitter meta for home view (US-008 AC6).
        detail.js overrides these; home.js restores them on back-navigation. -->
   <meta property="og:type"        content="website">
-  <meta property="og:title"       content="Public Forms — BC Government">
+  <meta property="og:title"       content="BC Transportation and Transit Public Forms">
   <meta property="og:description" content="Browse and download BC Government transportation forms.">
   <meta property="og:url"         content="/">
   <meta property="og:site_name"   content="BC Government Public Forms">
   <meta name="twitter:card"        content="summary">
-  <meta name="twitter:title"       content="Public Forms — BC Government">
+  <meta name="twitter:title"       content="BC Transportation and Transit Public Forms">
   <meta name="twitter:description" content="Browse and download BC Government transportation forms.">
 
-  <title>Public Forms — BC Government</title>
+  <title>BC Transportation Forms</title>
 </head>
 <body>
   <!-- Skip-to-main link (US-007 AC2 / US-003 AC13) -->
@@ -33,16 +33,6 @@
 
   <!-- Shared header (US-010). Rendered by ./js/shared/chrome.js when JS is on;
        static markup below is a progressive-enhancement fallback (US-010 AC11). -->
- <!-- <header id="siteHeader" role="banner" class="bcgov-header">
-    <div class="container d-flex align-items-center py-2">
-      <a href="/" class="d-flex align-items-center text-decoration-none" aria-label="BC Government — home">
-     
-        <img src="/assets/bc-gov-transportation-logo.png" alt="" class="bcgov-header-logo">
-        <span class="visually-hidden">BC Transportation and Transit</span>
-      </a>
-      <h4 class="text-white m-0">Transportation Forms</h4>
-    </div>
-  </header> -->
   <header id="siteHeader" role="banner">
   <div class="bcgov-header" role="banner">
     <div class="container d-flex flex-column flex-sm-row align-items-start align-items-sm-center py-2">
@@ -60,9 +50,9 @@
        Hidden until at least one nav-visible page exists so the empty
        state does not surface an empty <nav>. -->
   <nav id="cmsNav" role="navigation" aria-label="Site pages"
-       class="bcgov-cms-nav bg-light border-bottom" hidden>
+       class="bcgov-cms-nav bg-light border-bottom">
     <div class="container">
-      <ul id="cmsNavList" class="nav nav-pills flex-nowrap overflow-x-auto text-nowrap py-2 mb-0"></ul>
+      <ul id="cmsNavList" class="nav nav-pills py-2 mb-0"></ul>
     </div>
   </nav>
 
@@ -73,45 +63,71 @@
         <h1 id="homeHeading" class="visually-hidden">Transportation Forms</h1>
 
         <div class="hero text-center mb-4">
-          <h2 class="display-6">Find a transportation form</h2>
-          <p class="lead">Search the public catalogue or browse the most-recently-updated forms.</p>
+          <h2 class="display-6">Find public forms from BC Transportation and Transit</h2>
+          <p class="lead">Search the public catalogue or browse the most recently updated forms.</p>
         </div>
 
         <!-- Sticky search row (US-001 AC5) -->
-        <div class="search-sticky bg-body sticky-top py-2" id="searchSticky">
-          <form id="searchForm" role="search" autocomplete="off" onsubmit="return false;">
-            
-              <div class="col-12 col-md-12">
-                <label for="searchInput" class="form-label">Search forms</label>
-                <input id="searchInput" type="search" class="form-control form-control-lg" placeholder="Search forms…" aria-describedby="searchHelp" maxlength="100" autofocus>
-                
-              </div>                
-              <div class="row col-12 col-md-12">
-                <div class="col-6 col-md-3">
-                  <label for="filterBA" class="form-label">Business area</label>
-                  <select id="filterBA" class="form-select" aria-label="Filter by business area">
-                    <option value="">All business areas</option>
-                  <option value="Licensing">Licensing</option></select>
-                </div>
-                <div class="col-3 col-md-2">
-                  <label for="sortField" class="form-label">Sort by</label>
-                  <select id="sortField" class="form-select">
-                    <option value="updated_at">Updated</option>
-                    <option value="title">Title</option>
-                    <option value="form_number">Form #</option>
-                    <option value="effective_date">Effective</option>
-                  </select>
-                </div>
-                <div class="col-3 col-md-2">
-                  <label for="sortOrder" class="form-label">Order</label>
-                  <select id="sortOrder" class="form-select" aria-label="Sort order">
-                    <option value="desc">Desc</option>
-                    <option value="asc">Asc</option>
-                  </select>
-                </div>
-            </div>
-          </form>
+     <div class="search-sticky bg-body sticky-top py-2" id="searchSticky">
+  <form id="searchForm" role="search" autocomplete="off" onsubmit="return false;">
+
+    <!-- Search bar + filter toggle button on the right -->
+    <div class="col-12">
+      <label for="searchInput" class="form-label">Search forms</label>
+      <div class="d-flex align-items-stretch gap-2">
+        <input id="searchInput" type="search"
+               class="form-control form-control-lg flex-grow-1"
+               placeholder="Search forms…" aria-describedby="searchHelp"
+               maxlength="100" autofocus>
+
+        <!-- Toggle button -->
+        <button class="btn btn-outline-secondary d-flex align-items-center flex-shrink-0"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#filtersCollapse"
+                aria-expanded="false"
+                aria-controls="filtersCollapse">
+          <i class="bi bi-sliders me-1"></i> Filters
+        </button>
+      </div>
+      <div id="searchHelp" class="form-text">Search for forms here</div>
+    </div>
+
+    <!-- Collapsible filters -->
+    <div class="collapse" id="filtersCollapse">
+      <div class="row g-2 mt-1">
+        <div class="col-12 col-md-3">
+          <label for="filterBA" class="form-label">Business area</label>
+          <select id="filterBA" class="form-select" aria-label="Filter by business area">
+            <option value="">All business areas</option>
+            <option value="Licensing">Licensing</option>
+            <option value="Compliance">Compliance</option>
+          </select>
         </div>
+        <div class="col-12 col-md-2">
+          <label for="sortField" class="form-label">Sort by</label>
+          <select id="sortField" class="form-select">
+            <option value="updated_at">Updated</option>
+            <option value="title">Title</option>
+            <option value="form_number">Form #</option>
+            <option value="effective_date">Effective</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <label for="sortOrder" class="form-label">Order</label>
+          <select id="sortOrder" class="form-select" aria-label="Sort order">
+            <option value="desc">Desc</option>
+            <option value="asc">Asc</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+  </form>
+</div>
+
+  </form>
+</div>
 
         <!-- Result count line + aria-live (US-001 AC3, US-005 AC14) -->
         <div class="d-flex justify-content-between align-items-center mt-3 mb-2">

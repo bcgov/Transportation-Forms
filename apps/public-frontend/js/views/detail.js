@@ -8,6 +8,7 @@
 
 import { fetchJson, ApiError, downloadFormFile } from '../api.js';
 import { escapeHtml, formatDate, formatDateTime, formatFileType, truncate } from '../utils.js';
+import { SITE_NAME } from '../constants.js';
 import { showApiAlert } from '../ui-states.js';
 
 export async function showDetailView(formNumber) {
@@ -65,8 +66,15 @@ function _skeleton() {
 function _render(article, f) {
   if (!f) return;
 
-  // Per-page meta (AC5)
-  const pageTitle = `${f.title} (${f.form_number}) — Public Forms — BC Government`;
+  // Per-page meta (AC5) + US-005 tab-title format.
+  // Format: `<form_number>: <form_title> | <site_name>`.
+  // Fallback when the form title is missing/whitespace: `<form_number> | <site_name>`
+  // (US-005 AC4). We NEVER emit "undefined" / "null" / stray separators.
+  const rawTitle = typeof f.title === 'string' ? f.title.trim() : '';
+  const num = f.form_number || '';
+  const pageTitle = num
+    ? (rawTitle ? `${num}: ${rawTitle} | ${SITE_NAME}` : `${num} | ${SITE_NAME}`)
+    : (rawTitle ? `${rawTitle} | ${SITE_NAME}` : SITE_NAME);
   document.title = pageTitle;
   _setMeta('description', truncate(f.description || '', 160));
   _setLink('canonical', window.location.origin + `/forms/${encodeURIComponent(f.form_number)}`);
