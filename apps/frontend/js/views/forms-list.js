@@ -16,7 +16,7 @@ import {
 } from './business-areas.js';
 import { hasPermission, getAuthToken, isAdminUser } from '../auth.js';
 import { getCurrentUser } from '../state.js';
-import { openFormViewPopup } from '../shared/form-view-popup.js';
+import { openFormViewPopup, downloadFormAttachment } from '../shared/form-view-popup.js';
 
 // ── Module-private pagination state ──────────────────────────────────────────
 let _currentSkip = 0;
@@ -149,10 +149,13 @@ export function displayForms(forms) {
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-8">
-                        <h5 class="card-title">
-                            ${escapeHtml(getFormNumberDisplay(form))} - ${escapeHtml(form.title)}
-                        </h5>
-                        <p class="card-text text-muted">${escapeHtml(form.description || 'No description')}</p>
+                        <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap">
+                            <h5 class="card-title mb-0">
+                                ${escapeHtml(getFormNumberDisplay(form))} - ${escapeHtml(form.title)}
+                            </h5>
+                            ${_renderFormSourceButton(form)}
+                        </div>
+                        <p class="card-text text-muted mt-2">${escapeHtml(form.description || 'No description')}</p>
                         <div>
                             <span class="badge ${form.is_public ? 'bg-success' : 'bg-warning'}">
                                 ${form.is_public ? 'Public' : 'Private'}
@@ -237,6 +240,78 @@ function _renderFormActionButtons(form) {
     return buttons.join('\n');
 }
 
+/**
+ * US-009: Render the single per-card source action button next to the form
+ * title. Exactly one button is emitted per card, chosen by `form_source`:
+ *   - `form_source === 'Download'` with a file  → "Download" button.
+ *   - `form_source === 'URL'` with a valid http(s) link → "Form Link" anchor.
+ *   - anything else / missing target / unsafe scheme → disabled "No Attachment".
+ *
+ * The Download button reuses the shared `downloadFormAttachment` control so the
+ * endpoint, headers, and file-selection logic never diverge from the View
+ * Details popup (AC2 / BR-01). The Form Link opens in a new tab hardened with
+ * `rel="noopener noreferrer"` and only follows http/https URLs (AC8 / BR-05).
+ *
+ * @param {object} form  Form object from the API.
+ * @returns {string} HTML string for a single action button.
+ */
+function _renderFormSourceButton(form) {
+    const id = escapeHtml(form.id);
+    const formLabel = escapeHtml(getFormNumberDisplay(form) || form.title || 'form');
+
+    if (form.form_source === 'Download') {
+        if (form.form_attachment_url) {
+            const filename = escapeHtml(form.form_attachment_filename || '');
+            return `<button type="button" class="btn btn-sm btn-outline-primary forms-list__source-btn"
+                data-action="download-form-file" data-form-id="${id}"
+                data-form-filename="${filename}"
+                aria-label="Download form ${formLabel}">
+                <i class="fas fa-download" aria-hidden="true"></i> Download</button>`;
+        }
+        return _renderNoAttachmentButton(formLabel, 'No file available');
+    }
+
+    if (form.form_source === 'URL') {
+        if (_isSafeHttpUrl(form.form_source_url)) {
+            const href = escapeHtml(form.form_source_url.trim());
+            return `<a class="btn btn-sm btn-outline-primary forms-list__source-btn"
+                href="${href}" target="_blank" rel="noopener noreferrer"
+                data-action="open-form-link"
+                aria-label="Open form link for ${formLabel}">
+                <i class="fas fa-external-link-alt" aria-hidden="true"></i> Form Link</a>`;
+        }
+        return _renderNoAttachmentButton(formLabel, 'No link available');
+    }
+
+    return _renderNoAttachmentButton(formLabel, 'No file or URL attached');
+}
+
+/** US-009: Render the disabled "No Attachment" button with an accessible tooltip. */
+function _renderNoAttachmentButton(formLabel, tooltip) {
+    const safeTooltip = escapeHtml(tooltip);
+    return `<button type="button" class="btn btn-sm btn-outline-secondary forms-list__source-btn"
+        disabled title="${safeTooltip}"
+        aria-label="No attachment for form ${formLabel} — ${safeTooltip}">
+        <i class="fas fa-ban" aria-hidden="true"></i> No Attachment</button>`;
+}
+
+/**
+ * US-009 (AC8 / BR-05): return true only for absolute http/https URLs. Values
+ * with any other scheme (javascript:, data:, file:, …) or relative/malformed
+ * values are rejected and treated as "No link available".
+ * @param {string} value  Candidate URL.
+ * @returns {boolean}
+ */
+function _isSafeHttpUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) return false;
+    try {
+        const url = new URL(value.trim());
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch (_error) {
+        return false;
+    }
+}
+
 /** Reset to page 0 and reload — called by the search button and Enter key. */
 export function searchForms() {
     _currentSkip = 0;
@@ -244,6 +319,7 @@ export function searchForms() {
     if (suggestions) suggestions.style.display = 'none';
     loadForms();
 }
+
 
 /** Reset to page 0 and reload — called whenever any filter dropdown changes. */
 export function applyFilters() {
@@ -305,9 +381,13 @@ function _handleFormsListClick(e) {
     const submitBtn = e.target.closest('[data-action="submit-form"]');
     const archiveBtn = e.target.closest('[data-action="archive-form"]');
     const restoreBtn = e.target.closest('[data-action="restore-form"]');
+    const downloadBtn = e.target.closest('[data-action="download-form-file"]');
 
     if (viewBtn) {
         _viewForm(viewBtn.dataset.formId, viewBtn);
+    } else if (downloadBtn) {
+        // US-009 — reuse the shared internal Download control (AC2 / BR-01).
+        downloadFormAttachment(downloadBtn.dataset.formId, downloadBtn.dataset.formFilename);
     } else if (deleteBtn) {
         _deleteForm(deleteBtn.dataset.formId, deleteBtn.dataset.formTitle);
     } else if (submitBtn) {

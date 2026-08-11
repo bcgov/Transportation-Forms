@@ -320,7 +320,7 @@ function _wireModalBodyHandlers(form) {
     const downloadBtn = body.querySelector('[data-action="download-attachment"]');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', () => {
-            _downloadFormAttachment(
+            downloadFormAttachment(
                 downloadBtn.dataset.formId,
                 form.form_attachment_filename,
             );
@@ -464,9 +464,21 @@ function _emitActionComplete() {
     document.dispatchEvent(new CustomEvent('form-view-popup:action-complete'));
 }
 
-// ─── Attachment download (mirrors forms-list logic) ───────────────────────────
+// ─── Attachment download (single source of truth for every entry point) ───────
 
-async function _downloadFormAttachment(formId, fallbackFilename) {
+/**
+ * Download a form's current attachment via the internal `/forms/{id}/file`
+ * endpoint. This is the single internal Download control reused by both the
+ * View Details popup and the Forms-list per-card Download button (US-009 /
+ * AC2 / BR-01) so the endpoint, headers, and file-selection logic never
+ * diverge between entry points.
+ *
+ * @param {string} formId            UUID of the form whose file to download.
+ * @param {string} [fallbackFilename] Filename to use if the response omits a
+ *                                    Content-Disposition header.
+ * @returns {Promise<void>}
+ */
+export async function downloadFormAttachment(formId, fallbackFilename) {
     let objectUrl = null;
     try {
         const response = await fetch(`${API_BASE}/forms/${encodeURIComponent(formId)}/file`, {
