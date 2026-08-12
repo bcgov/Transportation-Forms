@@ -159,6 +159,24 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+   US-010 — Forms-list card description truncated to a single line + ellipsis
+   -------------------------------------------------------------------------- */
+.forms-list__description {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* --------------------------------------------------------------------------
+   US-011 — Preserve description newlines in the View Details / Approvals popup
+   -------------------------------------------------------------------------- */
+.form-view-popup__description {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------------------
    Badges
    -------------------------------------------------------------------------- */
 .badge-status {

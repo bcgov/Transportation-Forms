@@ -155,7 +155,7 @@ export function displayForms(forms) {
                             </h5>
                             ${_renderFormSourceButton(form)}
                         </div>
-                        <p class="card-text text-muted mt-2">${escapeHtml(form.description || 'No description')}</p>
+                        <p class="card-text text-muted mt-2 forms-list__description"${form.description ? ` title="${escapeHtml(form.description)}"` : ''}>${escapeHtml(form.description || 'No description')}</p>
                         <div>
                             <span class="badge ${form.is_public ? 'bg-success' : 'bg-warning'}">
                                 ${form.is_public ? 'Public' : 'Private'}
@@ -649,16 +649,46 @@ function _initFilterCombobox() {
         _setFilterDropdownVisible(true);
     });
 
+    // Open on focus — covers TAB-focus and the focus half of a click.
     input.addEventListener('focus', () => {
-        _renderFilterDropdown(input.value.trim().toLowerCase());
-        _setFilterDropdownVisible(true);
+        _openFilterDropdown();
+    });
+
+    // AC1 / AC7 — open immediately on click, including a re-click after the
+    // dropdown was dismissed with Escape while the input kept focus.
+    input.addEventListener('click', () => {
+        _openFilterDropdown();
     });
 
     input.addEventListener('keydown', (e) => {
+        const isOpen = dropdown.style.display !== 'none';
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            const firstItem = dropdown.querySelector('[role="option"]');
-            if (firstItem) firstItem.focus();
+            if (!isOpen) _openFilterDropdown();
+            _moveFilterActiveOption(1);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!isOpen) _openFilterDropdown();
+            _moveFilterActiveOption(-1);
+        } else if (e.key === 'Enter') {
+            // AC3 — Enter opens the closed dropdown; when open it applies the
+            // highlighted option.
+            const active = dropdown.querySelector('li[role="option"].active');
+            if (!isOpen) {
+                e.preventDefault();
+                _openFilterDropdown();
+            } else if (active?.dataset.key) {
+                e.preventDefault();
+                const opt = _FILTER_OPTIONS.find(o => o.key === active.dataset.key);
+                if (opt) _addFilterChip(opt);
+            }
+        } else if (e.key === ' ') {
+            // AC3 — Space opens the closed dropdown; while open it keeps typing
+            // so type-to-filter is not regressed (BR-02).
+            if (!isOpen) {
+                e.preventDefault();
+                _openFilterDropdown();
+            }
         } else if (e.key === 'Escape' || e.key === 'Tab') {
             _closeFilterDropdown();
         }
@@ -680,9 +710,21 @@ function _initFilterCombobox() {
     }
 }
 
+/**
+ * Renders the filter dropdown for the current query and makes it visible.
+ */
+function _openFilterDropdown() {
+    const input = document.getElementById('filterComboboxInput');
+    _renderFilterDropdown((input?.value || '').trim().toLowerCase());
+    _setFilterDropdownVisible(true);
+}
+
 function _renderFilterDropdown(query) {
     const dropdown = document.getElementById('filterComboboxDropdown');
     if (!dropdown) return;
+
+    // Re-rendering the option list invalidates any highlighted descendant.
+    _clearFilterActiveOption();
     dropdown.innerHTML = '';
 
     const visible = _getVisibleFilterOptions();
@@ -707,6 +749,9 @@ function _renderFilterDropdown(query) {
         return;
     }
 
+    // Active-descendant combobox pattern: keyboard focus stays on the input and
+    // the highlighted option is tracked via aria-activedescendant (AC8).
+    let optionIndex = 0;
     for (const [category, options] of groups) {
         // Non-selectable category header
         const header = document.createElement('li');
@@ -719,30 +764,23 @@ function _renderFilterDropdown(query) {
             const li = document.createElement('li');
             li.className = 'dropdown-item py-2';
             li.style.cursor = 'pointer';
+            li.id = `filterCombobox-option-${optionIndex++}`;
             li.setAttribute('role', 'option');
+            li.setAttribute('aria-selected', 'false');
             li.setAttribute('tabindex', '-1');
+            li.dataset.key = opt.key;
             li.textContent = opt.label;
 
             li.addEventListener('mousedown', (e) => e.preventDefault());
-            li.addEventListener('click', () => _addFilterChip(opt));
-            li.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    _addFilterChip(opt);
-                } else if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    let next = li.nextElementSibling;
-                    while (next && next.getAttribute('role') !== 'option') next = next.nextElementSibling;
-                    if (next) next.focus();
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    let prev = li.previousElementSibling;
-                    while (prev && prev.getAttribute('role') !== 'option') prev = prev.previousElementSibling;
-                    if (prev) prev.focus();
-                    else document.getElementById('filterComboboxInput')?.focus();
-                } else if (e.key === 'Escape' || e.key === 'Tab') {
-                    _closeFilterDropdown();
-                }
+            li.addEventListener('mouseenter', () => _setFilterActiveOption(li));
+            li.addEventListener('click', (e) => {
+                // Selecting an option is an in-combobox action. Stop the event
+                // reaching the document click-outside handler: _addFilterChip
+                // re-renders the dropdown, detaching this <li>, after which
+                // `closest('#filterCombobox')` would return null and wrongly
+                // close a multi-select (AC4) dropdown that must stay open.
+                e.stopPropagation();
+                _addFilterChip(opt);
             });
             dropdown.appendChild(li);
         }
@@ -776,7 +814,14 @@ function _addFilterChip(opt) {
     if (inputEl) inputEl.value = '';
     _renderFilterChips();
     _renderFilterDropdown('');
-    _closeFilterDropdown();
+    // AC4 — a multi-select category keeps the dropdown open so more chips can be
+    // added; AC5 — an exclusive (single-select) category closes it.
+    if (opt.exclusive) {
+        _closeFilterDropdown();
+    } else {
+        _setFilterDropdownVisible(true);
+        inputEl?.focus();
+    }
     applyFilters();
 }
 
@@ -805,6 +850,50 @@ function _setFilterDropdownVisible(visible) {
     const dropdown = document.getElementById('filterComboboxDropdown');
     if (input) input.setAttribute('aria-expanded', String(visible));
     if (dropdown) dropdown.style.display = visible ? 'block' : 'none';
+    if (!visible) _clearFilterActiveOption();
+}
+
+// ── Filter combobox active-descendant helpers (AC8) ───────────────────────────
+
+/** Highlights a single option and points aria-activedescendant at it. */
+function _setFilterActiveOption(li) {
+    const dropdown = document.getElementById('filterComboboxDropdown');
+    const input = document.getElementById('filterComboboxInput');
+    if (!dropdown || !li) return;
+    dropdown.querySelectorAll('li[role="option"]').forEach(el => {
+        el.classList.remove('active');
+        el.setAttribute('aria-selected', 'false');
+    });
+    li.classList.add('active');
+    li.setAttribute('aria-selected', 'true');
+    if (input) input.setAttribute('aria-activedescendant', li.id);
+    li.scrollIntoView({ block: 'nearest' });
+}
+
+/** Moves the highlight by `delta` options, wrapping at either end. */
+function _moveFilterActiveOption(delta) {
+    const dropdown = document.getElementById('filterComboboxDropdown');
+    if (!dropdown) return;
+    const options = Array.from(dropdown.querySelectorAll('li[role="option"]'));
+    if (options.length === 0) return;
+    const currentIndex = options.findIndex(el => el.classList.contains('active'));
+    const nextIndex = currentIndex === -1
+        ? (delta > 0 ? 0 : options.length - 1)
+        : (currentIndex + delta + options.length) % options.length;
+    _setFilterActiveOption(options[nextIndex]);
+}
+
+/** Clears the highlight and removes aria-activedescendant. */
+function _clearFilterActiveOption() {
+    const dropdown = document.getElementById('filterComboboxDropdown');
+    const input = document.getElementById('filterComboboxInput');
+    if (dropdown) {
+        dropdown.querySelectorAll('li[role="option"]').forEach(el => {
+            el.classList.remove('active');
+            el.setAttribute('aria-selected', 'false');
+        });
+    }
+    if (input) input.removeAttribute('aria-activedescendant');
 }
 
 function _closeFilterDropdown() {

@@ -93,6 +93,7 @@ form-card {
   border-radius: 0.5rem;
   padding: 1rem;
   background: #fff;
+  min-width: 0; /*added manually to allow flex items to shrink properly */
 }
 form-card .form-card__header { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
 form-card .form-card__num { font-weight: 700; color: #003366; }
@@ -118,10 +119,17 @@ form-card .form-card__title {
  * public list — that behaviour is scoped to the internal Forms list only.
  */
 form-card .form-card__desc {
-  white-space: normal;
+  /*white-space: normal;
   max-width: 100%;
   overflow-wrap: anywhere;
-  word-break: break-word;
+  word-break: break-word; */
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 form-card .form-card__actions { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem; }
 form-card .badge { background: #e0e7ef; color: #003366; padding: 0.15rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; }
@@ -194,4 +202,10 @@ form-card button:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px
 /* Reduced-motion: respect the user setting throughout (US-003 AC11) */
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+
+/* Added this style to preserve newlines in detail page paragraphs */
+#detailContent > section > p {
+    white-space: pre-wrap;
 }
