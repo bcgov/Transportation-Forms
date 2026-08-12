@@ -53,6 +53,18 @@ class FormService:
         "archived": ["published"],
     }
 
+    @staticmethod
+    def _normalize_newlines(value: Optional[str]) -> Optional[str]:
+        """FEAT-0027 US-011: normalise CRLF/CR line endings to LF before persistence.
+
+        Preserves the user's line/paragraph structure verbatim (no stripping or
+        collapsing) so Save is idempotent for already-normalised text.
+        """
+        if value is None:
+            return None
+        return value.replace("\r\n", "\n").replace("\r", "\n")
+
+
     # =====================================================================
     # CREATE OPERATIONS
     # =====================================================================
@@ -104,6 +116,9 @@ class FormService:
         # Validate description is provided (required per TASK-110C)
         if not description or not description.strip():
             raise ValueError("description is required")
+
+        # FEAT-0027 US-011: normalise newlines (\r\n, \r -> \n) before persistence
+        description = FormService._normalize_newlines(description)
 
         # TASK-413: Validate and link form number reservation
         if form_number_reservation_id:
@@ -447,7 +462,7 @@ class FormService:
         if "title" in kwargs:
             form.title = kwargs["title"]
         if "description" in kwargs:
-            form.description = kwargs["description"]
+            form.description = FormService._normalize_newlines(kwargs["description"])
         if "is_public" in kwargs:
             form.is_public = kwargs["is_public"]
         if "keywords" in kwargs:

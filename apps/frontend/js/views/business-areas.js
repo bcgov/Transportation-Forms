@@ -218,16 +218,45 @@ export function initFilterBusinessAreaCombobox(onFilterChange) {
         _setFilterBusinessAreaDropdownVisible(true);
     });
 
+    // Open on focus — covers TAB-focus and the focus half of a click.
     input.addEventListener('focus', () => {
-        renderFilterBusinessAreaDropdown(input.value.toLowerCase());
-        _setFilterBusinessAreaDropdownVisible(true);
+        _openFilterBusinessAreaDropdown();
+    });
+
+    // AC1 / AC6 — open immediately on click, including a re-click after the
+    // dropdown was dismissed with Escape while the input kept focus.
+    input.addEventListener('click', () => {
+        _openFilterBusinessAreaDropdown();
     });
 
     input.addEventListener('keydown', (e) => {
+        const isOpen = dropdown.style.display !== 'none';
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            const firstItem = dropdown.querySelector('[role="option"]');
-            if (firstItem) firstItem.focus();
+            if (!isOpen) _openFilterBusinessAreaDropdown();
+            _moveFilterActiveOption(1);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!isOpen) _openFilterBusinessAreaDropdown();
+            _moveFilterActiveOption(-1);
+        } else if (e.key === 'Enter') {
+            // AC3 — Enter opens the closed dropdown; when open it applies the
+            // highlighted option.
+            const active = dropdown.querySelector('li[role="option"].active');
+            if (!isOpen) {
+                e.preventDefault();
+                _openFilterBusinessAreaDropdown();
+            } else if (active?.dataset.id) {
+                e.preventDefault();
+                addBusinessAreaFilter(active.dataset.id);
+            }
+        } else if (e.key === ' ') {
+            // AC3 — Space opens the closed dropdown; while open it keeps typing
+            // so type-to-filter is not regressed (BR-02).
+            if (!isOpen) {
+                e.preventDefault();
+                _openFilterBusinessAreaDropdown();
+            }
         } else if (e.key === 'Escape' || e.key === 'Tab') {
             closeFilterBusinessAreaDropdown();
         }
@@ -243,12 +272,24 @@ export function initFilterBusinessAreaCombobox(onFilterChange) {
     _filterChangeCallback = onFilterChange ?? null;
 }
 
+/**
+ * Renders the filter dropdown for the current query and makes it visible.
+ */
+function _openFilterBusinessAreaDropdown() {
+    const input = document.getElementById('filterBusinessAreaInput');
+    renderFilterBusinessAreaDropdown((input?.value || '').toLowerCase());
+    _setFilterBusinessAreaDropdownVisible(true);
+}
+
 // Internal reference to the caller-provided change callback
 let _filterChangeCallback = null;
 
 export function renderFilterBusinessAreaDropdown(query) {
     const dropdown = document.getElementById('filterBusinessAreaDropdown');
     if (!dropdown) return;
+
+    // Re-rendering the option list invalidates any highlighted descendant.
+    _clearFilterActiveOption();
 
     const filtered = (
         query
@@ -266,33 +307,22 @@ export function renderFilterBusinessAreaDropdown(query) {
         return;
     }
 
-    filtered.forEach(option => {
+    // Active-descendant combobox pattern: keyboard focus stays on the input
+    // and the highlighted option is tracked via aria-activedescendant (AC7).
+    filtered.forEach((option, index) => {
         const li = document.createElement('li');
         li.className = 'dropdown-item py-2';
         li.style.cursor = 'pointer';
+        li.id = `filterBusinessArea-option-${index}`;
         li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', 'false');
         li.setAttribute('tabindex', '-1');
+        li.dataset.id = option.id;
         li.textContent = option.label;
 
         li.addEventListener('mousedown', (e) => e.preventDefault());
+        li.addEventListener('mouseenter', () => _setFilterActiveOption(li));
         li.addEventListener('click', () => addBusinessAreaFilter(option.id));
-        li.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                addBusinessAreaFilter(option.id);
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                const next = li.nextElementSibling;
-                if (next && next.getAttribute('role') === 'option') next.focus();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                const prev = li.previousElementSibling;
-                if (prev && prev.getAttribute('role') === 'option') prev.focus();
-                else document.getElementById('filterBusinessAreaInput')?.focus();
-            } else if (e.key === 'Escape' || e.key === 'Tab') {
-                closeFilterBusinessAreaDropdown();
-            }
-        });
         dropdown.appendChild(li);
     });
 }
@@ -343,6 +373,56 @@ function _setFilterBusinessAreaDropdownVisible(visible) {
     const dropdown = document.getElementById('filterBusinessAreaDropdown');
     if (input) input.setAttribute('aria-expanded', String(visible));
     if (dropdown) dropdown.style.display = visible ? 'block' : 'none';
+    if (!visible) _clearFilterActiveOption();
+}
+
+// ── Filter combobox active-descendant helpers (AC7) ────────────────────────────
+
+/**
+ * Highlights a single option and points aria-activedescendant at it.
+ */
+function _setFilterActiveOption(li) {
+    const dropdown = document.getElementById('filterBusinessAreaDropdown');
+    const input = document.getElementById('filterBusinessAreaInput');
+    if (!dropdown || !li) return;
+    dropdown.querySelectorAll('li[role="option"]').forEach(el => {
+        el.classList.remove('active');
+        el.setAttribute('aria-selected', 'false');
+    });
+    li.classList.add('active');
+    li.setAttribute('aria-selected', 'true');
+    if (input) input.setAttribute('aria-activedescendant', li.id);
+    li.scrollIntoView({ block: 'nearest' });
+}
+
+/**
+ * Moves the highlight by `delta` options, wrapping at either end.
+ */
+function _moveFilterActiveOption(delta) {
+    const dropdown = document.getElementById('filterBusinessAreaDropdown');
+    if (!dropdown) return;
+    const options = Array.from(dropdown.querySelectorAll('li[role="option"]'));
+    if (options.length === 0) return;
+    const currentIndex = options.findIndex(el => el.classList.contains('active'));
+    const nextIndex = currentIndex === -1
+        ? (delta > 0 ? 0 : options.length - 1)
+        : (currentIndex + delta + options.length) % options.length;
+    _setFilterActiveOption(options[nextIndex]);
+}
+
+/**
+ * Clears the highlight and removes aria-activedescendant.
+ */
+function _clearFilterActiveOption() {
+    const dropdown = document.getElementById('filterBusinessAreaDropdown');
+    const input = document.getElementById('filterBusinessAreaInput');
+    if (dropdown) {
+        dropdown.querySelectorAll('li[role="option"]').forEach(el => {
+            el.classList.remove('active');
+            el.setAttribute('aria-selected', 'false');
+        });
+    }
+    if (input) input.removeAttribute('aria-activedescendant');
 }
 
 export function closeFilterBusinessAreaDropdown() {

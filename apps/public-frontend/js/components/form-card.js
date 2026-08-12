@@ -107,7 +107,7 @@ class FormCard extends HTMLElement {
         ${ft ? `<span class="badge ms-auto">${escapeHtml(ft)}</span>` : ''}
       </div>
       <h3 class="form-card__title">${escapeHtml(title)}</h3>
-      <p class="form-card__desc">${escapeHtml(desc)}${desc ? ' ' : ''}${viewMore}</p>
+      <p class="form-card__desc">${escapeHtml(desc)}${desc ? ' ' : ''}</p>${viewMore}
       <div class="form-card__actions">
         ${eff ? `<small class="text-muted"><time datetime="${escapeHtml(f.effective_date || '')}">Effective ${escapeHtml(eff)}</time></small>` : ''}
         ${downloadBtn}
