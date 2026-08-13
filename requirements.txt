@@ -47,3 +47,6 @@ requests==2.34.2
 # Utilities
 pytz==2026.2
 python-dateutil==2.9.0.post0
+
+# HTML sanitization (FEAT-0026 mini-CMS, US-016)
+nh3==0.3.6

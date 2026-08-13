@@ -1,17 +1,55 @@
 /*
- * Public Forms Portal — site CSS.
- * Bootstrap utility classes are expected to come from the vendored
- * bootstrap-theme.min.css (see ../vendor/README.md). This file only adds
- * the SPA-specific structural and accessibility styles.
+ * Public Forms Portal — site CSS (FEAT-0028 redesign).
+ *
+ * Bootstrap utility classes come from the vendored bootstrap-theme.min.css.
+ * Bootstrap Icons come from the vendored bootstrap-icons.css (US-012).
+ * This file adds the SPA-specific brand, layout, and accessibility styles.
+ *
+ * CSP note (public-frontend nginx): style-src 'self' (no unsafe-inline),
+ * font-src 'self'. All styling MUST live here — never inline style="".
  */
 
-/* Skip-link (US-007 AC2 / US-003 AC13) */
+/* ─── Design tokens (US-001) ────────────────────────────────────────────── */
+:root {
+  --gov-blue:        #003366;
+  --gov-blue-dark:   #00264d;
+  --gov-blue-mid:    #1a5a96;
+  --gov-gold:        #fcba19;
+  --gov-gold-light:  #fff4d6;
+  --surface-bg:      #f4f6fa;
+  --card-bg:         #ffffff;
+  --border-subtle:   #dde3ed;
+  --text-primary:    #1a1f36;
+  --text-muted:      #64748b;
+  --text-link:       #1a5a96;
+
+  /* Business-area accent palette */
+  --ba-compliance:   #1565c0;
+  --ba-permits:      #2e7d32;
+  --ba-licensing:    #c77700;
+  --ba-default:      #003366;
+}
+
+/* ─── Globals ───────────────────────────────────────────────────────────── */
+html, body { height: 100%; }
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--surface-bg);
+  color: var(--text-primary);
+  font-family: 'BC Sans', 'BCSans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+main { flex: 1 0 auto; padding-top: 0;}
+a { color: var(--text-link); }
+
+/* Skip-link (US-007 AC2) */
 .skip-link {
   position: absolute;
   left: 0;
   top: 0;
   z-index: 1080;
-  background: #003366;
+  background: var(--gov-blue);
   color: #fff;
   padding: 0.5rem 1rem;
   text-decoration: none;
@@ -21,85 +59,632 @@
 .skip-link:focus,
 .skip-link:focus-visible {
   transform: translateY(0);
-  outline: 3px solid #fcba19;
+  outline: 3px solid var(--gov-gold);
   outline-offset: 2px;
 }
 
-/* Sticky-footer pattern (US-010 AC5) */
-html, body { height: 100%; }
-body { display: flex; flex-direction: column; min-height: 100vh; }
-main { flex: 1 0 auto; }
-.bcgov-footer { flex-shrink: 0; background: #003366; color: #fff; }
-.bcgov-footer a { color: #fff; text-decoration: underline; }
-.bcgov-footer a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
-
-/* Header */
-.bcgov-header { background: #003366; color: #fff; border-bottom: 2px solid #fcba19; }
-.bcgov-header a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
-.ministry-name { color: #fff; }
+/* ─── Header (US-001 — markup unchanged, tokenised colours) ─────────────── */
+.bcgov-header {
+  background: var(--gov-blue);
+  color: #fff;
+  border-bottom: 3px solid var(--gov-gold);
+}
+.bcgov-header a:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+.bcgov-header h4 { font-size: 1.1rem; letter-spacing: 0.01em; opacity: 0.92; font-weight: 600; }
 .bcgov-header-logo {
-    height: 60px;
-    margin-right: 2rem;
-    flex-shrink: 0;
-}
-
-/* Sticky search */
-.search-sticky { z-index: 1020; border-bottom: 1px solid #d1d1d1; }
-
-/* Results / cards (US-002) — single column at all breakpoints (AC7) */
-.results-region { min-height: 200px; }
-.results-region ol { display: grid; grid-template-columns: 1fr; gap: 1rem; margin: 0 auto; }
-
-/* form-card custom-element layout */
-form-card {
+  height: auto;
+  max-height: 50px;
+  width: auto;
+  max-width: 100%;
   display: block;
-  border: 1px solid #d1d1d1;
-  border-radius: 0.5rem;
-  padding: 1rem;
+  margin-right: 1.5rem;
+  flex-shrink: 0;
+}
+.ministry-name { color: #fff; }
+
+/* ─── CMS nav (US-001 1.3 — tokenised; markup owned by FEAT-0026) ──────── */
+.bcgov-cms-nav { background: #fff; border-bottom: 1px solid var(--border-subtle); }
+.bcgov-cms-nav .nav-link {
+  color: var(--gov-blue);
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.375rem;
+}
+.bcgov-cms-nav .nav-link:hover,
+.bcgov-cms-nav .nav-link.active { background: var(--gov-gold-light); color: var(--gov-blue); }
+
+/* ─── Footer (US-001 — markup unchanged, tokenised colours) ────────────── */
+.bcgov-footer { flex-shrink: 0; background: var(--gov-blue); color: #fff; }
+.bcgov-footer a { color: rgba(255,255,255,0.85); text-decoration: underline; font-size: 0.875rem; }
+.bcgov-footer a:hover { color: #fff; }
+.bcgov-footer a:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+.bcgov-footer .small { font-size: 0.8rem; color: rgba(255,255,255,0.6); }
+.bcgov-footer .list-inline-item + .list-inline-item::before {
+  content: '·';
+  margin-right: 0.5rem;
+  color: rgba(255,255,255,0.35);
+}
+
+/* ─── Hero band (US-002) ────────────────────────────────────────────────── */
+.hero-band {
+  background: linear-gradient(160deg, var(--gov-blue) 0%, var(--gov-blue-dark) 100%);
+  padding: 3rem 0 6rem;
+  position: relative;
+  overflow: hidden;
+}
+.hero-band::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+.hero-band::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 4px;
+  background: var(--gov-gold);
+  opacity: 0.6;
+}
+.hero-band .hero-eyebrow {
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gov-gold);
+  font-weight: 600;
+}
+.hero-band .hero-title {
+  font-size: clamp(1.6rem, 3vw, 2.5rem);
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.5rem;
+}
+.hero-band .hero-sub { color: rgba(255,255,255,0.72); font-size: 1rem; }
+.hero-icon { font-size: 4.5rem; color: rgba(255,255,255,0.08); line-height: 1; }
+
+/* ─── Floating search card (US-003) ─────────────────────────────────────── */
+.search-float-wrap {
+  margin-top: -3.5rem;
+  position: relative;
+  z-index: 10;
+}
+.search-float-card {
   background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(0,51,102,0.14), 0 2px 8px rgba(0,0,0,0.06);
+  padding: 1.5rem;
+  border: 1px solid var(--border-subtle);
 }
-form-card .form-card__header { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
-form-card .form-card__num { font-weight: 700; color: #003366; }
-form-card .form-card__title {
-  margin: 0;
-  font-size: 1.125rem;
-  overflow-wrap: anywhere; /* US-007 AC16 — long titles reflow at 320px */
-  word-break: break-word;  /* fallback for browsers without overflow-wrap:anywhere */
+.search-input-wrap { position: relative; }
+.search-input-wrap .search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  pointer-events: none;
 }
-form-card .form-card__desc {
+.search-float-card input[type="search"] {
+  padding-left: 2.75rem;
+  padding-right: 1rem;
+  height: 3rem;
+  font-size: 1rem;
+  border-radius: 0.625rem;
+  border: 1.5px solid #c8d3e6;
+  background: #f8fafc;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.search-float-card input[type="search"]:focus {
+  border-color: var(--gov-blue-mid);
+  box-shadow: 0 0 0 3px rgba(26,90,150,0.15);
+  background: #fff;
+  outline: none;
+}
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  align-items: center;
+  margin-top: 0.875rem;
+}
+.filter-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 0.25rem;
+}
+.filter-select {
+  height: 2rem;
+  font-size: 0.825rem;
+  padding: 0 1.6rem 0 0.625rem;
+  border-radius: 999px;
+  border: 1.5px solid #c8d3e6;
+  background-color: #f8fafc;
+  color: var(--text-primary);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%2364748b' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.55rem center;
+  transition: border-color 0.15s;
+}
+.filter-select:focus {
+  outline: none;
+  border-color: var(--gov-blue-mid);
+  box-shadow: 0 0 0 3px rgba(26,90,150,0.15);
+}
+.filter-divider {
+  width: 1px;
+  height: 1.25rem;
+  background: var(--border-subtle);
+  margin: 0 0.125rem;
+}
+
+/* ─── Category quick-filter chips (US-004) ──────────────────────────────── */
+.category-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.125rem 0 0.25rem;
+  scrollbar-width: none;
+}
+.category-chips::-webkit-scrollbar { display: none; }
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.875rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 999px;
+  border: 1.5px solid var(--border-subtle);
+  background: #fff;
+  color: var(--text-muted);
+  cursor: pointer;
   white-space: nowrap;
+  max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.cat-chip:hover { border-color: var(--gov-blue-mid); color: var(--gov-blue); }
+.cat-chip:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+.cat-chip[aria-pressed="true"] {
+  background: var(--gov-blue);
+  border-color: var(--gov-blue);
+  color: #fff;
+}
+.cat-chip .chip-count { font-size: 0.7rem; opacity: 0.7; }
+
+/* ─── Results toolbar (US-005) ──────────────────────────────────────────── */
+.results-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.results-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: var(--gov-gold-light);
+  color: #8a5000;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #f5d78e;
+}
+.results-count-badge::before {
+  font-family: bootstrap-icons;
+  content: "\f26a"; /* bi-check-circle-fill */
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.view-all-link { font-size: 0.825rem; color: var(--text-link); font-weight: 500; }
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.375rem;
+  border: 1.5px solid var(--border-subtle);
+  background: #fff;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  font-size: 0.95rem;
+}
+.view-toggle-btn:hover,
+.view-toggle-btn.active { background: var(--gov-blue); border-color: var(--gov-blue); color: #fff; }
+.view-toggle-btn:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+
+/* ─── Results grid (US-005 / US-006) ────────────────────────────────────── */
+.results-region { min-height: 200px; }
+.results-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.875rem;
+  margin: 0;
+  padding: 0;
+}
+.results-grid.grid-view {
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+}
+.results-grid > li { display: flex; min-width: 0; }
+
+/* ─── Form card v2 (US-006) ─────────────────────────────────────────────── */
+.form-card-v2 {
+  width: 100%;
+  background: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.875rem;
+  overflow: hidden;
+  display: flex;
+  position: relative;
+  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+  text-decoration: none;
+  color: inherit;
+}
+.form-card-v2:hover {
+  box-shadow: 0 8px 24px rgba(0,51,102,0.11), 0 2px 6px rgba(0,0,0,0.06);
+  transform: translateY(-2px);
+  border-color: #b0c4de;
+}
+.form-card-v2 .card-accent { width: 4px; flex-shrink: 0; background: var(--ba-default); }
+.form-card-v2.ba-compliance .card-accent { background: var(--ba-compliance); }
+.form-card-v2.ba-permits    .card-accent { background: var(--ba-permits); }
+.form-card-v2.ba-licensing  .card-accent { background: var(--ba-licensing); }
+
+.form-card-v2 .card-body-inner { flex: 1; padding: 1rem 1.125rem; min-width: 0; }
+.form-card-v2 .card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+  flex-wrap: wrap;
+}
+.form-num-link {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-link);
+  text-decoration: none;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  letter-spacing: 0.02em;
+}
+.form-num-link:hover { text-decoration: underline; }
+.form-num-link[aria-disabled="true"] { color: var(--text-muted); cursor: default; }
+.form-card-v2 a:focus-visible,
+.form-card-v2 button:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+
+.ba-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ba-badge.compliance { background: #dbeafe; color: var(--ba-compliance); }
+.ba-badge.permits    { background: #dcfce7; color: var(--ba-permits); }
+.ba-badge.licensing  { background: #fff3cd; color: var(--ba-licensing); }
+.ba-badge.default    { background: #e0e7ef; color: var(--ba-default); }
+.ba-badge-lg { font-size: 0.8rem; padding: 0.3rem 0.8rem; }
+
+.card-date { font-size: 0.73rem; color: var(--text-muted); margin-left: auto; }
+.form-card-v2__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.form-card-v2 .card-desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0 0 0.75rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
-form-card .form-card__actions { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem; }
-form-card .badge { background: #e0e7ef; color: #003366; padding: 0.15rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; }
-form-card a:focus-visible,
-form-card button:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
+.form-card-v2 .card-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.file-type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.175rem 0.5rem;
+  border-radius: 0.375rem;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.file-type-pill.pdf  { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+.file-type-pill.docx { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
+.file-type-pill.xlsx { background: #dcfce7; color: #15803d; border-color: #86efac; }
 
-/* Skeleton placeholder shimmer — Bootstrap-compatible class names (US-006 AC1) */
-.skeleton-card {
-  height: 7rem;
-  border: 1px solid #e9ecef;
+.btn-view-more {
+  font-size: 0.8rem;
+  color: var(--text-link);
+  text-decoration: none;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.btn-view-more:hover { text-decoration: underline; }
+.btn-view-more[aria-disabled="true"] { color: var(--text-muted); cursor: default; }
+
+.btn-download {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--gov-blue);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.btn-download:hover { background: var(--gov-blue-mid); color: #fff; box-shadow: 0 2px 8px rgba(0,51,102,0.25); }
+.btn-download:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
+
+/* ─── Pagination (US-008) ───────────────────────────────────────────────── */
+.pager { gap: 0.25rem; }
+.pager .page-item { margin: 0 0.125rem; }
+.pager .page-link {
   border-radius: 0.5rem;
-  margin-bottom: 1rem;
+  border: 1.5px solid var(--border-subtle);
+  color: var(--gov-blue);
+  font-size: 0.875rem;
+  padding: 0.375rem 0.75rem;
+  background: #fff;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.pager .page-item.active .page-link {
+  background: var(--gov-blue);
+  border-color: var(--gov-blue);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0,51,102,0.2);
+}
+.pager .page-link:hover:not(.active) { background: var(--gov-gold-light); border-color: var(--gov-gold); }
+.pager .page-item.disabled .page-link { color: var(--text-muted); background: #fff; }
+.pager .page-link:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+
+/* ─── Empty state (US-007) ──────────────────────────────────────────────── */
+.empty-icon {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 50%;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: #94a3b8;
+  margin: 0 auto 1.5rem;
+}
+
+/* ─── Skeleton placeholder shimmer (US-007) ─────────────────────────────── */
+.skeleton-card {
+  height: 6.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.875rem;
   background: linear-gradient(90deg, #f3f3f3 0%, #ececec 50%, #f3f3f3 100%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s linear infinite;
 }
-.skeleton-card.sk-title { height: 2rem; width: 60%; }
-.skeleton-card.sk-subtitle { height: 1rem; width: 40%; }
+.skeleton-card.sk-title { height: 2rem; width: 60%; margin-bottom: 1rem; }
+.skeleton-card.sk-subtitle { height: 1rem; width: 40%; margin-bottom: 1rem; }
 .skeleton-card.sk-body { height: 8rem; }
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .skeleton-card { animation: none; background: #f3f3f3; }
+
+/* ─── Detail view (US-009 / US-010) ─────────────────────────────────────── */
+.detail-hero {
+  background: linear-gradient(160deg, var(--gov-blue) 0%, var(--gov-blue-dark) 100%);
+  padding: 2rem 0 3.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.detail-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+.detail-hero .back-link {
+  color: rgba(255,255,255,0.75);
+  font-size: 0.875rem;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
+  transition: color 0.15s;
+}
+.detail-hero .back-link:hover { color: #fff; }
+.detail-hero .back-link:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+.detail-hero .detail-num {
+  font-family: ui-monospace, monospace;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--gov-gold);
+  letter-spacing: 0.08em;
+  margin-bottom: 0.375rem;
+}
+.detail-hero h1 {
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.detail-content-wrap { margin-top: -2rem; position: relative; z-index: 10; }
+.detail-main-card {
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  padding: 1.75rem;
+  box-shadow: 0 4px 16px rgba(0,51,102,0.08);
+}
+.detail-section-title {
+  font-size: 1.25rem;
+  color: var(--gov-blue);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+.detail-main-card p + .detail-section-title { margin-top: 1.5rem; }
+.detail-help-notice {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-top: 1.5rem;
+  background: #f0f7ff;
+  border: 1px solid #bdd8f7;
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  padding: 0.75rem 1rem;
+}
+.detail-help-notice .bi { color: var(--gov-blue-mid); margin-top: 0.15rem; flex-shrink: 0; }
+
+.detail-sidebar-card {
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 16px rgba(0,51,102,0.08);
+  position: sticky;
+  top: 1rem;
+}
+.detail-sidebar-card .sidebar-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.meta-row { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 1rem; }
+.meta-row .meta-key {
+  font-size: 0.73rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.meta-row .meta-val { font-size: 0.9rem; color: var(--text-primary); font-weight: 500; }
+.meta-row .meta-val.form-num { font-family: ui-monospace, monospace; color: var(--gov-blue); }
+.detail-divider { border: 0; border-top: 1px solid var(--border-subtle); margin: 1rem 0; }
+
+.btn-download-lg {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 0.625rem;
+  background: var(--gov-blue);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, box-shadow 0.15s;
+  margin-bottom: 0.75rem;
+}
+.btn-download-lg:hover { background: var(--gov-blue-mid); color: #fff; box-shadow: 0 4px 12px rgba(0,51,102,0.3); }
+.btn-download-lg:focus-visible,
+.detail-share-btn:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+.detail-share-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.625rem;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
-/* Bottom-center alert slot (US-006 AC5/AC6) */
+.keyword-chip-v2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: #f1f5f9;
+  color: var(--text-muted);
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 500;
+  margin-right: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+/* ─── 404 view (US-011) ─────────────────────────────────────────────────── */
+.not-found-wrap { max-width: 480px; }
+.not-found-icon {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 50%;
+  background: var(--gov-gold-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  color: var(--ba-licensing);
+  margin: 0 auto 1.5rem;
+}
+.btn-gov { background: var(--gov-blue); border-color: var(--gov-blue); color: #fff; }
+.btn-gov:hover { background: var(--gov-blue-mid); border-color: var(--gov-blue-mid); color: #fff; }
+
+/* ─── Bottom-pinned alert slot (US-010 / error states) ──────────────────── */
 .alert-slot {
   position: fixed;
   left: 50%;
@@ -112,28 +697,26 @@ form-card button:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px
 .alert-slot .alert {
   pointer-events: auto;
   margin-bottom: 0.5rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* Detail page heading reflow at 320px (US-007 AC16) */
-#detailContent h1 {
-  overflow-wrap: anywhere;
+  border: none;
+  border-radius: 0.625rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  font-size: 0.875rem;
+  font-weight: 500;
   word-break: break-word;
 }
 
-/* Detail page chips */
-.keyword-chip {
-  display: inline-block;
-  background: #e0e7ef;
-  color: #003366;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  margin-right: 0.25rem;
-  margin-bottom: 0.25rem;
-}
-
-/* Reduced-motion: respect the user setting throughout (US-003 AC11) */
+/* ─── Reduced motion (US-006 AC16 / US-007 AC7) ─────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  .skeleton-card { animation: none; background: #f3f3f3; }
+  .form-card-v2 { transition: none; }
+  .form-card-v2:hover { transform: none; }
+}
+
+/* ─── Responsive (US-002/003/005 breakpoints) ───────────────────────────── */
+@media (max-width: 576px) {
+  .hero-band { padding-bottom: 5.5rem; }
+  .search-float-wrap { margin-top: -4rem; }
+  .filter-row { flex-direction: column; align-items: flex-start; }
+  .results-grid.grid-view { grid-template-columns: 1fr; }
 }

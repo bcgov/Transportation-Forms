@@ -3,14 +3,15 @@
  *           + US-006 (loading/empty/error/rate-limit states).
  */
 
-import { fetchJson, ApiError } from '../api.js';
+import { fetchJson, ApiError, downloadFormFile } from '../api.js';
 import {
   PAGE_SIZE, VIEW_ALL_CAP, SEARCH_DEBOUNCE_MS, Q_MAX_LENGTH,
   DEFAULT_SORT_FIELD, DEFAULT_SORT_ORDER,
 } from '../constants.js';
 import { escapeHtml } from '../utils.js';
+import { renderFormCard, baInfo } from '../components/card.js';
 import { getState, setUrl, rememberScroll, restoreScroll, announce } from '../state.js';
-import { showSkeleton, clearBusy, showEmpty, hideEmpty, showApiAlert } from '../ui-states.js';
+import { showSkeleton, clearBusy, showEmpty, hideEmpty, showApiAlert, showAlert } from '../ui-states.js';
 
 let _wired = false;
 let _debounceTimer = null;
@@ -50,6 +51,11 @@ function _resetHomeMeta() {
 
 function _wireOnce() {
   _wired = true;
+
+  // CSP forbids inline onsubmit; prevent full-page GET submit on Enter here.
+  document.getElementById('searchForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+  });
 
   const input = document.getElementById('searchInput');
   if (input) {
@@ -118,6 +124,64 @@ function _wireOnce() {
     setUrl(state, 'replace');
     _refresh();
   });
+
+  // Category quick-filter chips (US-004) — delegated click sets the BA filter.
+  document.getElementById('categoryChips')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('.cat-chip');
+    if (!chip) return;
+    const value = chip.dataset.ba || '';
+    const state = getState();
+    state.f = value;
+    state.p = 1;
+    const filterBA = document.getElementById('filterBA');
+    if (filterBA) filterBA.value = value;
+    setUrl(state, 'replace');
+    _refresh();
+  });
+
+  // View mode toggle (US-005) — presentation only, no API call.
+  document.getElementById('viewToggle')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.view-toggle-btn');
+    if (!btn) return;
+    _applyViewMode(btn.dataset.view === 'grid' ? 'grid' : 'list');
+  });
+
+  // Delegated download (US-006) — buttons are distinct tab stops, not links.
+  document.getElementById('resultsList')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action="download"]');
+    if (!btn || btn.disabled) return;
+    const formNumber = btn.dataset.formNumber;
+    if (!formNumber) return;
+    _download(formNumber, btn);
+  });
+}
+
+let _viewMode = 'list';
+
+function _applyViewMode(mode) {
+  _viewMode = mode === 'grid' ? 'grid' : 'list';
+  const list = document.getElementById('resultsList');
+  if (list) list.classList.toggle('grid-view', _viewMode === 'grid');
+  for (const btn of document.querySelectorAll('#viewToggle .view-toggle-btn')) {
+    const active = btn.dataset.view === _viewMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
+}
+
+async function _download(formNumber, btn) {
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  try {
+    await downloadFormFile(formNumber);
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.kind !== 'abort') {
+      showAlert('Download failed. Please try again.', 'danger', { dismissMs: 5000 });
+    }
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
 }
 
 function _hydrateControls() {
@@ -142,10 +206,10 @@ async function _loadBusinessAreas() {
     const { data } = await fetchJson('/business-areas');
     const items = (data && data.items) || [];
     if (items.length === 0) {
-      // US-005 AC3 — hide control when empty
+      // US-005 AC3 — hide control (and its label) when empty
       select.disabled = true;
-      const wrapper = select.closest('.col-12, .col-md-3, .col-md-4, [class*="col-"]');
-      if (wrapper) wrapper.classList.add('d-none');
+      select.classList.add('d-none');
+      document.querySelector('label[for="filterBA"]')?.classList.add('d-none');
       return;
     }
     items.sort((a, b) => String(a.name).localeCompare(String(b.name), 'en-CA'));
@@ -222,18 +286,18 @@ function _renderList(data, { state, limit, offset, isViewAll }) {
     announce(state.q ? `Showing 0 results for "${state.q}"` : 'Showing 0 results');
     document.getElementById('paginator')?.setAttribute('hidden', '');
     document.getElementById('viewAllNotice')?.setAttribute('hidden', '');
+    document.getElementById('categoryChips')?.setAttribute('hidden', '');
     return;
   }
   hideEmpty();
 
-  // Build cards. <form-card> is registered at app boot.
+  // Build cards from the shared renderer (US-006).
   list.innerHTML = '';
   for (const item of items) {
-    const card = document.createElement('form-card');
-    card.dataset.form = JSON.stringify(item);
-    card.setAttribute('role', 'listitem');
-    list.appendChild(card);
+    list.appendChild(renderFormCard(item));
   }
+  _applyViewMode(_viewMode);
+  _renderChips(items, state.f);
 
   announce(state.q
     ? `Showing ${items.length} of ${total} results for "${state.q}", page ${state.p}`
@@ -255,6 +319,38 @@ function _renderList(data, { state, limit, offset, isViewAll }) {
   } else {
     _renderPager(state.p, total);
   }
+}
+
+/**
+ * Render the category quick-filter chips from the current page's business
+ * areas (US-004). Counts reflect the current page only. Hidden when the page
+ * contains no business-area values.
+ */
+function _renderChips(items, activeFilter) {
+  const wrap = document.getElementById('categoryChips');
+  if (!wrap) return;
+  const counts = new Map();
+  for (const it of items) {
+    const name = String((it && it.business_area) || '').trim();
+    if (!name) continue;
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  if (counts.size === 0) {
+    wrap.setAttribute('hidden', '');
+    wrap.innerHTML = '';
+    return;
+  }
+  const names = [...counts.keys()].sort((a, b) => a.localeCompare(b, 'en-CA'));
+  const parts = [];
+  const allActive = !activeFilter;
+  parts.push(`<button type="button" class="cat-chip" role="listitem" data-ba="" aria-pressed="${allActive ? 'true' : 'false'}"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i> All forms</button>`);
+  for (const name of names) {
+    const info = baInfo(name);
+    const active = activeFilter && activeFilter === name;
+    parts.push(`<button type="button" class="cat-chip" role="listitem" data-ba="${escapeHtml(name)}" aria-pressed="${active ? 'true' : 'false'}"><i class="bi ${info.icon}" aria-hidden="true"></i> ${escapeHtml(name)} <span class="chip-count">${counts.get(name)}</span></button>`);
+  }
+  wrap.innerHTML = parts.join('');
+  wrap.removeAttribute('hidden');
 }
 
 function _renderPager(currentPage, total) {

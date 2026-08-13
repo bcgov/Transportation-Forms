@@ -7,8 +7,11 @@
  */
 
 import { fetchJson, ApiError, downloadFormFile } from '../api.js';
-import { escapeHtml, formatDate, formatDateTime, formatFileType, truncate } from '../utils.js';
-import { showApiAlert } from '../ui-states.js';
+import { escapeHtml, formatDate, formatDateTime, truncate } from '../utils.js';
+import { SITE_NAME } from '../constants.js';
+import { showApiAlert, showAlert } from '../ui-states.js';
+import { baInfo, fileTypeInfo } from '../components/card.js';
+import { showNotFoundView } from './not-found.js';
 
 export async function showDetailView(formNumber) {
   const article = document.getElementById('detailContent');
@@ -65,61 +68,125 @@ function _skeleton() {
 function _render(article, f) {
   if (!f) return;
 
-  // Per-page meta (AC5)
-  const pageTitle = `${f.title} (${f.form_number}) — Public Forms — BC Government`;
+  // Per-page meta (AC5) + US-005 tab-title format.
+  // Format: `<form_number>: <form_title> | <site_name>`.
+  // Fallback when the form title is missing/whitespace: `<form_number> | <site_name>`
+  // (US-005 AC4). We NEVER emit "undefined" / "null" / stray separators.
+  const rawTitle = typeof f.title === 'string' ? f.title.trim() : '';
+  const num = f.form_number || '';
+  const pageTitle = num
+    ? (rawTitle ? `${num}: ${rawTitle} | ${SITE_NAME}` : `${num} | ${SITE_NAME}`)
+    : (rawTitle ? `${rawTitle} | ${SITE_NAME}` : SITE_NAME);
   document.title = pageTitle;
   _setMeta('description', truncate(f.description || '', 160));
   _setLink('canonical', window.location.origin + `/forms/${encodeURIComponent(f.form_number)}`);
   _setOgMeta(f);
   _setJsonLd(f);
 
-  const ft = formatFileType(f.file_type);
+  const ft = fileTypeInfo(f.file_type);
+  const ba = baInfo(f.business_area);
   const eff = formatDate(f.effective_date);
   const upd = formatDateTime(f.updated_at);
+  const numDisplay = f.form_number || '—';
 
   const keywordChips = Array.isArray(f.keywords) && f.keywords.length
-    ? `<p class="mt-3">${f.keywords.map(k => `<span class="keyword-chip">${escapeHtml(k)}</span>`).join('')}</p>`
+    ? `<h2 class="detail-section-title">Keywords</h2>
+       <p class="mb-0">${f.keywords.map(k => `<span class="keyword-chip-v2"><i class="bi bi-tag" aria-hidden="true"></i> ${escapeHtml(k)}</span>`).join('')}</p>`
     : '';
 
   article.innerHTML = `
-    <header class="mb-3">
-      <p class="text-muted mb-1">${escapeHtml(f.business_area || '')}</p>
-      <h1 id="detailHeading" class="h2 mb-2">${escapeHtml(f.title || '')}</h1>
-      <p class="mb-0">
-        <span class="form-card__num">${escapeHtml(f.form_number || '—')}</span>
-        ${ft ? `<span class="badge ms-2">${escapeHtml(ft)}</span>` : ''}
-      </p>
-    </header>
+    <div class="detail-hero">
+      <div class="container">
+        <a class="back-link" href="/"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to results</a>
+        <p class="detail-num">${escapeHtml(numDisplay)}</p>
+        <h1 id="detailHeading">${escapeHtml(f.title || '')}</h1>
+      </div>
+    </div>
 
-    ${f.description ? `<section><p>${escapeHtml(f.description)}</p></section>` : ''}
+    <div class="detail-content-wrap">
+      <div class="container">
+        <div class="row g-4">
+          <div class="col-lg-8">
+            <div class="detail-main-card">
+              <h2 class="detail-section-title">Description</h2>
+              <p class="mb-0">${f.description ? escapeHtml(f.description) : '<span class="text-muted">No description is available for this form.</span>'}</p>
+              ${keywordChips}
+              <div class="detail-help-notice">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <span>Download the form, complete it, and submit it as directed in the form’s instructions. Contact the responsible office if you need assistance.</span>
+              </div>
+            </div>
+          </div>
 
-    ${keywordChips}
-
-    <dl class="row mt-3">
-      ${eff ? `<dt class="col-sm-3">Effective</dt><dd class="col-sm-9"><time datetime="${escapeHtml(f.effective_date || '')}">${escapeHtml(eff)}</time></dd>` : ''}
-      ${upd ? `<dt class="col-sm-3">Last updated</dt><dd class="col-sm-9"><time datetime="${escapeHtml(f.updated_at || '')}">${escapeHtml(upd)}</time></dd>` : ''}
-    </dl>
-
-    <div class="mt-4">
-      ${f.file ? `<button type="button" class="btn btn-primary" data-action="download" aria-label="Download ${escapeHtml(f.form_number || '')}${ft ? ` (${escapeHtml(ft)})` : ''}">
-        Download form
-      </button>` : ''}
+          <aside class="col-lg-4">
+            <div class="detail-sidebar-card">
+              <p class="sidebar-title">Form details</p>
+              <div class="meta-row">
+                <span class="meta-key">Form number</span>
+                <span class="meta-val form-num">${escapeHtml(numDisplay)}</span>
+              </div>
+              ${f.business_area ? `<div class="meta-row">
+                <span class="meta-key">Business area</span>
+                <span class="meta-val"><span class="ba-badge ${ba.badgeClass} ba-badge-lg"><i class="bi ${ba.icon}" aria-hidden="true"></i> ${escapeHtml(ba.label)}</span></span>
+              </div>` : ''}
+              <div class="meta-row">
+                <span class="meta-key">File type</span>
+                <span class="meta-val"><span class="file-type-pill${ft.cls ? ` ${ft.cls}` : ''}"><i class="bi ${ft.icon}" aria-hidden="true"></i> ${escapeHtml(ft.label)}</span></span>
+              </div>
+              ${eff ? `<div class="meta-row">
+                <span class="meta-key">Effective date</span>
+                <span class="meta-val"><time datetime="${escapeHtml(f.effective_date || '')}">${escapeHtml(eff)}</time></span>
+              </div>` : ''}
+              ${upd ? `<div class="meta-row">
+                <span class="meta-key">Last updated</span>
+                <span class="meta-val"><time datetime="${escapeHtml(f.updated_at || '')}">${escapeHtml(upd)}</time></span>
+              </div>` : ''}
+              <hr class="detail-divider">
+              ${f.form_number ? `<button type="button" class="btn-download-lg" data-action="download" aria-label="Download ${escapeHtml(numDisplay)}${ft.label ? ` (${escapeHtml(ft.label)})` : ''}">
+                <i class="bi bi-download" aria-hidden="true"></i> Download form
+              </button>` : ''}
+              <button type="button" class="btn btn-outline-secondary detail-share-btn" data-action="share">
+                <i class="bi bi-share" aria-hidden="true"></i> Share link
+              </button>
+            </div>
+          </aside>
+        </div>
+      </div>
     </div>
   `;
 
   article.querySelector('[data-action="download"]')?.addEventListener('click', () => {
     if (f.form_number) downloadFormFile(f.form_number);
-  }, { once: true });
+  });
+
+  article.querySelector('[data-action="share"]')?.addEventListener('click', () => {
+    _shareLink();
+  });
+}
+
+/** Copy the current detail URL to the clipboard (US-010). */
+async function _shareLink() {
+  const url = window.location.href;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+      showAlert('Link copied to clipboard', 'success', { dismissMs: 3000 });
+      return;
+    }
+    throw new Error('clipboard unavailable');
+  } catch {
+    // Fallback: surface the URL so the user can copy it manually.
+    showAlert(`Copy this link: ${url}`, 'info', { dismissMs: 8000 });
+  }
 }
 
 function _render404(article, formNumber) {
-  document.title = 'Form not found — Public Forms — BC Government';
-  _setMeta('robots', 'noindex');
-  article.innerHTML = `
-    <h1>Form not found</h1>
-    <p>The form ${escapeHtml(formNumber)} could not be found, or it is not currently published.</p>
-    <p><a href="/" class="btn btn-primary">&larr; Back to all forms</a></p>
-  `;
+  // US-009 AC12 / US-011 BR-002 — reuse the shared 404 view rather than a
+  // form-specific message embedded in the detail container.
+  document.getElementById('detailView')?.setAttribute('hidden', '');
+  const nf = document.getElementById('notFoundView');
+  if (nf) nf.removeAttribute('hidden');
+  showNotFoundView();
 }
 
 function _setMeta(name, content) {

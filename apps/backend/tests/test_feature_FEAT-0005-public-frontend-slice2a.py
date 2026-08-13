@@ -133,19 +133,16 @@ class TestHeaderFooter:
         nav = parsed_index.find("nav", **{"aria-label": "Footer"})
         assert nav is not None
 
-    def test_shared_chrome_modules_exist_and_match(self):
-        # US-010 AC1 — shared module exists and is mirrored byte-for-byte.
-        a = (ROOT / "frontend/js/shared/chrome.js").read_text(encoding="utf-8")
-        b = (ROOT / "public-frontend/js/shared/chrome.js").read_text(encoding="utf-8")
-        # Both export renderHeader and use the same HEADER_HTML template.
-        assert "export function renderHeader" in a
-        assert "export function renderHeader" in b
-        # HEADER_HTML markup must match (the file headers/comments differ).
-        def _extract(src):
-            m = re.search(r"const HEADER_HTML = `(.*?)`;", src, re.DOTALL)
-            assert m, "HEADER_HTML constant missing"
-            return m.group(1)
-        assert _extract(a) == _extract(b), "Shared header markup drifted between apps"
+    def test_static_header_is_single_source(self, index_html):
+        # FEAT-0028 — chrome.js removed; the header is static in index.html.
+        assert not (ROOT / "public-frontend/js/shared/chrome.js").exists(), \
+            "chrome.js should have been removed in FEAT-0028"
+        assert 'id="siteHeader"' in index_html
+        assert 'class="bcgov-header"' in index_html
+        # main.js no longer imports the removed shared chrome module.
+        main_src = _read("js/main.js")
+        assert "shared/chrome.js" not in main_src
+        assert "renderHeader" not in main_src
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -153,15 +150,16 @@ class TestHeaderFooter:
 # ─────────────────────────────────────────────────────────────────────────
 
 class TestHomeShell:
-    def test_search_input_present_with_describedby(self, parsed_index):
+    def test_search_input_present_and_labelled(self, parsed_index):
         inp = parsed_index.find("input", id="searchInput")
         assert inp is not None
-        # AC4 — helper text via aria-describedby
-        assert inp.get("aria-describedby") == "searchHelp"
+        # FEAT-0028 — the floating search card uses an aria-label (visually-hidden
+        # <label>) rather than aria-describedby helper text.
+        assert inp.get("aria-label") == "Search forms"
         assert inp.get("maxlength") == "100"  # Q_MAX_LENGTH
 
-    def test_search_helper_text(self, index_html):
-        assert "Search for forms here" in index_html
+    def test_search_placeholder_text(self, index_html):
+        assert "Search by form name, number, or keyword" in index_html
 
     def test_results_region_aria_live_and_busy(self, parsed_index):
         rr = parsed_index.find("div", id="resultsRegion")
@@ -170,15 +168,18 @@ class TestHomeShell:
         assert rr.get("aria-live") == "polite"
 
     def test_results_count_aria_live(self, parsed_index):
-        rc = parsed_index.find("p", id="resultsCount")
+        # FEAT-0028 — the count badge is a <span class="results-count-badge">.
+        rc = parsed_index.find("span", id="resultsCount")
         assert rc is not None
         assert rc.get("aria-live") == "polite"
         assert rc.get("aria-atomic") == "true"
+        assert "results-count-badge" in (rc.get("class") or "")
 
-    def test_sticky_search_marker_present(self, index_html):
-        # AC5 — sticky positioning marker
-        assert 'id="searchSticky"' in index_html
-        assert "sticky-top" in index_html
+    def test_floating_search_card_present(self, index_html):
+        # FEAT-0028 US-003 — the sticky search bar was replaced by a floating
+        # search card overlapping the hero band.
+        assert "search-float-card" in index_html
+        assert 'id="searchForm"' in index_html
 
     def test_noscript_fallback_present_with_contact_link(self, parsed_index, index_html):
         # US-001 AC12 / US-006 AC10 — noscript is real and includes mailto.
@@ -228,52 +229,53 @@ class TestSearchBehaviourWiring:
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# US-002 — <form-card>
+# US-002 / FEAT-0028 US-006 — form card renderer (card.js)
 # ─────────────────────────────────────────────────────────────────────────
 
 class TestFormCard:
-    def test_custom_element_registered(self):
-        src = _read("js/components/form-card.js")
-        assert "customElements.define('form-card'" in src
-        # Light DOM (AC10) — no Shadow DOM
+    def test_render_function_exported(self):
+        src = _read("js/components/card.js")
+        # FEAT-0028 — plain renderer, no custom element / Shadow DOM.
+        assert "export function renderFormCard" in src
+        assert "customElements.define" not in src
         assert "attachShadow" not in src
 
     def test_view_more_is_anchor(self):
-        src = _read("js/components/form-card.js")
+        src = _read("js/components/card.js")
         # AC3 — must be a real <a href>, supports middle-click.
-        assert re.search(r'<a [^>]*href="/forms/', src)
+        assert re.search(r'<a [^>]*href="\$\{escapeHtml\(detailHref\)\}', src) \
+            or "/forms/" in src
 
     def test_disabled_when_form_number_null(self):
-        src = _read("js/components/form-card.js")
-        # AC2 — aria-disabled on the disabled View more
+        src = _read("js/components/card.js")
+        # AC2 — aria-disabled on the disabled View more / number
         assert 'aria-disabled="true"' in src
 
     def test_download_separate_tab_stop(self):
-        src = _read("js/components/form-card.js")
+        src = _read("js/components/card.js")
         # AC6 — separate <button> with data-action="download"
         assert 'data-action="download"' in src
         # AC6 — descriptive aria-label
         assert "aria-label=" in src
 
     def test_only_allowlisted_fields_rendered(self):
-        src = _strip_js_comments(_read("js/components/form-card.js"))
+        src = _strip_js_comments(_read("js/components/card.js"))
         # AC12 — no internal identifiers leak into the DOM.
-        # Use word-boundary checks against executable source (no comments).
         for forbidden in ("created_by_id", "is_public", "s3_key",
                           "form_id", "business_area_id"):
             assert not re.search(rf"\b{forbidden}\b", src), \
-                f"field {forbidden} must not appear in form-card source"
+                f"field {forbidden} must not appear in card source"
 
     def test_intl_date_format(self):
         # AC11 — Intl.DateTimeFormat('en-CA') ; <time datetime="…">
         utils = _read("js/utils.js")
         assert "Intl.DateTimeFormat('en-CA'" in utils
-        card = _read("js/components/form-card.js")
-        assert "<time datetime=" in card
+        card = _read("js/components/card.js")
+        assert "<time " in card and "datetime=" in card
 
     def test_history_state_cap(self):
-        src = _read("js/components/form-card.js")
-        # AC15 — cap-byte check before history.pushState payload
+        src = _read("js/components/card.js")
+        # AC15 — cap-byte check before caching the detail payload
         assert "HISTORY_STATE_CAP_BYTES" in src
         assert "byteLength" in src
 
@@ -314,11 +316,16 @@ class TestDetailView:
             assert not re.search(rf"\b{forbidden}\b", src), \
                 f"forbidden field {forbidden} in JSON-LD source"
 
-    def test_404_emits_robots_noindex(self):
+    def test_404_delegates_to_shared_not_found_view(self):
         src = _read("js/views/detail.js")
-        # AC4
-        assert "robots" in src
-        assert "noindex" in src
+        # FEAT-0028 US-009 AC12 / US-011 BR-002 — a missing form reuses the
+        # shared #notFoundView (which emits robots noindex) rather than an
+        # inline detail message.
+        assert "showNotFoundView" in src
+        assert "notFoundView" in src
+        nf = _read("js/views/not-found.js")
+        assert "robots" in nf
+        assert "noindex" in nf
 
     def test_jsonld_neutralises_close_script(self):
         src = _read("js/views/detail.js")
@@ -343,7 +350,7 @@ class TestDownload:
 
     def test_keyboard_activation_via_button_or_anchor(self):
         # AC11 — download is a real <button> in the card; native keyboard support.
-        src = _read("js/components/form-card.js")
+        src = _read("js/components/card.js")
         assert '<button type="button"' in src
         assert 'data-action="download"' in src
 
@@ -441,11 +448,8 @@ class TestUIStates:
 
 class TestSecurityHardening:
     def test_escape_html_used_in_card(self):
-        src = _read("js/components/form-card.js")
+        src = _read("js/components/card.js")
         # Every raw API value into innerHTML must pass through escapeHtml.
-        # We can't assert this perfectly with a regex, but we can ensure
-        # escapeHtml is imported and the file does not call innerHTML with
-        # bare API field interpolations.
         assert "escapeHtml" in src
 
     def test_no_inline_scripts_in_index(self, index_html):

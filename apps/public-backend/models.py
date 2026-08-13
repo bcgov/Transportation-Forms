@@ -1,6 +1,6 @@
-"""SQLAlchemy model mapping to the public_forms_v database view."""
+"""SQLAlchemy model mapping to the public_*_v database views."""
 
-from sqlalchemy import BigInteger, Column, DateTime, String, Text
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from database import Base
@@ -50,3 +50,47 @@ class PublicForm(Base):
     s3_key = Column(String(500), nullable=True)
     file_name = Column(String(255), nullable=True)
     file_size = Column(BigInteger, nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# FEAT-0026 — CMS view-backed models
+# ---------------------------------------------------------------------------
+
+
+class PublicCmsPage(Base):
+    """Read-only model backed by the ``public_cms_pages_v`` view.
+
+    Projects only non-deleted rows from ``cms_pages`` so that soft-deleted
+    pages disappear from the public API automatically (US-011 AC7).
+    """
+
+    __tablename__ = "public_cms_pages_v"
+    __table_args__ = {"info": {"is_view": True}}
+
+    id = Column(UUID(as_uuid=True), primary_key=True)
+    slug = Column(String(80), nullable=False)
+    title = Column(String(120), nullable=False)
+    meta_description = Column(String(180), nullable=True)
+    body_html = Column(Text, nullable=False)
+    show_in_nav = Column(Boolean, nullable=False, default=False)
+    nav_order = Column(Integer, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+
+class PublicCmsRedirect(Base):
+    """Read-only model backed by the ``public_cms_redirects_v`` view.
+
+    The view joins to ``cms_pages`` and filters out redirects whose target
+    is soft-deleted so the resolver reliably returns 404 for stale rows
+    (US-013 AC3).
+    """
+
+    __tablename__ = "public_cms_redirects_v"
+    __table_args__ = {"info": {"is_view": True}}
+
+    # The view exposes redirect_id as PK because ``id`` is used elsewhere.
+    redirect_id = Column(UUID(as_uuid=True), primary_key=True)
+    from_slug = Column(String(80), nullable=False)
+    to_page_id = Column(UUID(as_uuid=True), nullable=False)
+    to_slug = Column(String(80), nullable=False)
+    created_at = Column(DateTime, nullable=True)

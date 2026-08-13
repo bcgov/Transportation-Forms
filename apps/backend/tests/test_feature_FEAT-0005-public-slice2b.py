@@ -144,9 +144,9 @@ class TestA11yCSS:
 
     def test_detail_heading_overflow_wrap(self):
         css = self._css()
-        # #detailContent h1 must also get overflow-wrap
-        assert "#detailContent" in css
-        # overflow-wrap appears at least twice (form card + detail)
+        # FEAT-0028 — the detail heading lives in the hero band (.detail-hero h1).
+        assert ".detail-hero h1" in css
+        # overflow-wrap appears at least twice (form card + detail heading)
         assert css.count("overflow-wrap") >= 2
 
     def test_prefers_reduced_motion_skeleton(self):
@@ -389,9 +389,12 @@ class TestSEODetailMeta:
         assert r"<\/" in src
 
     def test_404_sets_noindex(self):
-        # AC9 — _render404 sets robots noindex
+        # AC9 / FEAT-0028 — the detail 404 path reuses the shared not-found view,
+        # which emits robots noindex.
         src = _strip_js_comments(self._src())
-        assert re.search(r"noindex", src)
+        assert "showNotFoundView" in src
+        nf = _strip_js_comments(_read_fe("js/views/not-found.js"))
+        assert re.search(r"noindex", nf)
 
     def test_jsonld_no_internal_fields(self):
         src = _strip_js_comments(self._src())
