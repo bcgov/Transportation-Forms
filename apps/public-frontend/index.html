@@ -31,28 +31,20 @@
   <!-- Skip-to-main link (US-007 AC2 / US-003 AC13) -->
   <a class="visually-hidden-focusable skip-link" href="#mainContent">Skip to main content</a>
 
-  <!-- Shared header (US-010). Rendered by ./js/shared/chrome.js when JS is on;
-       static markup below is a progressive-enhancement fallback (US-010 AC11). -->
- <!-- <header id="siteHeader" role="banner" class="bcgov-header">
-    <div class="container d-flex align-items-center py-2">
-      <a href="/" class="d-flex align-items-center text-decoration-none" aria-label="BC Government — home">
-     
-        <img src="/assets/bc-gov-transportation-logo.png" alt="" class="bcgov-header-logo">
-        <span class="visually-hidden">BC Transportation and Transit</span>
-      </a>
-      <h4 class="text-white m-0">Transportation Forms</h4>
-    </div>
-  </header> -->
+  <!-- Branded site header (FEAT-0028 US-001). This static markup is the sole
+       authoritative public header; it is not rendered or replaced at runtime.
+       The BC Gov logo is the primary "return home" affordance and its alt text
+       provides the single accessible name for the logo link (AC4/AC5). -->
   <header id="siteHeader" role="banner">
-  <div class="bcgov-header" role="banner">
-    <div class="container d-flex flex-column flex-sm-row align-items-start align-items-sm-center py-2">
-      <a href="/" class="d-flex align-items-center text-decoration-none" aria-label="BC Government — home">
-        <img src="/assets/bc-gov-transportation-logo.png" class="bcgov-header-logo">
-        <span class="visually-hidden">BC Transportation and Transit Public Forms</span>
-      </a>
-      <h4 class="ms-0 ms-sm-3 mt-1 mt-sm-0 mb-0 fw-bold align-self-center align-self-sm-auto text-center mt-3 mt-sm-0">Public Forms</h4>
+    <div class="bcgov-header">
+      <div class="container d-flex flex-column flex-sm-row align-items-start align-items-sm-center py-2">
+        <a href="/" class="d-flex align-items-center text-decoration-none">
+          <img src="/assets/bc-gov-transportation-logo.png" class="bcgov-header-logo"
+               alt="BC Ministry of Transportation and Transit Public Forms">
+        </a>
+        <h4 class="ms-0 ms-sm-3 mt-1 mt-sm-0 mb-0 fw-bold align-self-center text-white">Public Forms</h4>
+      </div>
     </div>
-  </div>
   </header>
 
   <!-- CMS-driven navbar (FEAT-0026 US-012). Populated by
@@ -60,9 +52,9 @@
        Hidden until at least one nav-visible page exists so the empty
        state does not surface an empty <nav>. -->
   <nav id="cmsNav" role="navigation" aria-label="Site pages"
-       class="bcgov-cms-nav bg-light border-bottom" hidden>
+       class="bcgov-cms-nav" hidden>
     <div class="container">
-      <ul id="cmsNavList" class="nav nav-pills flex-nowrap overflow-x-auto text-nowrap py-2 mb-0"></ul>
+      <ul id="cmsNavList" class="nav flex-nowrap overflow-x-auto text-nowrap py-2 mb-0"></ul>
     </div>
   </nav>
 

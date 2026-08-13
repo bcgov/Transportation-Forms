@@ -5,13 +5,27 @@
  * the SPA-specific structural and accessibility styles.
  */
 
+/*
+ * Design tokens (FEAT-0028 US-001). Branding values are defined once here
+ * and referenced everywhere; literal hex values are not repeated in header
+ * or navbar rules (BR-005).
+ */
+:root {
+  --gov-blue: #003366;
+  --gov-blue-dark: #00264d;
+  --gov-gold: #fcba19;
+  --gov-gold-light: #fff4d6;
+  --border-subtle: #dde3ed;
+  --font-sans: "BC Sans", "BCSans", system-ui, -apple-system, sans-serif;
+}
+
 /* Skip-link (US-007 AC2 / US-003 AC13) */
 .skip-link {
   position: absolute;
   left: 0;
   top: 0;
   z-index: 1080;
-  background: #003366;
+  background: var(--gov-blue);
   color: #fff;
   padding: 0.5rem 1rem;
   text-decoration: none;
@@ -21,7 +35,7 @@
 .skip-link:focus,
 .skip-link:focus-visible {
   transform: translateY(0);
-  outline: 3px solid #fcba19;
+  outline: 3px solid var(--gov-gold);
   outline-offset: 2px;
 }
 
@@ -33,50 +47,57 @@ main { flex: 1 0 auto; }
 .bcgov-footer a { color: #fff; text-decoration: underline; }
 .bcgov-footer a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
 
-/* Header */
-.bcgov-header { background: #003366; color: #fff; border-bottom: 2px solid #fcba19; }
-.bcgov-header a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
+/* Header (FEAT-0028 US-001) */
+.bcgov-header {
+  background: var(--gov-blue);
+  color: #fff;
+  border-bottom: 3px solid var(--gov-gold);
+  font-family: var(--font-sans);
+}
+.bcgov-header a:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
 .ministry-name { color: #fff; }
+.bcgov-header h4 {
+  font-size: 1.1rem;
+  letter-spacing: 0.01em;
+  font-weight: 600;
+  color: #fff;
+}
 /*
- * Header logo (US-003). Only `height` is set; `width: auto` explicitly preserves
- * the asset's natural aspect ratio (AC1) and prevents any inherited `width:100%`
- * from a parent flex/grid from squishing it. `max-width: 100%` guarantees the
- * logo never overflows the header container on narrow viewports (AC4), and the
- * xs-breakpoint override reduces height so the logo + brand text fit at 320px
- * without introducing a horizontal scrollbar.
- 
-.bcgov-header-logo {
-    height: 40px;
-    width: auto;
-    max-width: 100%;
-    margin-right: 2rem;
-    flex-shrink: 0;
-}
-@media (max-width: 500px) {
-  .bcgov-header-logo {
-    height: 40px;
-    width:auto;
-    margin-right: 1rem;
-  }
-}
-*/
-.bcgov-header h4
-{
-  font-size: 1.4rem;
-}
+ * Header logo. `width: auto` preserves the asset's natural aspect ratio (AC2)
+ * and `max-height: 42px` caps the rendered height at every breakpoint (AC3);
+ * `max-width: 100%` prevents overflow on narrow viewports.
+ */
 .bcgov-header-logo {
     height: auto;
     width: auto;
-    max-height: 50px; /* cap height on larger screens */
-    max-width: 100%; /* on small screens, width becomes the limit */
+    max-height: 42px;
+    max-width: 100%;
     display: block;
 }
-@media (max-width: 500px) {
-  .bcgov-header-logo {
-    height: 50px;
-    width:auto;
-    margin-right: 1rem;
-  }
+
+/* CMS navbar (FEAT-0028 US-001 AC20) — mockup: white band, subtle border,
+   plain nav pills styled with the gold-light active/hover token. */
+.bcgov-cms-nav {
+  background: #fff;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-sans);
+}
+.bcgov-cms-nav .nav { gap: 0.25rem; }
+.bcgov-cms-nav .nav-link {
+  color: var(--gov-blue);
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.375rem;
+}
+.bcgov-cms-nav .nav-link:hover,
+.bcgov-cms-nav .nav-link.active {
+  background: var(--gov-gold-light);
+  color: var(--gov-blue);
+}
+.bcgov-cms-nav .nav-link:focus-visible {
+  outline: 3px solid var(--gov-gold);
+  outline-offset: 2px;
 }
 
 /* Sticky search */

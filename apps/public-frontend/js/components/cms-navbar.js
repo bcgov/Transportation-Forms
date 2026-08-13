@@ -76,7 +76,12 @@ export function _markActive() {
   const here = window.location.pathname.replace(/\/$/, '') || '/';
   list.querySelectorAll('a').forEach(a => {
     const target = (a.getAttribute('href') || '').replace(/\/$/, '') || '/';
-    if (target === here) a.classList.add('active');
-    else a.classList.remove('active');
+    if (target === here) {
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    } else {
+      a.classList.remove('active');
+      a.removeAttribute('aria-current');
+    }
   });
 }
