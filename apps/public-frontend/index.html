@@ -133,15 +133,38 @@
       </div>
 
       <div class="container py-4">
-        <!-- Result count line + aria-live (US-001 AC3, US-005 AC14) -->
-        <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
-          <p id="resultsCount" class="mb-0 text-muted" aria-live="polite" aria-atomic="true">&nbsp;</p>
-          <button type="button" id="viewAllToggle" class="btn btn-link p-0" aria-pressed="false">View all</button>
+        <!-- Results toolbar (FEAT-0028 US-003 AC1/AC2/AC4).
+             The gold results-count badge carries the aria-live/atomic region;
+             its inner #resultsCount span keeps the id so state.js announce()
+             is unchanged. #viewAllToggle preserves its existing un-paginated
+             toggle behaviour (restyled). #viewToggle is a presentational-only
+             list/grid switch that never re-fetches (AC9/AC10). Icons are inline
+             SVG — no icon-font/CDN dependency (AC25). -->
+        <div class="results-toolbar mt-3 mb-3">
+          <div class="d-flex align-items-center gap-2">
+            <span class="results-count-badge" aria-live="polite" aria-atomic="true">
+              <svg class="bi" viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" aria-hidden="true"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg>
+              <span id="resultsCount">&nbsp;</span>
+            </span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <button type="button" id="viewAllToggle" class="view-all-link btn btn-link p-0 text-decoration-none" aria-pressed="false">View all</button>
+            <div id="viewToggle" class="d-flex gap-1 ms-2" role="group" aria-label="View mode">
+              <button type="button" id="viewListBtn" class="view-toggle-btn active" aria-pressed="true" aria-label="List view" title="List view">
+                <svg class="bi" viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" aria-hidden="true"><path d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5m-3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2m0 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2m0 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2"/></svg>
+              </button>
+              <button type="button" id="viewGridBtn" class="view-toggle-btn" aria-pressed="false" aria-label="Grid view" title="Grid view">
+                <svg class="bi" viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" aria-hidden="true"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zM9 2.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zM9 10.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5z"/></svg>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <!-- Results region (US-001 AC1, US-006 AC11) -->
+        <!-- Results region (US-001 AC1, US-006 AC11). #resultsList carries the
+             .results-grid layout; .is-grid (toggled by home.js) switches to the
+             responsive multi-column grid (US-003 AC5-AC8). -->
         <div id="resultsRegion" class="results-region" aria-busy="false" aria-live="polite">
-          <ol id="resultsList" class="list-unstyled" aria-label="Forms"></ol>
+          <ol id="resultsList" class="results-grid list-unstyled" aria-label="Forms"></ol>
         </div>
 
         <!-- Empty state (US-006 AC3, AC4) -->
@@ -152,9 +175,9 @@
           <button type="button" class="btn btn-outline-primary" id="clearFiltersBtn">Clear filters</button>
         </div>
 
-        <!-- Paginator (US-005 AC6, AC7) -->
+        <!-- Paginator (US-005 AC6, AC7; FEAT-0028 US-003 AC20-AC22 restyle) -->
         <nav id="paginator" class="mt-4" aria-label="Forms pagination" hidden>
-          <ul class="pagination justify-content-center mb-0" id="pagerList"></ul>
+          <ul class="pagination justify-content-center mb-0 pager" id="pagerList"></ul>
         </nav>
 
         <!-- View-all overflow notice (US-005 AC10) -->
