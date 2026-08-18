@@ -59,52 +59,80 @@
   </nav>
 
   <main id="mainContent" tabindex="-1">
-    <!-- HOME view (US-001 / US-005 / US-006) -->
+    <!-- HOME view (US-001 / US-005 / US-006 / FEAT-0028 US-002) -->
     <section id="homeView" class="view" aria-labelledby="homeHeading">
-      <div class="container py-4">
-        <h1 id="homeHeading" class="visually-hidden">Transportation Forms</h1>
+      <h1 id="homeHeading" class="visually-hidden">Transportation Forms</h1>
 
-        <div class="hero text-center mb-4">
-          <h2 class="display-6">Find a transportation form</h2>
-          <p class="lead">Search the public catalogue or browse the most-recently-updated forms.</p>
+      <!-- Hero band (FEAT-0028 US-002 AC1/AC2). Full-width dark-blue band with a
+           pure-CSS grid texture (main.css .hero-band::before) and a decorative
+           document icon. Icons are inline SVG so no icon-font dependency is
+           added (US-002 AC18). -->
+      <div class="hero-band">
+        <div class="container">
+          <div class="row align-items-center">
+            <div class="col-lg-9">
+              <h2 class="hero-title">Find a transportation form</h2>
+              <p class="hero-sub mb-0">Search the public catalogue or browse the most-recently-updated forms.</p>
+            </div>
+            <div class="col-lg-3 d-none d-lg-flex justify-content-end">
+              <div class="hero-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="currentColor" role="img"><path d="M5.5 7a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1zM5 9.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5"/><path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5zm0 1v2A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/></svg>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
 
-        <!-- Sticky search row (US-001 AC5) -->
-        <div class="search-sticky bg-body sticky-top py-2" id="searchSticky">
-          <form id="searchForm" role="search" autocomplete="off" onsubmit="return false;">
-            
-              <div class="col-12 col-md-12">
-                <label for="searchInput" class="form-label">Search forms</label>
-                <input id="searchInput" type="search" class="form-control form-control-lg" placeholder="Search forms…" aria-describedby="searchHelp" maxlength="100" autofocus>
-                
-              </div>                
-              <div class="row col-12 col-md-12">
-                <div class="col-6 col-md-3">
-                  <label for="filterBA" class="form-label">Business area</label>
-                  <select id="filterBA" class="form-select" aria-label="Filter by business area">
-                    <option value="">All business areas</option>
-                  <option value="Licensing">Licensing</option></select>
-                </div>
-                <div class="col-3 col-md-2">
-                  <label for="sortField" class="form-label">Sort by</label>
-                  <select id="sortField" class="form-select">
-                    <option value="updated_at">Updated</option>
-                    <option value="title">Title</option>
-                    <option value="form_number">Form #</option>
-                    <option value="effective_date">Effective</option>
-                  </select>
-                </div>
-                <div class="col-3 col-md-2">
-                  <label for="sortOrder" class="form-label">Order</label>
-                  <select id="sortOrder" class="form-select" aria-label="Sort order">
-                    <option value="desc">Desc</option>
-                    <option value="asc">Asc</option>
-                  </select>
-                </div>
+      <!-- Floating search card (FEAT-0028 US-002 AC3). Non-sticky; overlaps the
+           hero from below (main.css .search-float-wrap margin-top) and scrolls
+           with the page. Element IDs (searchInput/filterBA/sortField/sortOrder)
+           are preserved so existing home.js wiring is unchanged (AC4-AC6). -->
+      <div class="search-float-wrap">
+        <div class="container">
+          <form id="searchForm" class="search-float-card" role="search" autocomplete="off" onsubmit="return false;">
+            <div class="search-input-wrap">
+              <svg class="search-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>
+              <input id="searchInput" type="search" class="form-control" placeholder="Search by form name, number, or keyword…" aria-label="Search forms" maxlength="100" autofocus>
+            </div>
+
+            <div class="filter-row">
+              <span class="filter-label">
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5zm1 .5v1.308l4.372 4.858A.5.5 0 0 1 7 8.5v5.306l2-.666V8.5a.5.5 0 0 1 .128-.334L13.5 3.308V2z"/></svg>
+                Filter
+              </span>
+
+              <!-- Single-select business area. The leading option is the visible
+                   "Business Areas:" label and the clear/all state (US-002 AC7/AC10).
+                   API-provided areas are appended by home.js (AC7); no area name
+                   is hardcoded here. -->
+              <select id="filterBA" class="filter-select" aria-label="Filter by business area">
+                <option value="">Business Areas: All</option>
+              </select>
+
+              <div class="filter-divider" aria-hidden="true"></div>
+
+              <!-- Existing sort options. Visible option text is prefixed so each
+                   control always identifies its contents (US-002 AC6). Option
+                   values are unchanged from the existing backend contract. -->
+              <select id="sortField" class="filter-select" aria-label="Sort by">
+                <option value="updated_at">Sort By: Updated</option>
+                <option value="title">Sort By: Title</option>
+                <option value="form_number">Sort By: Form #</option>
+                <option value="effective_date">Sort By: Effective date</option>
+              </select>
+
+              <div class="filter-divider" aria-hidden="true"></div>
+
+              <select id="sortOrder" class="filter-select" aria-label="Sort order">
+                <option value="desc">Sort Order: Descending</option>
+                <option value="asc">Sort Order: Ascending</option>
+              </select>
             </div>
           </form>
         </div>
+      </div>
 
+      <div class="container py-4">
         <!-- Result count line + aria-live (US-001 AC3, US-005 AC14) -->
         <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
           <p id="resultsCount" class="mb-0 text-muted" aria-live="polite" aria-atomic="true">&nbsp;</p>

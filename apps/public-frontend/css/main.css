@@ -13,9 +13,14 @@
 :root {
   --gov-blue: #003366;
   --gov-blue-dark: #00264d;
+  --gov-blue-mid: #1a5a96;
   --gov-gold: #fcba19;
   --gov-gold-light: #fff4d6;
+  --surface-bg: #f4f6fa;
+  --card-bg: #ffffff;
   --border-subtle: #dde3ed;
+  --text-primary: #1a1f36;
+  --text-muted: #64748b;
   --font-sans: "BC Sans", "BCSans", system-ui, -apple-system, sans-serif;
 }
 
@@ -41,8 +46,13 @@
 
 /* Sticky-footer pattern (US-010 AC5) */
 html, body { height: 100%; }
-body { display: flex; flex-direction: column; min-height: 100vh; }
-main { flex: 1 0 auto; }
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--surface-bg);   /* FEAT-0028 — surface behind floating cards */
+}
+main { flex: 1 0 auto; padding-top:0 !important; }  /* FEAT-0028 — main content grows to fill the viewport */
 .bcgov-footer { flex-shrink: 0; background: #003366; color: #fff; }
 .bcgov-footer a { color: #fff; text-decoration: underline; }
 .bcgov-footer a:focus-visible { outline: 3px solid #fcba19; outline-offset: 2px; }
@@ -100,8 +110,167 @@ main { flex: 1 0 auto; }
   outline-offset: 2px;
 }
 
-/* Sticky search */
-.search-sticky { z-index: 1020; border-bottom: 1px solid #d1d1d1; }
+/*
+ * Home hero band + floating search card (FEAT-0028 US-002).
+ * The search card is intentionally NOT sticky (AC3): it overlaps the hero
+ * from below and scrolls with the page. Decorative icons are inline SVG so no
+ * icon-font dependency is added (AC18).
+ */
+.hero-band {
+  background: linear-gradient(160deg, var(--gov-blue) 0%, var(--gov-blue-dark) 100%);
+  padding: 3rem 0 6rem;
+  position: relative;
+  overflow: hidden;
+  font-family: var(--font-sans);
+}
+/* Pure-CSS grid texture overlay (AC2) */
+.hero-band::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+/* Gold accent line on the right edge */
+.hero-band::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 4px;
+  background: var(--gov-gold);
+  opacity: 0.6;
+}
+.hero-band .hero-title {
+  font-size: clamp(1.6rem, 3vw, 2.5rem);
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.5rem;
+}
+.hero-band .hero-sub {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 1rem;
+}
+.hero-icon {
+  color: rgba(255, 255, 255, 0.08);
+  line-height: 1;
+}
+.hero-icon svg { width: 4.5rem; height: 4.5rem; }
+
+.search-float-wrap {
+  margin-top: -3.5rem;
+  position: relative;
+  z-index: 10;   /* AC3 — stay above catalogue list items */
+}
+.search-float-card {
+  background: var(--card-bg);
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(0, 51, 102, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 1.5rem;
+  border: 1px solid var(--border-subtle);
+}
+.search-input-wrap { position: relative; }
+.search-input-wrap .search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.search-float-card input[type="search"] {
+  padding-left: 2.75rem;
+  padding-right: 1rem;
+  height: 3rem;
+  font-size: 1rem;
+  border-radius: 0.625rem;
+  border: 1.5px solid #c8d3e6;
+  background: #f8fafc;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.search-float-card input[type="search"]:focus {
+  border-color: var(--gov-blue-mid);
+  box-shadow: 0 0 0 3px rgba(26, 90, 150, 0.15);
+  background: #fff;
+  outline: none;
+}
+.search-float-card input[type="search"]:focus-visible {
+  outline: 3px solid var(--gov-gold);
+  outline-offset: 2px;
+}
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  align-items: center;
+  margin-top: 0.875rem;
+}
+.filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.filter-label svg { width: 0.85rem; height: 0.85rem; }
+.filter-select {
+  height: 2rem;
+  font-size: 0.825rem;
+  padding: 0 1.6rem 0 0.625rem;
+  border-radius: 999px;
+  border: 1.5px solid #c8d3e6;
+  background-color: #f8fafc;
+  color: var(--text-primary);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%2364748b' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.55rem center;
+  transition: border-color 0.15s;
+  max-width: 100%;
+}
+.filter-select:focus {
+  outline: none;
+  border-color: var(--gov-blue-mid);
+  box-shadow: 0 0 0 3px rgba(26, 90, 150, 0.15);
+}
+.filter-select:focus-visible {
+  outline: 3px solid var(--gov-gold);
+  outline-offset: 2px;
+}
+.filter-divider {
+  width: 1px;
+  height: 1.25rem;
+  background: var(--border-subtle);
+  margin: 0 0.125rem;
+}
+
+/* Mobile: stack the filter controls; keep the card overlap sensible (AC15). */
+@media (max-width: 575.98px) {
+  .hero-band { padding-bottom: 5.5rem; }
+  .search-float-wrap { margin-top: -4rem; }
+  .filter-row { flex-direction: column; align-items: stretch; }
+  .filter-row .filter-divider { display: none; }
+  .filter-select { width: 100%; }
+}
+
+/* Reduced motion: no transition/transform animation on the new home controls
+   (US-002 AC16). Uses !important so it overrides the global 0.01ms fallback
+   and yields a computed transition-duration of 0s. */
+@media (prefers-reduced-motion: reduce) {
+  .search-float-card input[type="search"],
+  .filter-select {
+    transition: none !important;
+  }
+}
 
 /* Results / cards (US-002) — single column at all breakpoints (AC7) */
 .results-region { min-height: 200px; }

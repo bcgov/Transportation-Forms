@@ -55,16 +55,15 @@ function _wireOnce() {
   if (input) {
     input.addEventListener('input', () => {
       if (_debounceTimer) clearTimeout(_debounceTimer);
-      _debounceTimer = setTimeout(() => {
-        const state = getState();
-        state.q = (input.value || '').trim().slice(0, Q_MAX_LENGTH);
-        state.p = 1;                            // US-005 AC12
-        // After a search, default sort flips to title/asc (US-005 BR-003)
-        if (state.q && !state.s) { state.s = 'title'; state.o = 'asc'; }
-        if (!state.q) { state.s = ''; state.o = ''; }   // back to default
-        setUrl(state, 'replace');
-        _refresh({ replaceUrl: false });
-      }, SEARCH_DEBOUNCE_MS);
+      _debounceTimer = setTimeout(() => _applySearch(input), SEARCH_DEBOUNCE_MS);
+    });
+    // US-002 AC4/E1 — Enter runs the search immediately, cancelling any
+    // pending debounce so exactly one refresh performs the submitted term.
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      if (_debounceTimer) { clearTimeout(_debounceTimer); _debounceTimer = null; }
+      _applySearch(input);
     });
   }
 
@@ -120,12 +119,35 @@ function _wireOnce() {
   });
 }
 
+/**
+ * Apply the current search-input value to URL state and refresh (US-002 AC4/AC5).
+ * Shared by the debounced input handler and the Enter-key handler so both paths
+ * behave identically. Blank/whitespace-only input clears the term and restores
+ * the default sort (US-005 BR-003).
+ */
+function _applySearch(input) {
+  const state = getState();
+  state.q = (input.value || '').trim().slice(0, Q_MAX_LENGTH);
+  state.p = 1;                            // US-005 AC12
+  // After a search, default sort flips to title/asc (US-005 BR-003)
+  if (state.q && !state.s) { state.s = 'title'; state.o = 'asc'; }
+  if (!state.q) { state.s = ''; state.o = ''; }   // back to default
+  setUrl(state, 'replace');
+  _refresh({ replaceUrl: false });
+}
+
 function _hydrateControls() {
   const state = getState();
   const input = document.getElementById('searchInput');
   if (input && document.activeElement !== input) input.value = state.q;
   const filterBA = document.getElementById('filterBA');
-  if (filterBA) filterBA.value = state.f || '';
+  if (filterBA) {
+    filterBA.value = state.f || '';
+    // US-002 AC13 — an unknown/stale business-area value must not remain
+    // selected nor leave the control in a blank (selectedIndex -1) state;
+    // fall back to the leading "Business Areas:" option.
+    if (filterBA.selectedIndex === -1) filterBA.value = '';
+  }
   const sf = document.getElementById('sortField');
   if (sf) sf.value = state.s || DEFAULT_SORT_FIELD;
   const so = document.getElementById('sortOrder');
@@ -142,10 +164,11 @@ async function _loadBusinessAreas() {
     const { data } = await fetchJson('/business-areas');
     const items = (data && data.items) || [];
     if (items.length === 0) {
-      // US-005 AC3 — hide control when empty
+      // US-002 AC12 — hide the control (and its divider) when no areas exist.
       select.disabled = true;
-      const wrapper = select.closest('.col-12, .col-md-3, .col-md-4, [class*="col-"]');
-      if (wrapper) wrapper.classList.add('d-none');
+      select.hidden = true;
+      const divider = select.nextElementSibling;
+      if (divider && divider.classList.contains('filter-divider')) divider.hidden = true;
       return;
     }
     items.sort((a, b) => String(a.name).localeCompare(String(b.name), 'en-CA'));
