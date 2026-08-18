@@ -11,6 +11,22 @@ import { escapeHtml, formatDate, formatDateTime, formatFileType, truncate } from
 import { SITE_NAME } from '../constants.js';
 import { showApiAlert } from '../ui-states.js';
 
+// US-004 AC17 — external-link icon (Bootstrap Icons box-arrow-up-right) inline SVG.
+const _EXTERNAL_LINK_ICON =
+  '<svg class="bi" viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" aria-hidden="true">' +
+  '<path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/>' +
+  '<path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/>' +
+  '</svg>';
+
+// US-004 AC19 — a form is link-source only when it exposes a non-empty http(s)
+// URL. Any other scheme (e.g. javascript:) is rejected so it can never produce
+// an unsafe href.
+function _safeUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  return /^https?:\/\//i.test(trimmed) ? trimmed : '';
+}
+
 export async function showDetailView(formNumber) {
   const article = document.getElementById('detailContent');
   if (!article) return;
@@ -84,6 +100,7 @@ function _render(article, f) {
   const ft = formatFileType(f.file_type);
   const eff = formatDate(f.effective_date);
   const upd = formatDateTime(f.updated_at);
+  const linkUrl = _safeUrl(f.url);
 
   const keywordChips = Array.isArray(f.keywords) && f.keywords.length
     ? `<p class="mt-3">${f.keywords.map(k => `<span class="keyword-chip">${escapeHtml(k)}</span>`).join('')}</p>`
@@ -109,7 +126,9 @@ function _render(article, f) {
     </dl>
 
     <div class="mt-4">
-      ${f.file ? `<button type="button" class="btn btn-primary" data-action="download" aria-label="Download ${escapeHtml(f.form_number || '')}${ft ? ` (${escapeHtml(ft)})` : ''}">
+      ${linkUrl
+        ? `<a class="btn btn-primary" href="${escapeHtml(linkUrl)}" target="_blank" rel="noopener noreferrer" data-no-router="1" aria-label="Open link for ${escapeHtml(f.form_number || '')} (opens in new tab)">${_EXTERNAL_LINK_ICON} Form Link</a>`
+        : f.file ? `<button type="button" class="btn btn-primary" data-action="download" aria-label="Download ${escapeHtml(f.form_number || '')}${ft ? ` (${escapeHtml(ft)})` : ''}">
         Download form
       </button>` : ''}
     </div>
