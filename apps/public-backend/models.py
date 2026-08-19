@@ -40,6 +40,14 @@ class PublicForm(Base):
 
     keywords = Column(JSONB, nullable=True)
     file_type = Column(String(20), nullable=True)
+
+    # FEAT-0029 — hyperlink (link-source) forms.  ``form_source`` is 'URL'
+    # or 'Download' (or NULL for legacy rows); ``form_source_url`` holds the
+    # destination for link-source forms.  The destination is emitted to
+    # clients only after a scheme guard in the route layer.
+    form_source = Column(String(50), nullable=True)
+    form_source_url = Column(String(500), nullable=True)
+
     effective_date = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=True)
 

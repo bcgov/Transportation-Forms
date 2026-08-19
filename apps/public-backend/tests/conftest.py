@@ -87,6 +87,8 @@ _CREATE_TABLE_SQL = text("""
         business_area  TEXT,
         keywords       TEXT,
         file_type      TEXT,
+        form_source    TEXT,
+        form_source_url TEXT,
         effective_date DATETIME,
         updated_at     DATETIME,
         s3_key         TEXT,

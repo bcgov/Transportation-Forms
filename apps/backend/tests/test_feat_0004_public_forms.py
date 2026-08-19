@@ -41,6 +41,8 @@ SELECT
     ba.name               AS business_area,
     f.keywords,
     f.file_type,
+    f.form_source,
+    f.form_source_url,
     f.effective_date,
     f.updated_at,
     fv.s3_key             AS s3_key,
@@ -456,7 +458,7 @@ class TestListPublicForms:
         forbidden = [
             "id", "form_id", "created_by_id", "form_number_reservation_id",
             "business_area_id", "is_public", "status", "deleted_at",
-            "created_at", "form_source", "form_source_url",
+            "created_at", "form_source_url",
             "form_attachment_url", "form_attachment_filename",
             "collects_personal_info",
             "s3_key",
@@ -722,10 +724,12 @@ class TestDatabaseView:
         resp = public_client.get("/api/public/v1/forms")
         item = resp.json()["items"][0]
         # FEAT-0005 added ``updated_at`` to the public projection;
+        # FEAT-0029 added ``form_source`` and the derived ``url``;
         # internal columns (form_id, business_area_id, s3_key, file_name,
-        # file_size) MUST remain hidden from clients.
+        # file_size, form_source_url) MUST remain hidden from clients.
         expected_keys = {"form_number", "title", "description", "business_area",
-                         "keywords", "file_type", "effective_date", "updated_at"}
+                         "keywords", "file_type", "form_source", "url",
+                         "effective_date", "updated_at"}
         assert set(item.keys()) == expected_keys
 
     def test_view_left_join_no_reservation(self, public_client, db, _creator):
