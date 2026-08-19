@@ -360,7 +360,7 @@ function _renderPager(currentPage, total) {
 
 const _CARD_FIELDS = [
   'form_number', 'title', 'description', 'business_area',
-  'file_type', 'effective_date', 'updated_at', 'keywords', 'url',
+  'file_type', 'form_source', 'effective_date', 'updated_at', 'keywords', 'url',
 ];
 
 // Allow-list project the API item — never read/render anything else (AC3/AC18).
@@ -400,6 +400,12 @@ function _cardHtml(item, index) {
   const eff = formatDate(f.effective_date);
   const updated = formatDate(f.updated_at);
   const url = _safeUrl(f.url);
+  // US-005 P7/BR-007 — positive file evidence: a non-empty file_type that is
+  // NOT a link-source ("URL") row. Covers form_source "Download" and legacy
+  // null rows carrying file metadata (FEAT-0029 E2). Absent both a valid url
+  // and positive file evidence, the form is "no source": no pill, no action.
+  const isUrlSource = (f.form_source || '').trim().toUpperCase() === 'URL';
+  const hasFileEvidence = !!ft && !isUrlSource;
   const titleId = `card-${index}-title`;
   const href = hasNumber ? `/forms/${encodeURIComponent(f.form_number)}` : '';
   const routeState = hasNumber ? escapeHtml(JSON.stringify(_stateForDetail(f))) : '';
@@ -418,9 +424,14 @@ function _cardHtml(item, index) {
 
   // Footer row: file-type (or link) pill, effective-date pill, View details,
   // and the right-aligned Download (or "Form Link") action.
-  const pill = url
-    ? `<span class="file-type-pill link">${_icon('link')} Link</span>`
-    : `<span class="file-type-pill ${escapeHtml(ft)}">${_fileTypeIcon(ft)} ${escapeHtml(ftLabel || 'FILE')}</span>`;
+  // US-005 AC1/AC3 — a "no source" form renders no pill at all (not even the
+  // neutral FILE fallback), refining US-003 E3 for the no-file/no-link case.
+  let pill = '';
+  if (url) {
+    pill = `<span class="file-type-pill link">${_icon('link')} Link</span>`;
+  } else if (hasFileEvidence) {
+    pill = `<span class="file-type-pill ${escapeHtml(ft)}">${_fileTypeIcon(ft)} ${escapeHtml(ftLabel || 'FILE')}</span>`;
+  }
   const effEl = eff
     ? `<span class="file-type-pill file-date">${_icon('calendar')}<span class="visually-hidden">Effective:</span> ${escapeHtml(eff)}</span>`
     : '';
@@ -429,17 +440,22 @@ function _cardHtml(item, index) {
           aria-label="View details about ${escapeHtml(num)}">${_icon('eye')} View details</a>`
     : '';
 
-  let action;
+  // US-005 AC2 — a "no source" form renders no action control (not even a
+  // disabled one). The disabled Download is reserved for a file-source form
+  // that lacks a form_number to download by (US-003 AC14).
+  let action = '';
   if (url) {
     action = `<a class="btn-download" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
                  data-no-router="1" aria-label="Open link for ${escapeHtml(num)} (opens in new tab)">${_icon('externalLink')} Form Link</a>`;
-  } else if (hasNumber) {
-    action = `<button type="button" class="btn-download" data-action="download"
+  } else if (hasFileEvidence) {
+    if (hasNumber) {
+      action = `<button type="button" class="btn-download" data-action="download"
                  data-form-number="${escapeHtml(f.form_number)}"
                  aria-label="Download ${escapeHtml(num)}${ftLabel ? ` (${escapeHtml(ftLabel)})` : ''}">${_icon('download')} Download</button>`;
-  } else {
-    action = `<button type="button" class="btn-download" disabled aria-disabled="true"
+    } else {
+      action = `<button type="button" class="btn-download" disabled aria-disabled="true"
                  aria-label="Download (unavailable)">${_icon('download')} Download</button>`;
+    }
   }
 
   return `<li>

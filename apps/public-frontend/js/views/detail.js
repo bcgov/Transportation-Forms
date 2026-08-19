@@ -101,6 +101,14 @@ function _render(article, f) {
   const eff = formatDate(f.effective_date);
   const upd = formatDateTime(f.updated_at);
   const linkUrl = _safeUrl(f.url);
+  // US-005 P7/BR-007 — positive file evidence: a non-empty file_type on a row
+  // that is not link-source ("URL"). Covers form_source "Download" and legacy
+  // null rows carrying file metadata (FEAT-0029 E2). A "no source" form (no
+  // valid url and no positive file evidence) hides both the file-type display
+  // and the primary action (AC6/AC7); the unsafe-url/file case still downloads.
+  const isUrlSource = (f.form_source || '').trim().toUpperCase() === 'URL';
+  const hasFileEvidence = !!(f.file_type && String(f.file_type).trim()) && !isUrlSource;
+  const showFileType = !!ft && (linkUrl ? true : hasFileEvidence);
 
   const keywordChips = Array.isArray(f.keywords) && f.keywords.length
     ? `<p class="mt-3">${f.keywords.map(k => `<span class="keyword-chip">${escapeHtml(k)}</span>`).join('')}</p>`
@@ -112,7 +120,7 @@ function _render(article, f) {
       <h1 id="detailHeading" class="h2 mb-2">${escapeHtml(f.title || '')}</h1>
       <p class="mb-0">
         <span class="form-card__num">${escapeHtml(f.form_number || '—')}</span>
-        ${ft ? `<span class="badge ms-2">${escapeHtml(ft)}</span>` : ''}
+        ${showFileType ? `<span class="badge ms-2">${escapeHtml(ft)}</span>` : ''}
       </p>
     </header>
 
@@ -128,7 +136,7 @@ function _render(article, f) {
     <div class="mt-4">
       ${linkUrl
         ? `<a class="btn btn-primary" href="${escapeHtml(linkUrl)}" target="_blank" rel="noopener noreferrer" data-no-router="1" aria-label="Open link for ${escapeHtml(f.form_number || '')} (opens in new tab)">${_EXTERNAL_LINK_ICON} Form Link</a>`
-        : f.file ? `<button type="button" class="btn btn-primary" data-action="download" aria-label="Download ${escapeHtml(f.form_number || '')}${ft ? ` (${escapeHtml(ft)})` : ''}">
+        : hasFileEvidence ? `<button type="button" class="btn btn-primary" data-action="download" aria-label="Download ${escapeHtml(f.form_number || '')}${ft ? ` (${escapeHtml(ft)})` : ''}">
         Download form
       </button>` : ''}
     </div>
