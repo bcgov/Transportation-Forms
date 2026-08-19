@@ -478,6 +478,8 @@ SELECT
     ba.name               AS business_area,
     f.keywords,
     f.file_type,
+    f.form_source,
+    f.form_source_url,
     f.effective_date,
     f.updated_at,
     fv.s3_key             AS s3_key,

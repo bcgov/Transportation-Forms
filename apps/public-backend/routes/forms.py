@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from datetime import date, datetime
 from enum import Enum
 
@@ -76,6 +77,11 @@ class PublicFormItem(BaseModel):
     business_area: Optional[str] = None
     keywords: list[str] = []
     file_type: Optional[str] = None
+    # FEAT-0029 — hyperlink (link-source) advertisement.  ``form_source`` is
+    # passed through as-is ('URL'/'Download'/null); ``url`` is the destination,
+    # emitted only for safe http(s) link-source forms (see _safe_link_url).
+    form_source: Optional[str] = None
+    url: Optional[str] = None
     effective_date: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -104,6 +110,8 @@ class PublicFormDetail(BaseModel):
     business_area: Optional[str] = None
     keywords: list[str] = []
     file_type: Optional[str] = None
+    form_source: Optional[str] = None
+    url: Optional[str] = None
     effective_date: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     file: Optional[PublicFormFile] = None
@@ -112,6 +120,34 @@ class PublicFormDetail(BaseModel):
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
+
+# Only these schemes may ever be emitted as a clickable destination.  Mirrors
+# the public-frontend guard (FEAT-0028 _safeUrl) so a hostile or malformed
+# stored value (javascript:, data:, file:, scheme-relative //host, blank) can
+# never surface as an unsafe link.  The URL is treated as opaque data — the
+# backend never fetches, follows, or validates its reachability (BR-002).
+_SAFE_URL_RE = re.compile(r"^https?://", re.IGNORECASE)
+
+
+def _safe_link_url(
+    form_source: Optional[str], form_source_url: Optional[str]
+) -> Optional[str]:
+    """Return the destination URL for a link-source form, or ``None``.
+
+    ``url`` is emitted only when ``form_source`` is 'URL' and the stored
+    destination is a non-blank ``http``/``https`` URL (FEAT-0029 BR-001).
+    Every other case — a downloadable/legacy form, a blank destination, or a
+    disallowed scheme — yields ``None`` (AC5, AC6).
+    """
+    if not form_source or form_source.strip().upper() != "URL":
+        return None
+    if not form_source_url:
+        return None
+    candidate = form_source_url.strip()
+    if not candidate or not _SAFE_URL_RE.match(candidate):
+        return None
+    return candidate
 
 
 def _apply_text_search(query, q: str):
@@ -257,7 +293,11 @@ def list_public_forms(
     total = query.count()
     rows = query.offset(offset).limit(effective_limit).all()
 
-    items = [PublicFormItem.model_validate(row) for row in rows]
+    items = []
+    for row in rows:
+        item = PublicFormItem.model_validate(row)
+        item.url = _safe_link_url(row.form_source, row.form_source_url)
+        items.append(item)
     payload = PublicFormListResponse(
         total=total, limit=effective_limit, offset=offset, items=items
     )
@@ -297,6 +337,8 @@ def _detail_payload(row: PublicForm) -> PublicFormDetail:
         business_area=row.business_area,
         keywords=list(row.keywords or []),
         file_type=row.file_type,
+        form_source=row.form_source,
+        url=_safe_link_url(row.form_source, row.form_source_url),
         effective_date=row.effective_date,
         updated_at=row.updated_at,
         file=file_info,
