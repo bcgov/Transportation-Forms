@@ -22,13 +22,14 @@
 
 import { fetchCmsPage, fetchCmsRedirect } from '../api.js';
 import { CMS_SLUG_RE, CMS_SLUG_MAX } from '../constants.js';
-import { escapeHtml } from '../utils.js';
 import { showNotFound } from '../router.js';
 
 const CANONICAL_BASE = ''; // relative canonical — the edge sets the host
 const PAGE_VIEW_ID = 'cmsPageView';
 const PAGE_CONTENT_ID = 'cmsPageContent';
 const HEADING_ID = 'cmsPageHeading';
+const HERO_ID = 'cmsPageHero';
+const BREADCRUMB_CURRENT_ID = 'cmsBreadcrumbCurrent';
 
 
 /**
@@ -45,6 +46,8 @@ export async function showCmsPageView(slug) {
   const article = document.getElementById(PAGE_CONTENT_ID);
   if (!article) return;
 
+  _resetPage(article);
+
   if (!_isSyntacticallyValidSlug(slug)) {
     // Do NOT round-trip: the backend enforces the same regex and would
     // return 404. Fail-close on the client so bogus URLs never even
@@ -60,11 +63,14 @@ export async function showCmsPageView(slug) {
   try {
     page = await fetchCmsPage(slug);
   } catch {
+    if (!_isCurrentSlug(slug)) return;
     // Network / 5xx / rate-limit: treat as 404 so we never spin.
     article.setAttribute('aria-busy', 'false');
     await showNotFound();
     return;
   }
+
+  if (!_isCurrentSlug(slug)) return;
 
   if (page) {
     _renderPage(page, article);
@@ -79,6 +85,7 @@ export async function showCmsPageView(slug) {
   } catch {
     target = null;
   }
+  if (!_isCurrentSlug(slug)) return;
   article.setAttribute('aria-busy', 'false');
 
   if (target && _isSyntacticallyValidSlug(target) && target !== slug) {
@@ -120,19 +127,48 @@ function _renderPage(page, article) {
   _setProp('og:description', meta);
   _setProp('og:url',         `${CANONICAL_BASE}/${slug}`);
 
-  // Container: a single H1 (escaped) + the sanitised body_html.
-  const safeTitle = escapeHtml(title);
-  article.innerHTML =
-    `<h1 id="${HEADING_ID}" class="mb-3">${safeTitle}</h1>` +
-    `<div class="cms-body">${body}</div>`;
+  const heading = document.getElementById(HEADING_ID);
+  const breadcrumbCurrent = document.getElementById(BREADCRUMB_CURRENT_ID);
+  const hero = document.getElementById(HERO_ID);
+  if (heading) heading.textContent = title;
+  if (breadcrumbCurrent) breadcrumbCurrent.textContent = title;
+  if (hero) hero.removeAttribute('hidden');
+
+  const bodyElement = document.createElement('div');
+  bodyElement.className = 'cms-body';
+  bodyElement.innerHTML = body;
+
+  const footnote = document.createElement('div');
+  footnote.className = 'cms-footnote';
+  const backLink = document.createElement('a');
+  backLink.className = 'btn btn-outline-primary btn-sm';
+  backLink.href = '/';
+  backLink.innerHTML = '<svg class="bi" viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" aria-hidden="true"><path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8"/></svg> Back to forms';
+  footnote.append(backLink);
+  article.replaceChildren(bodyElement, footnote);
 
   // Move keyboard focus to the heading so screen-readers announce the
   // new page (mirrors the pattern used by home.js / detail.js).
-  const h1 = document.getElementById(HEADING_ID);
-  if (h1) {
-    h1.setAttribute('tabindex', '-1');
-    h1.focus({ preventScroll: false });
+  if (heading) {
+    heading.setAttribute('tabindex', '-1');
+    heading.focus({ preventScroll: false });
   }
+}
+
+function _resetPage(article) {
+  const heading = document.getElementById(HEADING_ID);
+  const breadcrumbCurrent = document.getElementById(BREADCRUMB_CURRENT_ID);
+  const hero = document.getElementById(HERO_ID);
+  if (heading) heading.textContent = '';
+  if (breadcrumbCurrent) breadcrumbCurrent.textContent = '';
+  if (hero) hero.removeAttribute('hidden');
+  article.setAttribute('aria-busy', 'true');
+  article.innerHTML = _skeleton();
+}
+
+function _isCurrentSlug(slug) {
+  const currentPath = window.location.pathname.replace(/\/+$/, '');
+  return currentPath === `/${slug}`;
 }
 
 function _skeleton() {

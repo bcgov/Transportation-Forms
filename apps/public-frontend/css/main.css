@@ -162,7 +162,8 @@ main { flex: 1 0 auto; padding-top:0 !important; }  /* FEAT-0028 — main conten
 /* Lifted-card offset, shared by the home search card and the detail columns
    (US-002 AC3 / US-006 AC7). Defined once so the two cannot drift. */
 .search-float-wrap,
-.detail-content-wrap {
+.detail-content-wrap,
+.cms-content-wrap {
   margin-top: -3.5rem;
   position: relative;
   z-index: 10;   /* AC3 — stay above catalogue list items */
@@ -557,7 +558,8 @@ main { flex: 1 0 auto; padding-top:0 !important; }  /* FEAT-0028 — main conten
 
 /* Detail page heading reflow at 320px (US-007 AC16) */
 #detailContent h1,
-.hero-band--detail .hero-title {
+.hero-band--detail .hero-title,
+.hero-band--cms .hero-title {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -569,7 +571,8 @@ main { flex: 1 0 auto; padding-top:0 !important; }  /* FEAT-0028 — main conten
  * stay defined in exactly one place. The sidebar is deliberately NOT sticky
  * (CONFLICT-22 / AC8).
  */
-.hero-band--detail { padding: 2rem 0 5rem; }
+.hero-band--detail,
+.hero-band--cms { padding: 2rem 0 5rem; }
 .detail-back-link {
   display: inline-flex;
   align-items: center;
@@ -591,7 +594,8 @@ main { flex: 1 0 auto; padding-top:0 !important; }  /* FEAT-0028 — main conten
 }
 
 .detail-main-card,
-.detail-sidebar-card {
+.detail-sidebar-card,
+.cms-card {
   background: var(--card-bg);
   border: 1px solid var(--border-subtle);
   border-radius: 1rem;
@@ -600,6 +604,94 @@ main { flex: 1 0 auto; padding-top:0 !important; }  /* FEAT-0028 — main conten
 }
 .detail-main-card { padding: 1.75rem; }
 .detail-sidebar-card { padding: 1.5rem; }
+
+/* CMS article page (FEAT-0028 US-007). */
+.cms-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.875rem;
+  margin-bottom: 1.25rem;
+}
+.cms-breadcrumb a { color: inherit; text-decoration: none; }
+.cms-breadcrumb a:hover { color: #fff; text-decoration: underline; }
+.cms-breadcrumb a:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+.cms-breadcrumb .sep { opacity: 0.5; }
+.cms-breadcrumb .current { color: var(--gov-gold); font-weight: 600; }
+.cms-card { padding: 2rem 2.25rem; }
+.cms-body {
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.cms-body > :first-child { margin-top: 0; }
+.cms-body > :last-child { margin-bottom: 0; }
+.cms-body h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--gov-blue);
+  margin: 2rem 0 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.cms-body h3 { font-size: 1.1rem; font-weight: 700; color: var(--gov-blue); margin: 1.5rem 0 0.5rem; }
+.cms-body h4 { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 1.25rem 0 0.4rem; }
+.cms-body p { margin-bottom: 1rem; }
+.cms-body ul,
+.cms-body ol { margin-bottom: 1rem; padding-left: 1.25rem; }
+.cms-body li { margin-bottom: 0.4rem; }
+.cms-body a { color: var(--gov-blue-mid); text-decoration: underline; text-underline-offset: 2px; }
+.cms-body a:hover { color: var(--gov-blue); }
+.cms-body a:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+.cms-body img { max-width: 100%; height: auto; border-radius: 0.625rem; margin: 1rem 0; }
+.cms-body hr { border-color: var(--border-subtle); opacity: 1; margin: 2rem 0; }
+.cms-body blockquote {
+  border-left: 4px solid var(--gov-gold);
+  background: var(--gov-gold-light);
+  padding: 0.875rem 1.125rem;
+  margin: 1.25rem 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-size: 0.95rem;
+}
+.cms-body blockquote p:last-child { margin-bottom: 0; }
+.cms-body code {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 0.85em;
+  background: #eef2f8;
+  color: var(--gov-blue);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+}
+.cms-body table {
+  width: 100%;
+  margin: 1.25rem 0;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.625rem;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.cms-body th,
+.cms-body td { padding: 0.625rem 0.875rem; border-bottom: 1px solid var(--border-subtle); text-align: left; }
+.cms-body thead th { background: #eef2f8; color: var(--gov-blue); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.cms-body tbody tr:last-child td { border-bottom: 0; }
+.cms-footnote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-subtle);
+}
+.cms-footnote .btn { font-size: 0.8rem; border-radius: 999px; padding: 0.25rem 0.875rem; }
+@media (max-width: 575.98px) {
+  .hero-band--cms { padding-bottom: 4.5rem; }
+  .cms-card { padding: 1.25rem; }
+}
 .detail-section-title {
   font-size: 1.25rem;
   color: var(--gov-blue);
