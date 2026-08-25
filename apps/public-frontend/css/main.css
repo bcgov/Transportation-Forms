@@ -159,7 +159,10 @@ main { flex: 1 0 auto; padding-top:0 !important; }  /* FEAT-0028 — main conten
 }
 .hero-icon svg { width: 4.5rem; height: 4.5rem; }
 
-.search-float-wrap {
+/* Lifted-card offset, shared by the home search card and the detail columns
+   (US-002 AC3 / US-006 AC7). Defined once so the two cannot drift. */
+.search-float-wrap,
+.detail-content-wrap {
   margin-top: -3.5rem;
   position: relative;
   z-index: 10;   /* AC3 — stay above catalogue list items */
@@ -553,10 +556,112 @@ main { flex: 1 0 auto; padding-top:0 !important; }  /* FEAT-0028 — main conten
 }
 
 /* Detail page heading reflow at 320px (US-007 AC16) */
-#detailContent h1 {
+#detailContent h1,
+.hero-band--detail .hero-title {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+
+/*
+ * Form detail view (FEAT-0028 US-006).
+ * Consolidated onto the existing hero-band, float-wrap and download-button
+ * rules via modifiers (AC36) — the gradient, grid texture and action colours
+ * stay defined in exactly one place. The sidebar is deliberately NOT sticky
+ * (CONFLICT-22 / AC8).
+ */
+.hero-band--detail { padding: 2rem 0 5rem; }
+.detail-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.875rem;
+  text-decoration: none;
+  margin-bottom: 1.25rem;
+}
+.detail-back-link:hover { color: #fff; text-decoration: underline; }
+.detail-back-link:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
+.detail-num {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--gov-gold);
+  letter-spacing: 0.08em;
+  margin-bottom: 0.375rem;
+}
+
+.detail-main-card,
+.detail-sidebar-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  box-shadow: 0 4px 16px rgba(0, 51, 102, 0.08);
+  height: 100%;
+}
+.detail-main-card { padding: 1.75rem; }
+.detail-sidebar-card { padding: 1.5rem; }
+.detail-section-title {
+  font-size: 1.25rem;
+  color: var(--gov-blue);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+/* FEAT-0027 US-011 — preserve authored newlines in the description.
+   Bound to a class (US-006 AC12) so it cannot silently stop matching. */
+.detail-description { white-space: pre-wrap; margin-bottom: 0; }
+
+.detail-sidebar-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.meta-list { margin: 0; }
+.meta-row { margin-bottom: 1rem; }
+.meta-row .meta-key {
+  display: block;
+  font-size: 0.73rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.meta-row .meta-val {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.meta-row .meta-val.meta-num {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  color: var(--gov-blue);
+}
+.detail-actions {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+/* Full-width variant of the existing card download button (AC22/AC36) */
+.btn-download--block {
+  width: 100%;
+  margin-left: 0;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  border-radius: 0.625rem;
+}
+.detail-sidebar-card .btn:focus-visible { outline: 3px solid var(--gov-gold); outline-offset: 2px; }
 
 /* Detail page chips */
 .keyword-chip {
@@ -573,10 +678,4 @@ main { flex: 1 0 auto; padding-top:0 !important; }  /* FEAT-0028 — main conten
 /* Reduced-motion: respect the user setting throughout (US-003 AC11) */
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-}
-
-
-/* Added this style to preserve newlines in detail page paragraphs */
-#detailContent > section > p {
-    white-space: pre-wrap;
 }
