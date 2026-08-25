@@ -185,11 +185,27 @@
       </div>
     </section>
 
-    <!-- DETAIL view (US-003) -->
+    <!-- DETAIL view (US-003; redesigned by FEAT-0028 US-006).
+         The hero band is a static shell (US-006 P14/AC2): #backLink,
+         #detailFormNumber and #detailHeading exist before render, so the
+         section's aria-labelledby always resolves. detail.js fills the values
+         and hides #detailHero on the not-found path (AC32). -->
     <section id="detailView" class="view" hidden aria-labelledby="detailHeading">
-      <div class="container py-4">
-        <p class="mb-3"><a id="backLink" href="/">&larr; Back to results</a></p>
-        <article id="detailContent" aria-busy="false"></article>
+      <div id="detailHero" class="hero-band hero-band--detail">
+        <div class="container">
+          <a id="backLink" class="detail-back-link" href="/">
+            <svg class="bi" viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" aria-hidden="true"><path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8"/></svg>
+            Back to results
+          </a>
+          <p id="detailFormNumber" class="detail-num" hidden></p>
+          <h1 id="detailHeading" class="hero-title mb-0"></h1>
+        </div>
+      </div>
+
+      <div class="detail-content-wrap">
+        <div class="container">
+          <article id="detailContent" aria-busy="false"></article>
+        </div>
       </div>
     </section>
 

@@ -57,6 +57,7 @@ export const DEFAULT_SORT_ORDER = 'desc';
 export const ALERT_DISMISS_MS = {
   RATE_LIMIT: 5000,    // US-006 BR-006
   ERROR: 8000,
+  SUCCESS: 4000,       // FEAT-0028 US-006 AC27 — Share confirmation
 };
 
 export const FILE_TYPE_LABELS = {
