@@ -38,6 +38,7 @@ You must NOT:
 - Commit code
 - Modify CI/CD workflows
 - Make changes outside allowed directories
+- Use node in this workspace
 
 You MAY:
 - Provide commands to run locally (tests/lint)
@@ -92,6 +93,7 @@ You are the lead and must delegate to specialized subagents. You integrate their
 - Read existing test cases from `/plan/features/FEAT-NNNN-short-slug/`
 - Write unit/integration tests within app's test folder only (e.g., `/apps/backend/tests/`).
 - Do not merge new test cases into existing test files; create new test files if needed with clear naming (e.g., `test_feature_FEAT-NNNN-short-slug.py`)
+- Must use Playwright within integrated browser for test cases that involve UI interactions or end-to-end scenarios.
 - Ensure regression prevention and coverage of critical paths
 - Provide deterministic tests with fixtures/mocks as needed
 - Deliverables: test plan, tests, coverage notes

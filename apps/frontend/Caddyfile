@@ -30,17 +30,45 @@
 		reverse_proxy {$BACKEND_URL:http://app:8000}
 	}
 
-	# Serve static files; fall back to index.html for client-side navigation
-	handle {
+	# Static assets must retain normal file-server semantics. In particular, a
+	# missing asset returns 404 without being replaced by the SPA document.
+	handle /static/* {
 		root * /srv
 		file_server
-		try_files {path} /index.html
+	}
+
+	# Registered Staff portal document routes serve the SPA shell with 200.
+	@spa_routes {
+		path / /callback /forms /create /reserve /my-reservations /approvals /roles /users /access-requests /business-areas /prefixes /admin/cms/pages /admin/cms/redirects /forms/* /edit/* /reservations/* /roles/* /users/* /access-requests/* /business-areas/* /prefixes/* /admin/cms/pages/*
+	}
+
+	handle @spa_routes {
+		root * /srv
+		rewrite * /index.html
+		file_server
+	}
+
+	# Retired and non-existing document routes render the SPA Not Found view,
+	# but retain the correct HTTP status for clients, crawlers, and monitoring.
+	handle {
+		root * /srv
+		rewrite * /index.html
+		file_server {
+			status 404
+		}
 	}
 
 	# Caddy access logs
 	log {
 		output stdout
-		format json
+		format filter {
+			request>uri query {
+				replace code REDACTED
+				replace state REDACTED
+				replace session_state REDACTED
+			}
+			wrap json
+		}
 	}
 }
 

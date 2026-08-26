@@ -26,11 +26,13 @@ async def root():
 
 
 @app.get("/create")
+@app.get("/forms")
+@app.get("/forms/{form_id}")
+@app.get("/callback")
 @app.get("/reserve")
 @app.get("/approvals")
 @app.get("/my-reservations")
 @app.get("/edit/{form_id}")
-@app.get("/dashboard")
 @app.get("/roles")
 @app.get("/roles/{role_id}")
 @app.get("/users")
@@ -68,6 +70,15 @@ async def form_demo():
     if os.path.exists(demo_path):
         return FileResponse(demo_path)
     return {"message": "Form demo page not found"}
+
+
+@app.get("/{path:path}")
+async def not_found(path: str):
+    """Serve the SPA shell with a 404 status for non-existing routes."""
+    index_path = os.path.join(frontend_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, status_code=404)
+    return {"message": "Frontend index.html not found"}
 
 
 if __name__ == "__main__":

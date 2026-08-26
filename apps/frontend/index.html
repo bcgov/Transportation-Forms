@@ -49,15 +49,6 @@
                 <div class="dropdown-menu dropdown-menu-end rounded-3 shadow-lg bg-primary-nav px-3 py-2 mt-4"
                     id="navbarColor01" style="z-index: 1031; width: 280px; border: none;" data-bs-theme="dark">
                     <ul class="navbar-nav w-100 mb-1" id="mainNavLinks">
-
-                        <!-- Dashboard (standalone) -->
-                        <li class="nav-item">
-                            <a class="nav-link" id="dashboardLink" href="/dashboard"
-                                data-route="/dashboard">
-                                <i class="fas fa-tachometer-alt fa-fw me-2"></i> Dashboard
-                            </a>
-                        </li>
-
                         <!-- Approvals (standalone) -->
                         <li class="nav-item">
                             <a class="nav-link" id="approvalsLink" href="/approvals"
@@ -188,29 +179,14 @@
                 </div>
             </div>
 
-            <!-- Dashboard View (TASK-430) -->
-            <div id="dashboardView" style="display:none;">
-                <h2 class="mb-4"><i class="fas fa-tachometer-alt"></i> Overview</h2>
-                <div id="dashboardStatsError" class="alert alert-danger" style="display:none;"></div>
-                <div class="row g-3">
-                    <div class="col-12 col-md-4">
-                        <div class="card h-100 text-center p-4">
-                            <div class="display-4 fw-bold" id="stat-published-forms">—</div>
-                            <div class="text-muted mt-2">Published Forms</div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <div class="card h-100 text-center p-4">
-                            <div class="display-4 fw-bold" id="stat-forms-awaiting-approval">—</div>
-                            <div class="text-muted mt-2">Forms Awaiting Approval</div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <div class="card h-100 text-center p-4">
-                            <div class="display-4 fw-bold" id="stat-reservations-awaiting-approval">—</div>
-                            <div class="text-muted mt-2">Reservation Requests Awaiting Approval</div>
-                        </div>
-                    </div>
+            <div id="notFoundView" style="display:none;" role="status" aria-live="polite">
+                <div class="text-center py-5">
+                    <i class="fas fa-file-circle-xmark fa-3x text-muted mb-3" aria-hidden="true"></i>
+                    <h2 class="mb-3">Not Found</h2>
+                    <p class="text-muted mb-4">The requested page is unavailable.</p>
+                    <button class="btn btn-bc-primary" type="button" data-route="/forms">
+                        <i class="fas fa-list fa-fw me-2" aria-hidden="true"></i>Forms
+                    </button>
                 </div>
             </div>
 

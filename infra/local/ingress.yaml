@@ -18,17 +18,3 @@ spec:
             name: transportation-forms-local-frontend
             port:
               number: 3000
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: transportation-forms-local-backend
-            port:
-              number: 8000
-      - path: /auth
-        pathType: Prefix
-        backend:
-          service:
-            name: transportation-forms-local-backend
-            port:
-              number: 8000

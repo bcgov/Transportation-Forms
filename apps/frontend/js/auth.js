@@ -82,6 +82,66 @@ function _clearAuthSession() {
   updateAuthUi();
 }
 
+function _removeStoredReturnUrl() {
+  try {
+    sessionStorage.removeItem('tf_return_url');
+  } catch (_error) {
+    // Storage can be unavailable in private browsing modes.
+  }
+}
+
+function _consumeStoredReturnUrl() {
+  let returnUrl = null;
+  try {
+    returnUrl = sessionStorage.getItem('tf_return_url');
+  } catch (_error) {
+    return null;
+  } finally {
+    _removeStoredReturnUrl();
+  }
+  return returnUrl;
+}
+
+function _getSafeInternalReturnUrl(value) {
+  if (!value || value !== value.trim() || !value.startsWith('/') || value.startsWith('//')) {
+    return null;
+  }
+  if (value.includes('\\') || /[\u0000-\u001f\u007f]/.test(value)) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value, window.location.origin);
+    if (url.origin !== window.location.origin) {
+      return null;
+    }
+
+    const exactPaths = new Set(
+      Object.values(ROUTES).filter(route =>
+        !route.includes(':') && route !== ROUTES.HOME && route !== ROUTES.CALLBACK
+      )
+    );
+    const supportedPrefixes = [
+      `${ROUTES.FORMS_LIST}/`,
+      '/edit/',
+      '/reservations/',
+      '/roles/',
+      '/users/',
+      '/access-requests/',
+      '/business-areas/',
+      '/prefixes/',
+      '/admin/cms/pages/',
+    ];
+    const supportedPath = exactPaths.has(url.pathname) || supportedPrefixes.some(prefix =>
+      url.pathname.startsWith(prefix) && url.pathname.length > prefix.length
+    );
+
+    return supportedPath ? `${url.pathname}${url.search}${url.hash}` : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
 // ─── Exported auth API ────────────────────────────────────────────────────────
 
 /**
@@ -109,7 +169,6 @@ export function isAdminUser() {
 
 /**
  * Returns true when the current user has at least one portal role assigned.
- * Used to decide whether to show the staff-facing dashboard vs. the public list.
  */
 export function hasPortalRoles() {
   const user = getCurrentUser();
@@ -220,7 +279,7 @@ export async function startLogin() {
 /**
  * Handles the OIDC authorization_code callback at /callback.
  * Reads `code` and `state` from the query string, exchanges them for tokens,
- * and persists the session. Navigates to dashboard or home depending on roles.
+ * and persists the session. Restores a safe explicit destination or uses Forms.
  *
  * Callers should invoke routeHandler() after this function completes (it
  * dispatches 'auth:callback-complete' so the router can react without a direct
@@ -232,6 +291,8 @@ export async function handleAuthCallback() {
   const state = params.get('state');
 
   if (!code || !state) {
+    _clearAuthSession();
+    _removeStoredReturnUrl();
     showAlert('Invalid authentication callback.', 'danger');
     window.history.replaceState({}, '', ROUTES.HOME);
     window.dispatchEvent(new CustomEvent('auth:navigate-home'));
@@ -257,20 +318,15 @@ export async function handleAuthCallback() {
     _saveAuthSession(payload.access_token, null, payload.user);
     showAlert('Signed in successfully.', 'success');
 
-    let dest = hasPortalRoles() ? ROUTES.DASHBOARD : ROUTES.HOME;
-    const returnUrl = sessionStorage.getItem('tf_return_url');
-    if (returnUrl) {
-      sessionStorage.removeItem('tf_return_url');
-      if (hasPortalRoles()) {
-        dest = returnUrl;
-      }
-    }
+    let dest = ROUTES.FORMS_LIST;
+    const returnUrl = _consumeStoredReturnUrl();
+    dest = _getSafeInternalReturnUrl(returnUrl) || dest;
 
     window.history.replaceState({}, '', dest);
     window.dispatchEvent(new CustomEvent('auth:callback-complete'));
-  } catch (error) {
-    console.error('Auth callback failed:', error);
+  } catch (_error) {
     _clearAuthSession();
+    _removeStoredReturnUrl();
     showAlert('Sign-in failed. Please try again.', 'danger');
     window.history.replaceState({}, '', ROUTES.HOME);
     window.dispatchEvent(new CustomEvent('auth:navigate-home'));
