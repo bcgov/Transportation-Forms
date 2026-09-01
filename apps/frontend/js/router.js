@@ -11,6 +11,7 @@ import { getCurrentUser, isAuthInitialized } from './state.js';
 import {
   isAuthenticated,
   isAdminUser,
+  canReviewApprovals,
   hasPermission,
   updateAuthUi,
   handleAuthCallback,
@@ -146,13 +147,19 @@ const _ROUTE_LINK_MAP = {
  */
 export function updateNavbar(user) {
   document
-    .querySelectorAll('#navbarColor01 .nav-link, #navbarColor01 .dropdown-item')
-    .forEach(link => link.classList.remove('active'));
+    .querySelectorAll('#staffSidebar .staff-sidebar__link')
+    .forEach(link => {
+      link.classList.remove('active');
+      link.removeAttribute('aria-current');
+    });
 
   const linkId = _ROUTE_LINK_MAP[_currentRoute];
   if (linkId) {
     const el = document.getElementById(linkId);
-    if (el) el.classList.add('active');
+    if (el) {
+      el.classList.add('active');
+      el.setAttribute('aria-current', 'page');
+    }
   }
 }
 
@@ -180,6 +187,31 @@ export function isAdminRoute(path) {
   );
 }
 
+function _canAccessOperationalRoute(path) {
+  if (path === ROUTES.HOME) {
+    return isAdminUser() || hasPermission('form:read');
+  }
+  if (path === ROUTES.FORMS_LIST) {
+    return isAdminUser() || hasPermission('form:read');
+  }
+  if (path.startsWith('/forms/')) {
+    return isAdminUser() || hasPermission('form:read');
+  }
+  if (path === ROUTES.FORM_CREATE) {
+    return isAdminUser() || hasPermission('form:create');
+  }
+  if (path === ROUTES.RESERVE) {
+    return isAdminUser() || hasPermission('reservation:create');
+  }
+  if (path === ROUTES.MY_RESERVATIONS) {
+    return isAdminUser() || hasPermission('reservation:read');
+  }
+  if (path === ROUTES.APPROVALS) {
+    return canReviewApprovals();
+  }
+  return true;
+}
+
 // ─── Core route handler ───────────────────────────────────────────────────────
 
 /**
@@ -194,6 +226,7 @@ export async function routeHandler(path, params = {}) {
     return;
   }
 
+  window.dispatchEvent(new CustomEvent('app:route-changing', { detail: { path } }));
   hideAllViews();
 
   // Route existence is independent of authentication and authorization.
@@ -220,6 +253,17 @@ export async function routeHandler(path, params = {}) {
     _routeParams = {};
     const { showWelcomeView } = await import('./views/welcome.js');
     await showWelcomeView();
+    updateNavbar();
+    return;
+  }
+
+  if (isAuthenticated() && !_canAccessOperationalRoute(path)) {
+    window.dispatchEvent(new CustomEvent('app:route-changing', { detail: { path: 'denied' } }));
+    showAlert('You do not have permission to access that page.', 'warning');
+    _currentRoute = 'not-found';
+    _routeParams = {};
+    const { showNotFoundView } = await import('./views/not-found.js');
+    showNotFoundView();
     updateNavbar();
     return;
   }
@@ -258,11 +302,7 @@ export async function routeHandler(path, params = {}) {
     if (!isAllowed) {
       showAlert('You do not have permission to access that page.', 'warning');
       window.history.replaceState({}, '', ROUTES.HOME);
-      _currentRoute = 'list';
-      _routeParams = {};
-      const { showListView } = await import('./views/list.js');
-      await showListView();
-      updateNavbar();
+      await routeHandler(ROUTES.HOME);
       return;
     }
   }

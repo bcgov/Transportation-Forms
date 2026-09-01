@@ -13,6 +13,7 @@ import { API_BASE, AUTH_STORAGE_ACCESS, AUTH_STORAGE_REFRESH, AUTH_STORAGE_USER,
 import { showAlert } from './utils.js';
 import { getCurrentUser, setCurrentUser, isAuthInitialized, setAuthInitialized } from './state.js';
 import { tryRefreshToken } from './token-refresh.js';
+import { setSidebarAvailability } from './sidebar.js';
 
 export { tryRefreshToken };
 
@@ -79,6 +80,7 @@ function _clearAuthSession() {
   localStorage.removeItem(AUTH_STORAGE_REFRESH);
   localStorage.removeItem(AUTH_STORAGE_USER);
   setCurrentUser(null);
+  window.dispatchEvent(new CustomEvent('auth:session-cleared'));
   updateAuthUi();
 }
 
@@ -187,6 +189,19 @@ export function hasPermission(permission) {
   const user = getCurrentUser();
   const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
   return permissions.includes(permission);
+}
+
+/**
+ * Returns true when the current user can open the combined approvals queue.
+ */
+export function canReviewApprovals() {
+  return (
+    isAdminUser() ||
+    (hasPermission('form:approve') && hasPermission('form:review')) ||
+    hasPermission('reservation:approve') ||
+    hasPermission('reservation:request_changes') ||
+    hasPermission('reservation:reject')
+  );
 }
 
 /**
@@ -367,48 +382,93 @@ export async function signOut() {
  */
 export function updateAuthUi() {
   const signOutBtn = document.getElementById('signOutBtn');
+  const authDropdown = document.getElementById('authDropdown');
   const authUserDisplay = document.getElementById('authUserDisplay');
   const authUserInitials = document.getElementById('authUserInitials');
+  const authUserRole = document.getElementById('authUserRole');
   const authDropdownContainer = document.getElementById('authDropdownContainer');
-  const navDropdownContainer = document.getElementById('navMenuToggle')?.closest('.dropdown');
-  const navAccordion = document.getElementById('navAccordion');
-  const adminAccordionItem = document.querySelector('#accAdmin')?.closest('.accordion-item');
+  const sidebarToggleContainer = document.getElementById('sidebarToggleContainer');
+  const sidebarDestinationIds = [
+    'approvalsLink', 'manageFormsLink', 'createFormLink',
+    'reserveNumberLink', 'myReservationsLink', 'rolesLink', 'usersLink',
+    'accessRequestsLink', 'businessAreasLink', 'prefixesLink',
+    'cmsPagesLink', 'cmsRedirectsLink',
+  ];
+
+  const setVisible = (element, visible) => {
+    if (!element) return;
+    element.hidden = !visible;
+    element.style.display = visible ? '' : 'none';
+  };
+
+  const updateSidebarGroups = () => {
+    const groups = Array.from(document.querySelectorAll('[data-sidebar-group]'));
+    groups.forEach(group => {
+      const hasVisibleLink = Array.from(group.querySelectorAll('.staff-sidebar__link'))
+        .some(link => !link.hidden);
+      setVisible(group, hasVisibleLink);
+    });
+
+    document.querySelectorAll('[data-sidebar-separator]').forEach(separator => {
+      const groupIndex = groups.findIndex(
+        group => group.dataset.sidebarGroup === separator.dataset.afterGroup,
+      );
+      const hasVisibleGroupAfter = groups.slice(groupIndex + 1).some(group => !group.hidden);
+      setVisible(separator, groupIndex >= 0 && !groups[groupIndex].hidden && hasVisibleGroupAfter);
+    });
+
+    return groups.some(group => !group.hidden);
+  };
+
+  const hideSidebarDestinations = () => {
+    sidebarDestinationIds.forEach(linkId => setVisible(document.getElementById(linkId), false));
+    updateSidebarGroups();
+    setVisible(sidebarToggleContainer, false);
+    setSidebarAvailability(false);
+  };
 
   if (isAuthenticated()) {
-    if (signOutBtn) signOutBtn.style.display = 'block';
+    setVisible(signOutBtn, true);
 
     const user = getCurrentUser();
-    const displayName = user?.name || user?.email || 'Signed in';
+    const rawDisplayName = typeof user?.name === 'string' ? user.name.trim() : '';
+    const displayName = rawDisplayName.slice(0, 100) || 'Signed in';
     const initials = displayName
       .split(' ')
       .filter(Boolean)
-      .map(w => w[0])
+      .map(word => word[0])
       .join('')
       .slice(0, 2)
       .toUpperCase();
+    const isAdmin = isAdminUser();
 
     if (authUserInitials) authUserInitials.textContent = initials || '?';
     if (authUserDisplay) authUserDisplay.textContent = displayName;
-    if (authDropdownContainer) authDropdownContainer.style.display = '';
+    if (authUserRole) authUserRole.textContent = isAdmin ? 'Admin' : '';
+    setVisible(authUserRole, isAdmin);
+    if (authDropdown) authDropdown.setAttribute('aria-label', `Open user menu for ${displayName}`);
+    setVisible(authDropdownContainer, true);
 
     if (hasPortalRoles()) {
-      if (navDropdownContainer) navDropdownContainer.style.display = '';
-      const mainNavLinks = document.getElementById('mainNavLinks');
-      if (mainNavLinks) mainNavLinks.style.display = '';
-      if (navAccordion) navAccordion.style.display = '';
+      const operationalLinkVisibility = {
+        approvalsLink: canReviewApprovals(),
+        manageFormsLink: isAdmin || hasPermission('form:read'),
+        createFormLink: isAdmin || hasPermission('form:create'),
+        reserveNumberLink: isAdmin || hasPermission('reservation:create'),
+        myReservationsLink: isAdmin || hasPermission('reservation:read'),
+      };
+
+      for (const [linkId, visible] of Object.entries(operationalLinkVisibility)) {
+        setVisible(document.getElementById(linkId), visible);
+      }
 
       // ── Admin link visibility ──────────────────────────────────────────
       // Each admin link is gated on the granular permission(s) that govern
       // the corresponding API surface. The accordion item itself is shown
       // when the user can access *any* admin link, otherwise it is hidden
       // so non-admin users don't see disabled/forbidden navigation entries.
-      const isAdmin = isAdminUser();
-
       const canManageBA =
         isAdmin ||
-        hasPermission('business_area:create') ||
-        hasPermission('business_area:edit') ||
-        hasPermission('business_area:delete') ||
         hasPermission('business_area:manage');
 
       // CMS admin surfaces are gated on ``cms:manage`` — the same
@@ -428,30 +488,25 @@ export function updateAuthUi() {
         cmsRedirectsLink: canManageCms,
       };
 
-      let anyAdminLinkVisible = false;
       for (const [linkId, visible] of Object.entries(adminLinkVisibility)) {
-        const el = document.getElementById(linkId);
-        if (el) el.style.display = visible ? '' : 'none';
-        if (visible) anyAdminLinkVisible = true;
+        const link = document.getElementById(linkId);
+        setVisible(link, visible);
       }
 
-      if (adminAccordionItem) {
-        adminAccordionItem.style.display = anyAdminLinkVisible ? '' : 'none';
-      }
+      const anyDestinationVisible = updateSidebarGroups();
+      setVisible(sidebarToggleContainer, anyDestinationVisible);
+      setSidebarAvailability(anyDestinationVisible);
     } else {
-      if (navDropdownContainer) navDropdownContainer.style.display = 'none';
-      const mainNavLinks = document.getElementById('mainNavLinks');
-      if (mainNavLinks) mainNavLinks.style.display = 'none';
-      if (navAccordion) navAccordion.style.display = 'none';
+      hideSidebarDestinations();
     }
   } else {
-    if (signOutBtn) signOutBtn.style.display = 'none';
-    if (authUserInitials) authUserInitials.textContent = '?';
+    setVisible(signOutBtn, false);
+    if (authUserInitials) authUserInitials.textContent = '';
     if (authUserDisplay) authUserDisplay.textContent = '';
-    if (authDropdownContainer) authDropdownContainer.style.display = 'none';
-    if (navDropdownContainer) navDropdownContainer.style.display = 'none';
-    const mainNavLinks = document.getElementById('mainNavLinks');
-    if (mainNavLinks) mainNavLinks.style.display = 'none';
-    if (navAccordion) navAccordion.style.display = 'none';
+    if (authUserRole) authUserRole.textContent = '';
+    if (authDropdown) authDropdown.setAttribute('aria-label', 'Open user menu');
+    setVisible(authUserRole, false);
+    setVisible(authDropdownContainer, false);
+    hideSidebarDestinations();
   }
 }

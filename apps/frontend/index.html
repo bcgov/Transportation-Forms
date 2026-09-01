@@ -13,153 +13,127 @@
 </head>
 
 <body>
-    <!-- BC Gov Header -->
-    <nav class="navbar navbar-dark bg-primary-nav mb-5">
-        <div class="container">
-            <img src="/static/assets/bc-gov-transportation-logo.png" alt="BC Government Logo" class="bc-header-logo">
-            <h4 class="text-white m-0">Transportation Forms</h4>
-            <!-- Auth controls -->
-            <div class="dropdown ms-auto me-2" id="authDropdownContainer" style="display:none;">
-                <button class="btn btn-sm d-flex align-items-center gap-2 text-white border-0 px-2 py-1 rounded-pill"
-                    id="authDropdown" data-bs-toggle="dropdown" aria-expanded="false"
-                    style="background: rgba(255,255,255,0.12);">
-                    <span
-                        class="d-flex align-items-center justify-content-center rounded-circle bg-white text-primary fw-semibold"
-                        style="width:28px; height:28px; font-size:0.75rem;" id="authUserInitials"></span>
-                    <span id="authUserDisplay" class="small d-none d-sm-inline"></span>
-                    <i class="fas fa-chevron-down" style="font-size: 0.65rem; opacity: 0.7;"></i>
+    <header class="staff-header">
+        <div class="staff-header__layout">
+            <a class="staff-header__brand staff-header__brand--desktop" href="/forms" data-route="/forms"
+                aria-label="Transportation Forms home">
+                <img src="/static/assets/bc-gov-transportation-logo.png"
+                    alt="Government of British Columbia, Ministry of Transportation and Transit">
+                <span class="staff-header__divider" aria-hidden="true"></span>
+                <span class="staff-header__application-name">Transportation Forms</span>
+            </a>
+
+            <a class="staff-header__brand staff-header__brand--mobile" href="/forms" data-route="/forms"
+                aria-label="Transportation Forms home">
+                <img src="/static/assets/bc-gov-transportation-logo.png"
+                    alt="Government of British Columbia, Ministry of Transportation and Transit">
+            </a>
+
+            <span class="staff-header__mobile-title">Transportation Forms</span>
+
+            <div class="staff-header__navigation" id="sidebarToggleContainer" hidden style="display:none;">
+                <button class="staff-header__icon-button" type="button" id="navMenuToggle"
+                    aria-controls="staffSidebar" aria-expanded="false"
+                    aria-label="Open navigation">
+                    <i class="fas fa-bars" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="dropdown staff-header__account" id="authDropdownContainer" hidden style="display:none;">
+                <button class="staff-header__user-menu" id="authDropdown" type="button" data-bs-toggle="dropdown"
+                    aria-expanded="false" aria-label="Open user menu">
+                    <span class="staff-header__avatar" id="authUserInitials" aria-hidden="true"></span>
+                    <span class="staff-header__user-copy">
+                        <span class="staff-header__user-name" id="authUserDisplay"></span>
+                        <span class="staff-header__user-role" id="authUserRole" hidden></span>
+                    </span>
+                    <i class="fas fa-chevron-down staff-header__chevron" aria-hidden="true"></i>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="authDropdown">
-                    <li>
-                        <button id="signOutBtn" class="dropdown-item text-danger" type="button" data-action="sign-out"
-                            style="display: block;">
-                            <i class="fas fa-sign-out-alt fa-fw me-2"></i> Sign Out
-                        </button>
-                    </li>
+                    <li><span class="dropdown-item-text staff-header__account-meta">Signed in with IDIR</span></li>
+                    <li><button class="dropdown-item" id="bookmarksPlaceholder" type="button">
+                        <i class="fas fa-bookmark fa-fw me-2" aria-hidden="true"></i>Bookmarks
+                    </button></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><button id="signOutBtn" class="dropdown-item text-danger" type="button"
+                        data-action="sign-out" style="display: block;">
+                        <i class="fas fa-sign-out-alt fa-fw me-2" aria-hidden="true"></i>Log out
+                    </button></li>
                 </ul>
             </div>
-
-            <div class="dropdown">
-                <button class="navbar-toggler border-0 p-1" type="button"
-                    id="navMenuToggle" data-bs-toggle="dropdown" data-bs-auto-close="outside"
-                    aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-
-                <div class="dropdown-menu dropdown-menu-end rounded-3 shadow-lg bg-primary-nav px-3 py-2 mt-4"
-                    id="navbarColor01" style="z-index: 1031; width: 280px; border: none;" data-bs-theme="dark">
-                    <ul class="navbar-nav w-100 mb-1" id="mainNavLinks">
-                        <!-- Approvals (standalone) -->
-                        <li class="nav-item">
-                            <a class="nav-link" id="approvalsLink" href="/approvals"
-                                data-route="/approvals">
-                                <i class="fas fa-check-double fa-fw me-2"></i> Approvals
-                            </a>
-                        </li>
-
-                    </ul>
-
-                    <!-- Accordion groups -->
-                    <div class="accordion accordion-flush" id="navAccordion">
-
-                        <!-- Forms -->
-                        <div class="accordion-item border-0 bg-transparent">
-                            <h2 class="accordion-header">
-                                <button
-                                    class="accordion-button collapsed px-2 py-2 text-white bg-transparent shadow-none"
-                                    style="font-size: 0.95rem;" type="button" data-bs-toggle="collapse"
-                                    data-bs-target="#accForms" aria-expanded="false">
-                                    <i class="fas fa-file-alt fa-fw me-2"></i> Forms
-                                </button>
-                            </h2>
-                            <div id="accForms" class="accordion-collapse collapse" data-bs-parent="#navAccordion">
-                                <div class="accordion-body py-1 px-0">
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="manageFormsLink"
-                                        href="/forms" data-route="/forms">
-                                        <i class="fas fa-list fa-fw me-2"></i> Manage Forms
-                                    </a>
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="createFormLink"
-                                        href="/create" data-route="/create">
-                                        <i class="fas fa-plus fa-fw me-2"></i> New Form
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Reservations -->
-                        <div class="accordion-item border-0 bg-transparent">
-                            <h2 class="accordion-header">
-                                <button
-                                    class="accordion-button collapsed px-2 py-2 text-white bg-transparent shadow-none"
-                                    style="font-size: 0.95rem;" type="button" data-bs-toggle="collapse"
-                                    data-bs-target="#accReservations" aria-expanded="false">
-                                    <i class="fas fa-hashtag fa-fw me-2"></i> Reservations
-                                </button>
-                            </h2>
-                            <div id="accReservations" class="accordion-collapse collapse"
-                                data-bs-parent="#navAccordion">
-                                <div class="accordion-body py-1 px-0">
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="reserveNumberLink"
-                                        href="/reserve" data-route="/reserve">
-                                        <i class="fas fa-hashtag fa-fw me-2"></i> Reserve Form Number
-                                    </a>
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="myReservationsLink"
-                                        href="/my-reservations" data-route="/my-reservations">
-                                        <i class="fas fa-clipboard-list fa-fw me-2"></i> My Reservations
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Admin -->
-                        <div class="accordion-item border-0 bg-transparent">
-                            <h2 class="accordion-header">
-                                <button
-                                    class="accordion-button collapsed px-2 py-2 text-white bg-transparent shadow-none"
-                                    style="font-size: 0.95rem;" type="button" data-bs-toggle="collapse"
-                                    data-bs-target="#accAdmin" aria-expanded="false">
-                                    <i class="fas fa-shield-alt fa-fw me-2"></i> Admin
-                                </button>
-                            </h2>
-                            <div id="accAdmin" class="accordion-collapse collapse" data-bs-parent="#navAccordion">
-                                <div class="accordion-body py-1 px-0">
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="rolesLink" href="/roles"
-                                        data-route="/roles">
-                                        <i class="fas fa-user-shield fa-fw me-2"></i> Roles
-                                    </a>
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="usersLink" href="/users"
-                                        data-route="/users">
-                                        <i class="fas fa-users fa-fw me-2"></i> Users
-                                    </a>
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="accessRequestsLink"
-                                        href="/access-requests" data-route="/access-requests">
-                                        <i class="fas fa-user-clock fa-fw me-2"></i> Access Requests
-                                    </a>
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="businessAreasLink"
-                                        href="/business-areas" data-route="/business-areas">
-                                        <i class="fas fa-building fa-fw me-2"></i> Business Areas
-                                    </a>
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="prefixesLink"
-                                        href="/prefixes" data-route="/prefixes">
-                                        <i class="fas fa-tag fa-fw me-2"></i> Prefixes
-                                    </a>
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="cmsPagesLink"
-                                        href="/admin/cms/pages" data-route="/admin/cms/pages">
-                                        <i class="fas fa-file-alt fa-fw me-2"></i> CMS Pages
-                                    </a>
-                                    <a class="dropdown-item rounded px-3 py-2 text-white" id="cmsRedirectsLink"
-                                        href="/admin/cms/redirects" data-route="/admin/cms/redirects">
-                                        <i class="fas fa-random fa-fw me-2"></i> CMS Redirects
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-            </div>
         </div>
-        </nav>
+    </header>
+
+    <nav class="staff-sidebar" id="staffSidebar" aria-label="Primary navigation"
+        aria-hidden="true" hidden inert>
+        <ul class="staff-sidebar__list">
+            <li class="staff-sidebar__group" data-sidebar-group="approvals" hidden style="display:none;">
+                <ul class="staff-sidebar__group-list">
+                    <li><a class="staff-sidebar__link" id="approvalsLink" href="/approvals" data-route="/approvals">
+                        <i class="fas fa-check-double fa-fw" aria-hidden="true"></i><span>Approvals</span>
+                    </a></li>
+                </ul>
+            </li>
+            <li class="staff-sidebar__separator" data-sidebar-separator data-after-group="approvals"
+                role="separator" hidden style="display:none;"></li>
+            <li class="staff-sidebar__group" data-sidebar-group="forms" hidden style="display:none;">
+                <ul class="staff-sidebar__group-list">
+                    <li><a class="staff-sidebar__link" id="manageFormsLink" href="/forms" data-route="/forms">
+                        <i class="fas fa-list fa-fw" aria-hidden="true"></i><span>Manage Forms</span>
+                    </a></li>
+                    <li><a class="staff-sidebar__link" id="createFormLink" href="/create" data-route="/create">
+                        <i class="fas fa-file-circle-plus fa-fw" aria-hidden="true"></i><span>New Form</span>
+                    </a></li>
+                </ul>
+            </li>
+            <li class="staff-sidebar__separator" data-sidebar-separator data-after-group="forms"
+                role="separator" hidden style="display:none;"></li>
+            <li class="staff-sidebar__group" data-sidebar-group="reservations" hidden style="display:none;">
+                <ul class="staff-sidebar__group-list">
+                    <li><a class="staff-sidebar__link" id="reserveNumberLink" href="/reserve" data-route="/reserve">
+                        <i class="fas fa-hashtag fa-fw" aria-hidden="true"></i><span>Reserve Form Number</span>
+                    </a></li>
+                    <li><a class="staff-sidebar__link" id="myReservationsLink" href="/my-reservations" data-route="/my-reservations">
+                        <i class="fas fa-clipboard-list fa-fw" aria-hidden="true"></i><span>My Reservations</span>
+                    </a></li>
+                </ul>
+            </li>
+            <li class="staff-sidebar__separator" data-sidebar-separator data-after-group="reservations"
+                role="separator" hidden style="display:none;"></li>
+            <li class="staff-sidebar__group" data-sidebar-group="administration" hidden style="display:none;">
+                <ul class="staff-sidebar__group-list">
+                    <li><a class="staff-sidebar__link" id="rolesLink" href="/roles" data-route="/roles">
+                        <i class="fas fa-user-shield fa-fw" aria-hidden="true"></i><span>Roles</span>
+                    </a></li>
+                    <li><a class="staff-sidebar__link" id="usersLink" href="/users" data-route="/users">
+                        <i class="fas fa-users fa-fw" aria-hidden="true"></i><span>Users</span>
+                    </a></li>
+                    <li><a class="staff-sidebar__link" id="accessRequestsLink" href="/access-requests" data-route="/access-requests">
+                        <i class="fas fa-user-clock fa-fw" aria-hidden="true"></i><span>Access Requests</span>
+                    </a></li>
+                    <li><a class="staff-sidebar__link" id="businessAreasLink" href="/business-areas" data-route="/business-areas">
+                        <i class="fas fa-building fa-fw" aria-hidden="true"></i><span>Business Areas</span>
+                    </a></li>
+                    <li><a class="staff-sidebar__link" id="prefixesLink" href="/prefixes" data-route="/prefixes">
+                        <i class="fas fa-tag fa-fw" aria-hidden="true"></i><span>Prefixes</span>
+                    </a></li>
+                </ul>
+            </li>
+            <li class="staff-sidebar__separator" data-sidebar-separator data-after-group="administration"
+                role="separator" hidden style="display:none;"></li>
+            <li class="staff-sidebar__group" data-sidebar-group="cms" hidden style="display:none;">
+                <ul class="staff-sidebar__group-list">
+                    <li><a class="staff-sidebar__link" id="cmsPagesLink" href="/admin/cms/pages" data-route="/admin/cms/pages">
+                        <i class="fas fa-window-restore fa-fw" aria-hidden="true"></i><span>CMS Pages</span>
+                    </a></li>
+                    <li><a class="staff-sidebar__link" id="cmsRedirectsLink" href="/admin/cms/redirects" data-route="/admin/cms/redirects">
+                        <i class="fas fa-random fa-fw" aria-hidden="true"></i><span>CMS Redirects</span>
+                    </a></li>
+                </ul>
+            </li>
+        </ul>
+    </nav>
+    <div class="staff-sidebar__scrim" id="sidebarScrim" aria-hidden="true" hidden></div>
 
         <!-- Alert Container -->
         <div class="alert-container" id="alertContainer"></div>
@@ -191,7 +165,7 @@
             </div>
 
             <!-- List View -->
-            <div id="listView" style="display:none;">
+            <div id="listView" class="forms-library" style="display:none;">
                 <div id="requestAccessPanel" class="alert alert-info justify-content-between align-items-center"
                     style="display:none;">
                     <div>
@@ -205,79 +179,91 @@
                     </button>
                 </div>
 
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label for="searchInput" class="form-label">Search</label>
-                        <div class="position-relative">
-                            <div class="input-group">
-                                <input type="text" class="form-control" id="searchInput" placeholder="Search forms..."
-                                    autocomplete="off">
-                                <button class="btn btn-bc-primary" type="button" data-action="search-forms">
-                                    <i class="fas fa-search"></i> Search
-                                </button>
-                            </div>
-                            <ul id="searchSuggestions" class="dropdown-menu w-100"
-                                style="display:none; max-height:240px; overflow-y:auto;"></ul>
+                <section class="forms-library__heading" aria-labelledby="formsLibraryTitle">
+                    <h1 id="formsLibraryTitle">Forms library</h1>
+                    <p>Search for forms and view their current details.</p>
+                </section>
+
+                <section aria-label="Forms search and results">
+                    <div class="forms-command-bar">
+                        <div class="forms-search-wrap">
+                            <i class="fas fa-search" aria-hidden="true"></i>
+                            <label class="visually-hidden" for="searchInput">Search forms</label>
+                            <input class="forms-search-input" id="searchInput" type="search"
+                                placeholder="Search by form number, title, or keyword" autocomplete="off"
+                                maxlength="200"
+                                role="combobox" aria-autocomplete="list" aria-haspopup="listbox"
+                                aria-controls="searchSuggestions" aria-expanded="false">
+                            <button class="forms-clear-search" id="clearSearchButton" type="button"
+                                aria-label="Clear search" title="Clear search" hidden>
+                                <i class="fas fa-xmark" aria-hidden="true"></i>
+                            </button>
+                            <ul id="searchSuggestions" class="dropdown-menu forms-search-suggestions"
+                                role="listbox" hidden></ul>
+                        </div>
+
+                        <div class="forms-filter-wrap">
+                            <button class="forms-command-button" id="filtersButton" type="button"
+                                aria-label="Filters" aria-expanded="false" aria-controls="filtersMenu">
+                                <i class="fas fa-filter" aria-hidden="true"></i>
+                                <span>Filters</span>
+                            </button>
+                            <div class="forms-filter-menu" id="filtersMenu" hidden></div>
+                        </div>
+
+                        <div class="forms-density-control" role="group" aria-label="Results layout">
+                            <button class="forms-density-button is-active" type="button"
+                                data-density-view="list" aria-pressed="true" aria-disabled="true"
+                                aria-label="List view" title="List view">
+                                <i class="fas fa-bars" aria-hidden="true"></i>
+                            </button>
+                            <button class="forms-density-button" type="button"
+                                data-density-view="grid" aria-pressed="false" aria-disabled="true"
+                                aria-label="Grid view unavailable" title="Grid view coming soon">
+                                <i class="fas fa-table-cells-large" aria-hidden="true"></i>
+                            </button>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <label for="filterComboboxInput" class="form-label">Filter</label>
-                        <div class="position-relative" id="filterCombobox">
-                            <input type="text" id="filterComboboxInput" class="form-control"
-                                placeholder="Type to add filters..." autocomplete="off" role="combobox"
-                                aria-expanded="false" aria-controls="filterComboboxDropdown" aria-haspopup="listbox"
-                                aria-autocomplete="list">
-                            <ul id="filterComboboxDropdown" role="listbox" class="dropdown-menu w-100 p-0"
-                                style="display:none; max-height:280px; overflow-y:auto; z-index:1060;"></ul>
+
+                    <div class="forms-active-filters" id="activeFilters" aria-live="polite" hidden></div>
+
+                    <div class="forms-results-bar">
+                        <div class="forms-results-summary" id="resultsSummary">
+                            <strong>0 forms</strong> available
                         </div>
-                        <div id="selectedFilterChips" class="mt-2"></div>
-                    </div>
-                </div>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label for="filterBusinessAreaInput" class="form-label">Business Areas</label>
-                        <div class="position-relative" id="filterBusinessAreaCombobox">
-                            <input type="text" id="filterBusinessAreaInput" class="form-control"
-                                placeholder="Type to add business area filters..." autocomplete="off" role="combobox"
-                                aria-expanded="false" aria-controls="filterBusinessAreaDropdown" aria-haspopup="listbox"
-                                aria-autocomplete="list">
-                            <ul id="filterBusinessAreaDropdown" role="listbox" class="dropdown-menu w-100 p-0"
-                                style="display:none; max-height:220px; overflow-y:auto; z-index:1060;"></ul>
+                        <div class="forms-results-controls">
+                            <label class="forms-select-control" for="pageSizeSelect">
+                                <span>Page size</span>
+                                <select id="pageSizeSelect" aria-label="Page size">
+                                    <option value="25" selected>25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </label>
+                            <label class="forms-select-control" for="sortOrder">
+                                <span>Sort by</span>
+                                <select id="sortOrder" aria-label="Sort by">
+                                    <option value="created_at:desc">Date Created (Newest)</option>
+                                    <option value="created_at:asc">Date Created (Oldest)</option>
+                                    <option value="form_number:asc">Form Number A-Z</option>
+                                    <option value="form_number:desc">Form Number Z-A</option>
+                                </select>
+                            </label>
                         </div>
-                        <div id="selectedBusinessAreaFilters" class="mt-2"></div>
                     </div>
-                    <div class="col-md-3">
-                        <label for="sortOrder" class="form-label">Sort</label>
-                        <select class="form-select" id="sortOrder">
-                            <option value="created_at:desc">Date Created (Newest)</option>
-                            <option value="created_at:asc">Date Created (Oldest)</option>
-                            <option value="form_number:asc">Form Number A–Z</option>
-                            <option value="form_number:desc">Form Number Z–A</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="pageSizeSelect" class="form-label">Page Size</label>
-                        <select class="form-select" id="pageSizeSelect">
-                            <option value="25" selected>25</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                        </select>
-                    </div>
-                </div>
 
-                <div id="formsList"></div>
-
-                <div class="d-flex justify-content-between align-items-center mt-3" id="paginationContainer"
-                    style="display:none;">
-                    <small class="text-muted" id="paginationSummary">Showing 0-0 of 0</small>
-                    <div class="btn-group" role="group" aria-label="Pagination">
-                        <button class="btn btn-outline-secondary" id="prevPageBtn" type="button"
-                           >Previous</button>
-                        <button class="btn btn-outline-secondary" id="nextPageBtn" type="button"
-                           >Next</button>
+                    <div class="forms-results-region">
+                        <div id="formsList"></div>
                     </div>
-                </div>
+
+                    <div class="forms-pagination" id="paginationContainer" hidden>
+                        <span id="paginationSummary">Showing 0-0 of 0</span>
+                        <div class="forms-pagination__actions" role="group" aria-label="Pagination">
+                            <button class="forms-command-button" id="prevPageBtn" type="button">Previous</button>
+                            <button class="forms-command-button" id="nextPageBtn" type="button">Next</button>
+                        </div>
+                    </div>
+                </section>
             </div>
 
             <!-- Create/Edit View -->
