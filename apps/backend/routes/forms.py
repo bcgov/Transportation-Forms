@@ -724,7 +724,11 @@ async def delete_form(
 async def list_forms(
     skip: int = Query(0, ge=0, description="Number of forms to skip"),
     limit: int = Query(
-        25, description="Number of forms to return (allowed: 25, 50, 100)"
+        24,
+        description=(
+            "Number of forms to return "
+            "(preferred: 24, 48, 96; legacy compatible: 25, 50, 100)"
+        ),
     ),
     q: Optional[str] = Query(None, description="Keyword full-text search query"),
     status_filter: Optional[List[str]] = Query(
@@ -750,7 +754,7 @@ async def list_forms(
     List forms with filtering, pagination, and sorting.
 
     - **skip**: Number of forms to skip (for pagination)
-    - **limit**: Max forms to return (25, 50, 100)
+    - **limit**: Max forms to return (preferred: 24, 48, 96)
     - **q**: Full-text keyword search query (also matches form numbers)
     - **status**: Filter by status (draft, pending_review, published, archived).
       Multi-value with OR logic.
@@ -768,10 +772,10 @@ async def list_forms(
             detail="Insufficient permissions for this action",
         )
 
-    if limit not in {25, 50, 100}:
+    if limit not in {24, 25, 48, 50, 96, 100}:
         raise HTTPException(
             status_code=422,
-            detail="limit must be one of: 25, 50, 100",
+            detail="limit must be one of: 24, 25, 48, 50, 96, 100",
         )
 
     # Validate status values

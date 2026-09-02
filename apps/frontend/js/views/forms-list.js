@@ -4,7 +4,6 @@ import { API_BASE, ROUTES } from '../constants.js';
 import {
     escapeHtml,
     showAlert,
-    showSpinner,
     getFormNumberDisplay,
     showNotification,
 } from '../utils.js';
@@ -19,24 +18,31 @@ import { openFormViewPopup, downloadFormAttachment } from '../shared/form-view-p
 
 // ── Module-private pagination state ──────────────────────────────────────────
 let _currentSkip = 0;
-let _currentLimit = 25;
+let _currentLimit = 24;
 let _lastListTotal = 0;
 let _formsRequestController = null;
+let _isFormsRequestPending = false;
 let _autocompleteRequestController = null;
 let _autocompleteDebounceTimer = null;
 let _isDismissingSearchSuggestions = false;
 let _formsLifecycleGeneration = 0;
-const ALLOWED_PAGE_SIZES = new Set([25, 50, 100]);
+const ALLOWED_PAGE_SIZES = new Set([24, 48, 96]);
 const MAX_FORM_ID_LENGTH = 128;
 const MAX_FORM_NUMBER_LENGTH = 100;
 const MAX_FORM_TITLE_LENGTH = 300;
 const MAX_FORM_DESCRIPTION_LENGTH = 4000;
 const MAX_FORM_FIELD_LENGTH = 255;
 const MAX_FORM_URL_LENGTH = 2048;
+const DEFAULT_RESULTS_LAYOUT = 'list';
+const RESULTS_LAYOUTS = new Set(['list', 'grid']);
+const RESULTS_LAYOUT_STORAGE_PREFIX = 'transportation-forms:forms-layout:v1:';
+const FORM_WORKFLOW_STATES = new Set(['draft', 'pending_review', 'published', 'archived']);
 
 // ── Module-private setup flag & navigate callback ─────────────────────────────
 let _initialized = false;
 let _navigate = null;
+let _currentResultsLayout = DEFAULT_RESULTS_LAYOUT;
+let _layoutPreferenceGeneration = 0;
 
 // ── Filter combobox state ─────────────────────────────────────────────────────
 let _selectedFilterChips = [];   // array of { key, label, category }
@@ -44,23 +50,28 @@ let _selectedBusinessAreaIds = [];
 
 function _resetFormsListLifecycle() {
     _formsLifecycleGeneration += 1;
+    _layoutPreferenceGeneration += 1;
     _formsRequestController?.abort();
     _autocompleteRequestController?.abort();
     clearTimeout(_autocompleteDebounceTimer);
     _formsRequestController = null;
+    _isFormsRequestPending = false;
     _autocompleteRequestController = null;
     _autocompleteDebounceTimer = null;
     resetBusinessAreas();
     _selectedFilterChips = [];
     _selectedBusinessAreaIds = [];
     _currentSkip = 0;
-    _currentLimit = 25;
+    _currentLimit = 24;
     _lastListTotal = 0;
     const list = document.getElementById('formsList');
     if (list) list.replaceChildren();
     _updateResultsSummary(0);
     const paginationContainer = document.getElementById('paginationContainer');
-    if (paginationContainer) paginationContainer.hidden = true;
+    if (paginationContainer) {
+        paginationContainer.hidden = true;
+        paginationContainer.removeAttribute('aria-busy');
+    }
     const paginationSummary = document.getElementById('paginationSummary');
     if (paginationSummary) paginationSummary.textContent = 'Showing 0-0 of 0';
     const previousPage = document.getElementById('prevPageBtn');
@@ -72,7 +83,7 @@ function _resetFormsListLifecycle() {
     const clearSearchButton = document.getElementById('clearSearchButton');
     if (clearSearchButton) clearSearchButton.hidden = true;
     const pageSize = document.getElementById('pageSizeSelect');
-    if (pageSize) pageSize.value = '25';
+    if (pageSize) pageSize.value = '24';
     const sort = document.getElementById('sortOrder');
     if (sort) sort.value = 'created_at:desc';
     _dismissSearchSuggestions();
@@ -117,6 +128,7 @@ function _boundedString(value, maxLength) {
 function _normalizeFormItem(item) {
     const reservation = item.form_number_reservation;
     const createdBy = item.created_by;
+    const businessArea = item.business_area;
     return {
         id: _boundedString(item.id, MAX_FORM_ID_LENGTH),
         full_form_number: _boundedString(item.full_form_number, MAX_FORM_NUMBER_LENGTH),
@@ -142,7 +154,11 @@ function _normalizeFormItem(item) {
             item.form_attachment_filename,
             MAX_FORM_FIELD_LENGTH
         ),
+        business_area: businessArea && typeof businessArea === 'object' ? {
+            name: _boundedString(businessArea.name, MAX_FORM_FIELD_LENGTH),
+        } : null,
         created_at: _boundedString(item.created_at, MAX_FORM_FIELD_LENGTH),
+        updated_at: _boundedString(item.updated_at, MAX_FORM_FIELD_LENGTH),
         created_by: createdBy && typeof createdBy === 'object' ? {
             id: _boundedString(createdBy.id, MAX_FORM_ID_LENGTH),
         } : null,
@@ -165,7 +181,8 @@ function _defaultNavigate(path) {
  * @param {function} [navigateFn] - SPA navigation callback (path: string) => void.
  *   Falls back to pushState + popstate dispatch when omitted.
  */
-export function showFormsListView(navigateFn) {
+export async function showFormsListView(navigateFn) {
+    const lifecycleGeneration = _formsLifecycleGeneration;
     _navigate = navigateFn ?? _defaultNavigate;
 
     document.getElementById('listView').style.display = 'block';
@@ -176,8 +193,9 @@ export function showFormsListView(navigateFn) {
         _initialized = true;
     }
 
+    await _restoreResultsLayoutPreference();
+    if (lifecycleGeneration !== _formsLifecycleGeneration) return;
     _renderFiltersMenu();
-    const lifecycleGeneration = _formsLifecycleGeneration;
     const selectedAreaIdsBeforeLoad = [..._selectedBusinessAreaIds];
     loadBusinessAreas().then(loaded => {
         if (lifecycleGeneration !== _formsLifecycleGeneration || !loaded) return;
@@ -193,15 +211,21 @@ export function showFormsListView(navigateFn) {
 }
 
 /** Load (or reload) the forms list from the API, applying current filters & pagination. */
-export async function loadForms() {
+export async function loadForms(requestedSkip = _currentSkip) {
     _formsRequestController?.abort();
-    _formsRequestController = new AbortController();
-    const { signal } = _formsRequestController;
+    const controller = new AbortController();
+    _formsRequestController = controller;
+    const { signal } = controller;
+    const candidateSkip = Number.isSafeInteger(requestedSkip) && requestedSkip >= 0
+        ? requestedSkip
+        : 0;
+    _isFormsRequestPending = true;
+    _setPaginationPending();
     try {
-        showSpinner('#formsList', true);
+        _renderResultsLoading();
 
         const params = new URLSearchParams();
-        params.set('skip', String(_currentSkip));
+        params.set('skip', String(candidateSkip));
         params.set('limit', String(_currentLimit));
 
         const query = document.getElementById('searchInput')?.value.trim() ?? '';
@@ -232,23 +256,40 @@ export async function loadForms() {
 
         const data = await response.json();
         if (signal.aborted) return;
-        _lastListTotal = Number.isSafeInteger(data?.total) && data.total >= 0 ? data.total : 0;
-        const items = Array.isArray(data?.items)
-            ? data.items
-                .filter(item => item && typeof item === 'object')
-                .slice(0, _currentLimit)
-                .map(_normalizeFormItem)
-                .filter(item => item.id)
-            : [];
+        const items = data.items
+            .filter(item => item && typeof item === 'object')
+            .map(_normalizeFormItem)
+            .filter(item => item.id);
+        if (!_isValidFormsPage(data, candidateSkip, items.length)) {
+            throw new Error('Invalid Forms response');
+        }
+        _currentSkip = candidateSkip;
+        _lastListTotal = data.total;
         displayForms(items);
         _updatePaginationControls(_lastListTotal);
     } catch (error) {
         if (signal.aborted || error.name === 'AbortError') return;
+        _currentSkip = 0;
         _lastListTotal = 0;
         displayForms([]);
         _updatePaginationControls(0);
         showAlert('Unable to load forms. Please try again.', 'danger');
+    } finally {
+        if (_formsRequestController === controller) {
+            _formsRequestController = null;
+            _isFormsRequestPending = false;
+        }
     }
+}
+
+function _isValidFormsPage(data, requestedSkip, usableItemCount) {
+    if (!Number.isSafeInteger(data?.total) || data.total < 0 || !Array.isArray(data.items)) {
+        return false;
+    }
+    if (data.skip !== requestedSkip || data.limit !== _currentLimit) return false;
+    const expectedItems = Math.min(_currentLimit, Math.max(0, data.total - requestedSkip));
+    if (data.items.length !== expectedItems || usableItemCount !== expectedItems) return false;
+    return data.total === 0 ? requestedSkip === 0 : requestedSkip < data.total;
 }
 
 /** Render the given array of form objects into #formsList. */
@@ -258,47 +299,72 @@ export function displayForms(forms) {
 
     if (forms.length === 0) {
         container.innerHTML = `
-            <div class="empty-state">
+            <li class="empty-state">
                 <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
                 <h2>No forms match this view</h2>
                 <p>Adjust your search or remove a filter.</p>
-            </div>
+            </li>
         `;
         return;
     }
 
     container.innerHTML = forms.map(form => `
-        <div class="card">
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-8">
-                        <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap">
-                            <h5 class="card-title mb-0">
-                                ${escapeHtml(getFormNumberDisplay(form))} - ${escapeHtml(form.title)}
-                            </h5>
-                            ${_renderFormSourceButton(form)}
-                        </div>
-                        <p class="card-text text-muted mt-2 forms-list__description"${form.description ? ` title="${_escapeAttribute(form.description)}"` : ''}>${escapeHtml(form.description || 'No description')}</p>
-                        <div>
-                            <span class="badge ${form.is_public ? 'bg-success' : 'bg-warning'}">
-                                ${form.is_public ? 'Public' : 'Private'}
-                            </span>
-                            <span class="badge bg-info">${escapeHtml(form.status)}</span>
-                            ${form.file_type ? `<span class="badge bg-secondary">${escapeHtml(form.file_type)}</span>` : ''}
-                        </div>
+        <li class="forms-result-item">
+            <article class="forms-result-card" aria-labelledby="form-title-${_escapeAttribute(form.id)}">
+                <span class="forms-result-card__accent" aria-hidden="true"></span>
+                <div class="forms-result-card__body">
+                    <div class="forms-result-card__meta">
+                        <button class="forms-result-card__number" type="button"
+                            data-action="view-form" data-form-id="${_escapeAttribute(form.id)}"
+                            aria-label="Open details for form ${_escapeAttribute(getFormNumberDisplay(form))} from form number">
+                            ${escapeHtml(getFormNumberDisplay(form))}
+                        </button>
+                        ${form.business_area?.name ? `<span class="forms-result-card__business-area">${escapeHtml(form.business_area.name)}</span>` : ''}
+                        <span class="forms-result-card__date">Updated ${escapeHtml(_formatUpdatedDate(form.updated_at))}</span>
                     </div>
-                    <div class="col-md-4 text-end">
-                        <small class="text-muted d-block">
-                            Created: ${new Date(form.created_at).toLocaleDateString()}
-                        </small>
-                        <div class="mt-2">
+                    <h2 class="forms-result-card__title" id="form-title-${_escapeAttribute(form.id)}">${escapeHtml(form.title)}</h2>
+                    <p class="forms-result-card__description"${form.description ? ` title="${_escapeAttribute(form.description)}"` : ''}>${escapeHtml(form.description || 'No description')}</p>
+                    <div class="forms-result-card__footer">
+                        ${_renderFormSourceType(form)}
+                        <span class="forms-result-card__status" data-status="${_escapeAttribute(form.status)}">${escapeHtml(_formatStatus(form.status))}</span>
+                        <button class="forms-result-card__view" type="button"
+                            data-action="view-form" data-form-id="${_escapeAttribute(form.id)}"
+                            aria-label="View details for form ${_escapeAttribute(getFormNumberDisplay(form))}">
+                            <i class="fas fa-eye" aria-hidden="true"></i> View details
+                        </button>
+                        ${_renderFormSourceButton(form)}
+                        <div class="forms-result-card__actions" role="group"
+                            aria-label="Available actions for ${_escapeAttribute(getFormNumberDisplay(form))}">
                             ${_renderFormActionButtons(form)}
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </article>
+        </li>
     `).join('');
+}
+
+function _renderResultsLoading() {
+    const container = document.getElementById('formsList');
+    if (!container) return;
+    container.innerHTML = `
+        <li class="spinner-container">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading forms...</span>
+            </div>
+        </li>
+    `;
+}
+
+function _formatUpdatedDate(value) {
+    if (!value) return 'date unavailable';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'date unavailable' : date.toLocaleDateString();
+}
+
+function _formatStatus(status) {
+    if (!FORM_WORKFLOW_STATES.has(status)) return 'Unknown status';
+    return status.split('_').map(word => word[0].toUpperCase() + word.slice(1)).join(' ');
 }
 
 /**
@@ -309,58 +375,70 @@ export function displayForms(forms) {
 function _renderFormActionButtons(form) {
     const buttons = [];
     const id = _escapeAttribute(form.id);
+    const formLabel = _escapeAttribute(getFormNumberDisplay(form));
     const status = form.status;
     const user = getCurrentUser();
+    const isKnownStatus = FORM_WORKFLOW_STATES.has(status);
+    if (!isKnownStatus || !user || !Array.isArray(user.permissions)) return '';
     const userId = user?.id || '';
     const isOwner = form.created_by?.id === userId;
 
-    // View — all states, form:read
-    if (hasPermission('form:read')) {
-        buttons.push(`<button class="btn btn-sm btn-outline-primary"
-            data-action="view-form" data-form-id="${id}">
-            <i class="fas fa-eye"></i> View</button>`);
-    }
-
     // Edit — draft + published, form:edit
     if ((status === 'draft' || status === 'published') && hasPermission('form:edit')) {
-        buttons.push(`<button class="btn btn-sm btn-outline-warning"
-            data-action="navigate" data-route="/edit/${id}">
-            <i class="fas fa-edit"></i> Edit</button>`);
+        buttons.push(`<button class="forms-result-card__action" type="button"
+            data-action="navigate" data-route="/edit/${id}"
+            aria-label="Edit form ${formLabel}">
+            <i class="fas fa-edit" aria-hidden="true"></i> Edit</button>`);
     }
 
     // Submit — draft only, creator only, form:submit_for_review
     if (status === 'draft' && isOwner && hasPermission('form:submit_for_review')) {
-        buttons.push(`<button class="btn btn-sm btn-outline-success"
+        buttons.push(`<button class="forms-result-card__action forms-result-card__action--submit" type="button"
             data-action="submit-form" data-form-id="${id}"
-            data-form-title="${_escapeAttribute(form.title)}">
-            <i class="fas fa-paper-plane"></i> Submit</button>`);
+            data-form-title="${_escapeAttribute(form.title)}"
+            aria-label="Submit form ${formLabel} for review">
+            <i class="fas fa-paper-plane" aria-hidden="true"></i> Submit</button>`);
     }
 
     // Archive — published only, form:archive
     if (status === 'published' && hasPermission('form:archive')) {
-        buttons.push(`<button class="btn btn-sm btn-outline-secondary"
+        buttons.push(`<button class="forms-result-card__action" type="button"
             data-action="archive-form" data-form-id="${id}"
-            data-form-title="${_escapeAttribute(form.title)}">
-            <i class="fas fa-archive"></i> Archive</button>`);
+            data-form-title="${_escapeAttribute(form.title)}"
+            aria-label="Archive form ${formLabel}">
+            <i class="fas fa-archive" aria-hidden="true"></i> Archive</button>`);
     }
 
     // Restore — archived only, form:approve
     if (status === 'archived' && hasPermission('form:approve')) {
-        buttons.push(`<button class="btn btn-sm btn-outline-info"
+        buttons.push(`<button class="forms-result-card__action" type="button"
             data-action="restore-form" data-form-id="${id}"
-            data-form-title="${_escapeAttribute(form.title)}">
-            <i class="fas fa-undo"></i> Restore</button>`);
+            data-form-title="${_escapeAttribute(form.title)}"
+            aria-label="Restore form ${formLabel}">
+            <i class="fas fa-undo" aria-hidden="true"></i> Restore</button>`);
     }
 
     // Delete — draft only, form:delete, owner or admin (matches backend enforcement)
     if (status === 'draft' && hasPermission('form:delete') && (isOwner || isAdminUser())) {
-        buttons.push(`<button class="btn btn-sm btn-outline-danger"
+        buttons.push(`<button class="forms-result-card__action forms-result-card__action--danger" type="button"
             data-action="delete-form" data-form-id="${id}"
-            data-form-title="${_escapeAttribute(form.title)}">
-            <i class="fas fa-trash"></i> Delete</button>`);
+            data-form-title="${_escapeAttribute(form.title)}"
+            aria-label="Delete form ${formLabel}">
+            <i class="fas fa-trash" aria-hidden="true"></i> Delete</button>`);
     }
 
     return buttons.join('\n');
+}
+
+function _renderFormSourceType(form) {
+    if (form.form_source === 'Download' && form.form_attachment_url) {
+        const fileType = form.file_type || 'unknown';
+        return `<span class="forms-result-card__source-type" data-source="download">${escapeHtml(fileType.toUpperCase())}</span>`;
+    }
+    if (form.form_source === 'URL' && _isSafeHttpUrl(form.form_source_url)) {
+        return '<span class="forms-result-card__source-type" data-source="link">Online form</span>';
+    }
+    return '<span class="forms-result-card__source-type" data-source="none">No source</span>';
 }
 
 /**
@@ -472,6 +550,10 @@ function _initListViewEvents() {
     document.getElementById('pageSizeSelect')?.addEventListener('change', _onPageSizeChange);
     document.getElementById('prevPageBtn')?.addEventListener('click', _goToPreviousPage);
     document.getElementById('nextPageBtn')?.addEventListener('click', _goToNextPage);
+    document.querySelector('.forms-density-control')?.addEventListener('click', event => {
+        const button = event.target.closest('[data-density-view]');
+        if (button) _selectResultsLayout(button.dataset.densityView);
+    });
     _initListSearchAutocomplete();
     _initFiltersMenu();
 
@@ -481,6 +563,60 @@ function _initListViewEvents() {
         submitAccessRequest();
     });
 
+}
+
+async function _getResultsLayoutStorageKey() {
+    const userId = getCurrentUser()?.id;
+    if (typeof userId !== 'string' || !userId || !globalThis.crypto?.subtle) return null;
+    try {
+        const input = new TextEncoder().encode(userId.slice(0, MAX_FORM_ID_LENGTH));
+        const digest = await crypto.subtle.digest('SHA-256', input);
+        const digestHex = Array.from(new Uint8Array(digest), byte =>
+            byte.toString(16).padStart(2, '0')
+        ).join('');
+        return `${RESULTS_LAYOUT_STORAGE_PREFIX}${digestHex}`;
+    } catch (_error) {
+        return null;
+    }
+}
+
+async function _restoreResultsLayoutPreference() {
+    const generation = ++_layoutPreferenceGeneration;
+    let layout = DEFAULT_RESULTS_LAYOUT;
+    try {
+        const storageKey = await _getResultsLayoutStorageKey();
+        if (generation !== _layoutPreferenceGeneration) return;
+        const storedLayout = storageKey ? localStorage.getItem(storageKey) : null;
+        if (RESULTS_LAYOUTS.has(storedLayout)) layout = storedLayout;
+    } catch (_error) {
+        layout = DEFAULT_RESULTS_LAYOUT;
+    }
+    if (generation === _layoutPreferenceGeneration) _applyResultsLayout(layout);
+}
+
+async function _selectResultsLayout(layout) {
+    if (!RESULTS_LAYOUTS.has(layout)) return;
+    const generation = ++_layoutPreferenceGeneration;
+    _applyResultsLayout(layout);
+    try {
+        const storageKey = await _getResultsLayoutStorageKey();
+        if (generation === _layoutPreferenceGeneration && storageKey) {
+            localStorage.setItem(storageKey, layout);
+        }
+    } catch (_error) {
+        // The selected layout remains usable when durable storage is unavailable.
+    }
+}
+
+function _applyResultsLayout(layout) {
+    _currentResultsLayout = RESULTS_LAYOUTS.has(layout) ? layout : DEFAULT_RESULTS_LAYOUT;
+    const list = document.getElementById('formsList');
+    if (list) list.dataset.layout = _currentResultsLayout;
+    document.querySelectorAll('[data-density-view]').forEach(button => {
+        const isSelected = button.dataset.densityView === _currentResultsLayout;
+        button.classList.toggle('is-active', isSelected);
+        button.setAttribute('aria-pressed', String(isSelected));
+    });
 }
 
 function _handleFormsListClick(e) {
@@ -524,9 +660,19 @@ function _updatePaginationControls(total) {
     _updateResultsSummary(total);
     summary.textContent = `Showing ${start}-${end} of ${total}`;
     paginationContainer.hidden = false;
+    paginationContainer.removeAttribute('aria-busy');
 
     prevBtn.disabled = _currentSkip <= 0;
     nextBtn.disabled = _currentSkip + _currentLimit >= total;
+}
+
+function _setPaginationPending() {
+    const paginationContainer = document.getElementById('paginationContainer');
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    paginationContainer?.setAttribute('aria-busy', 'true');
+    if (prevBtn) prevBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = true;
 }
 
 function _updateResultsSummary(total) {
@@ -541,7 +687,7 @@ function _onPageSizeChange() {
     const pageSizeSelect = document.getElementById('pageSizeSelect');
     if (pageSizeSelect) {
         const requestedLimit = Number.parseInt(pageSizeSelect.value, 10);
-        _currentLimit = ALLOWED_PAGE_SIZES.has(requestedLimit) ? requestedLimit : 25;
+        _currentLimit = ALLOWED_PAGE_SIZES.has(requestedLimit) ? requestedLimit : 24;
         pageSizeSelect.value = String(_currentLimit);
     }
     _currentSkip = 0;
@@ -549,15 +695,13 @@ function _onPageSizeChange() {
 }
 
 function _goToPreviousPage() {
-    if (_currentSkip <= 0) return;
-    _currentSkip = Math.max(0, _currentSkip - _currentLimit);
-    loadForms();
+    if (_isFormsRequestPending || _currentSkip <= 0) return;
+    loadForms(Math.max(0, _currentSkip - _currentLimit));
 }
 
 function _goToNextPage() {
-    if (_currentSkip + _currentLimit >= _lastListTotal) return;
-    _currentSkip += _currentLimit;
-    loadForms();
+    if (_isFormsRequestPending || _currentSkip + _currentLimit >= _lastListTotal) return;
+    loadForms(_currentSkip + _currentLimit);
 }
 
 // ── Search autocomplete ───────────────────────────────────────────────────────

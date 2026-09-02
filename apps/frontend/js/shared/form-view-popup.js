@@ -125,6 +125,10 @@ function _renderPopup(form) {
     _wireModalFooterHandlers(form);
 }
 
+function _escapeAttribute(value) {
+    return escapeHtml(value).replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+
 function _renderBodyHtml(form) {
     const parts = [];
 
@@ -155,10 +159,10 @@ function _renderBodyHtml(form) {
             <dt class="col-sm-3">Form Source:</dt>
             <dd class="col-sm-9">${escapeHtml(form.form_source || 'N/A')}</dd>
 
-            ${form.form_source === 'URL' ? `
+            ${form.form_source === 'URL' && _isSafeHttpUrl(form.form_source_url) ? `
             <dt class="col-sm-3">Source URL:</dt>
             <dd class="col-sm-9">
-                <a href="${escapeHtml(form.form_source_url || '')}" target="_blank" rel="noopener noreferrer">
+                <a href="${_escapeAttribute(form.form_source_url.trim())}" target="_blank" rel="noopener noreferrer">
                     ${escapeHtml(form.form_source_url || '')}
                 </a>
             </dd>
@@ -207,6 +211,16 @@ function _renderBodyHtml(form) {
     `);
 
     return parts.join('');
+}
+
+function _isSafeHttpUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) return false;
+    try {
+        const url = new URL(value.trim());
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch (_error) {
+        return false;
+    }
 }
 
 function _renderRequestContextHtml(ctx) {

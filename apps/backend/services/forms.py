@@ -236,7 +236,7 @@ class FormService:
     def list_forms(
         db: Session,
         skip: int = 0,
-        limit: int = 25,
+        limit: int = 24,
         q: Optional[str] = None,
         status: Optional[List[str]] = None,
         business_area_ids: Optional[List[UUID]] = None,

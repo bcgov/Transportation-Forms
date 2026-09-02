@@ -227,16 +227,16 @@ def test_pagination_contract_and_limits(search_client: TestClient, db, seed_user
     default_response = search_client.get("/api/v1/forms")
     assert default_response.status_code == 200
     default_payload = default_response.json()
-    assert default_payload["limit"] == 25
-    assert len(default_payload["items"]) == 25
+    assert default_payload["limit"] == 24
+    assert len(default_payload["items"]) == 24
 
-    limit_50_response = search_client.get("/api/v1/forms", params={"limit": 50})
-    assert limit_50_response.status_code == 200
-    assert limit_50_response.json()["limit"] == 50
+    limit_48_response = search_client.get("/api/v1/forms", params={"limit": 48})
+    assert limit_48_response.status_code == 200
+    assert limit_48_response.json()["limit"] == 48
 
-    limit_100_response = search_client.get("/api/v1/forms", params={"limit": 100})
-    assert limit_100_response.status_code == 200
-    assert limit_100_response.json()["limit"] == 100
+    limit_96_response = search_client.get("/api/v1/forms", params={"limit": 96})
+    assert limit_96_response.status_code == 200
+    assert limit_96_response.json()["limit"] == 96
 
     invalid_limit_response = search_client.get("/api/v1/forms", params={"limit": 30})
     assert invalid_limit_response.status_code == 422

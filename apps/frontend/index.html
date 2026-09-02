@@ -213,13 +213,13 @@
 
                         <div class="forms-density-control" role="group" aria-label="Results layout">
                             <button class="forms-density-button is-active" type="button"
-                                data-density-view="list" aria-pressed="true" aria-disabled="true"
+                                data-density-view="list" aria-pressed="true"
                                 aria-label="List view" title="List view">
                                 <i class="fas fa-bars" aria-hidden="true"></i>
                             </button>
                             <button class="forms-density-button" type="button"
-                                data-density-view="grid" aria-pressed="false" aria-disabled="true"
-                                aria-label="Grid view unavailable" title="Grid view coming soon">
+                                data-density-view="grid" aria-pressed="false"
+                                aria-label="Grid view" title="Grid view">
                                 <i class="fas fa-table-cells-large" aria-hidden="true"></i>
                             </button>
                         </div>
@@ -235,9 +235,9 @@
                             <label class="forms-select-control" for="pageSizeSelect">
                                 <span>Page size</span>
                                 <select id="pageSizeSelect" aria-label="Page size">
-                                    <option value="25" selected>25</option>
-                                    <option value="50">50</option>
-                                    <option value="100">100</option>
+                                    <option value="24" selected>24</option>
+                                    <option value="48">48</option>
+                                    <option value="96">96</option>
                                 </select>
                             </label>
                             <label class="forms-select-control" for="sortOrder">
@@ -253,14 +253,21 @@
                     </div>
 
                     <div class="forms-results-region">
-                        <div id="formsList"></div>
+                        <ol id="formsList" class="forms-results-list" data-layout="list"
+                            aria-label="Forms results"></ol>
                     </div>
 
                     <div class="forms-pagination" id="paginationContainer" hidden>
                         <span id="paginationSummary">Showing 0-0 of 0</span>
                         <div class="forms-pagination__actions" role="group" aria-label="Pagination">
-                            <button class="forms-command-button" id="prevPageBtn" type="button">Previous</button>
-                            <button class="forms-command-button" id="nextPageBtn" type="button">Next</button>
+                            <button class="forms-command-button" id="prevPageBtn" type="button"
+                                aria-label="Previous page">
+                                <i class="fas fa-arrow-left" aria-hidden="true"></i>Previous
+                            </button>
+                            <button class="forms-command-button" id="nextPageBtn" type="button"
+                                aria-label="Next page">
+                                Next<i class="fas fa-arrow-right" aria-hidden="true"></i>
+                            </button>
                         </div>
                     </div>
                 </section>
