@@ -153,7 +153,6 @@ jobs:
           values_file: >-
             ${{
               inputs.environment == 'prod' && 'infra/charts/crunchy/values-prod.yml' ||
-              inputs.environment == 'test' && 'infra/charts/crunchy/values-test.yml' ||
               'infra/charts/crunchy/values.yml'
             }}
           s3_access_key: ${{ secrets.s3_access_key }}
