@@ -144,6 +144,7 @@ jobs:
 
       # ── Deploy Crunchy PostgreSQL ─────────────────────────────────────────
       - name: Deploy Crunchy PostgreSQL
+        id: crunchy
         uses: bcgov/action-crunchy@v2.1.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
@@ -155,6 +156,56 @@ jobs:
           s3_secret_key: ${{ secrets.s3_secret_key }}
           s3_bucket: ${{ secrets.s3_bucket }}
           s3_endpoint: ${{ secrets.s3_endpoint_url }}
+
+      - name: Configure application database schema
+        uses: bcgov/action-oc-runner@v1.4.1
+        with:
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_token: ${{ secrets.oc_token }}
+          oc_server: ${{ vars.OC_SERVER }}
+          commands: |
+            set -euo pipefail
+            CLUSTER="${{ steps.crunchy.outputs.cluster }}"
+            DATABASE="transportation_forms"
+            DATABASE_USER="${{ inputs.db_user }}"
+            PRIMARY_POD="$(oc get pods \
+              -l "postgres-operator.crunchydata.com/cluster=${CLUSTER},postgres-operator.crunchydata.com/role=master" \
+              -o jsonpath='{.items[0].metadata.name}')"
+
+            if oc exec "${PRIMARY_POD}" -c database -- \
+              psql -U postgres -d "${DATABASE}" -Atqc \
+              "SELECT to_regclass('public.alembic_version') IS NOT NULL" | grep -qx t; then
+              echo "Existing public-schema database detected; preserving its search path."
+              oc exec "${PRIMARY_POD}" -c database -- \
+                psql -U postgres -d "${DATABASE}" -v ON_ERROR_STOP=1 \
+                -c "GRANT USAGE, CREATE ON SCHEMA public TO \"${DATABASE_USER}\""
+            else
+              oc annotate postgrescluster "${CLUSTER}" \
+                postgres-operator.crunchydata.com/autoCreateUserSchema=true \
+                --overwrite
+
+              for ATTEMPT in $(seq 1 30); do
+                if oc exec "${PRIMARY_POD}" -c database -- \
+                  psql -U postgres -d "${DATABASE}" -Atqc \
+                  "SELECT EXISTS (
+                     SELECT 1
+                     FROM pg_namespace n
+                     JOIN pg_roles r ON r.oid = n.nspowner
+                     WHERE n.nspname = '${DATABASE_USER}'
+                       AND r.rolname = '${DATABASE_USER}'
+                   )" | grep -qx t; then
+                  echo "Application schema ${DATABASE_USER} is ready."
+                  break
+                fi
+
+                if [[ "${ATTEMPT}" -eq 30 ]]; then
+                  echo "Crunchy did not create schema ${DATABASE_USER}." >&2
+                  exit 1
+                fi
+                echo "Waiting for application schema (${ATTEMPT}/30)..."
+                sleep 2
+              done
+            fi
 
       # ── Deploy application via Helm ───────────────────────────────────────
       - name: Update Helm dependencies
