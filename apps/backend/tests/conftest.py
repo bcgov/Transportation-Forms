@@ -243,14 +243,14 @@ def role_factory(db: Session):
     def _create(
         *,
         name: str = "staff",
-        permissions: dict | None = None,
+        permissions: dict | list[str] | None = None,
         is_system: bool = False,
         is_active: bool = True,
     ) -> Role:
         role = Role(
             id=uuid.uuid4(),
             name=name,
-            permissions=permissions or {},
+            permissions=permissions if permissions is not None else {},
             is_system=is_system,
             is_active=is_active,
         )
@@ -348,7 +348,10 @@ def reservation_factory(db: Session):
 def staff_user(user_factory, role_factory, db: Session) -> User:
     """A basic staff user with the 'staff' role."""
     user = user_factory(email="staff@example.com", first_name="Staff", last_name="Member")
-    role = role_factory(name="staff")
+    role = role_factory(
+        name="staff",
+        permissions=["form:read", "form:create", "form:edit"],
+    )
     db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
     db.flush()
     return user
@@ -358,7 +361,7 @@ def staff_user(user_factory, role_factory, db: Session) -> User:
 def approver_user(user_factory, role_factory, db: Session) -> User:
     """A reviewer user with the 'reviewer' role (approver-eligible)."""
     user = user_factory(email="approver@example.com", first_name="Approver", last_name="One")
-    role = role_factory(name="reviewer")
+    role = role_factory(name="reviewer", permissions=["reservation:approve"])
     db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
     db.flush()
     return user
@@ -368,7 +371,13 @@ def approver_user(user_factory, role_factory, db: Session) -> User:
 def admin_user(user_factory, role_factory, db: Session) -> User:
     """An admin user with the 'admin' role."""
     user = user_factory(email="admin@example.com", first_name="Admin", last_name="Boss")
-    role = role_factory(name="admin")
+    from backend.auth.permissions import DEFAULT_ROLES, Permission
+
+    permissions = [
+        permission.value if isinstance(permission, Permission) else str(permission)
+        for permission in DEFAULT_ROLES["admin"]["permissions"]
+    ]
+    role = role_factory(name="admin", permissions=permissions)
     db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
     db.flush()
     return user

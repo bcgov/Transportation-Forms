@@ -10,8 +10,9 @@ import { showAlert, showSpinner } from './utils.js';
 import { getCurrentUser, isAuthInitialized } from './state.js';
 import {
   isAuthenticated,
-  isAdminUser,
   canReviewApprovals,
+  hasValidAuthorizationContext,
+  hasPortalRoles,
   hasPermission,
   updateAuthUi,
   handleAuthCallback,
@@ -188,23 +189,29 @@ export function isAdminRoute(path) {
 }
 
 function _canAccessOperationalRoute(path) {
-  if (path === ROUTES.HOME) {
-    return isAdminUser() || hasPermission('form:read');
+  if (!hasValidAuthorizationContext()) {
+    return false;
   }
-  if (path === ROUTES.FORMS_LIST) {
-    return isAdminUser() || hasPermission('form:read');
+  if (path === ROUTES.HOME || path === ROUTES.FORMS_LIST) {
+    return !hasPortalRoles() || hasPermission('form:read');
   }
   if (path.startsWith('/forms/')) {
-    return isAdminUser() || hasPermission('form:read');
+    return hasPermission('form:read');
   }
   if (path === ROUTES.FORM_CREATE) {
-    return isAdminUser() || hasPermission('form:create');
+    return hasPermission('form:create');
+  }
+  if (path.startsWith('/edit/')) {
+    return hasPermission('form:edit');
   }
   if (path === ROUTES.RESERVE) {
-    return isAdminUser() || hasPermission('reservation:create');
+    return hasPermission('reservation:create');
   }
   if (path === ROUTES.MY_RESERVATIONS) {
-    return isAdminUser() || hasPermission('reservation:read');
+    return hasPermission('reservation:read');
+  }
+  if (path.startsWith('/reservations/')) {
+    return hasPermission('reservation:read');
   }
   if (path === ROUTES.APPROVALS) {
     return canReviewApprovals();
@@ -241,10 +248,14 @@ export async function routeHandler(path, params = {}) {
 
   // ── Unauthenticated guard ──────────────────────────────────────────────────
   if (!isAuthenticated() && path !== ROUTES.CALLBACK) {
-    // FEAT-0027 US-008 AC9 — remember the deep-link target so the app can
-    // resume there once the user completes the login flow. Uses the same
-    // sessionStorage key already consumed by auth.js on callback.
-    if (path && path !== ROUTES.HOME && path.startsWith('/forms/')) {
+    // Remember registered destinations so callback routing can resume at the
+    // requested path and apply the authenticated permission guards below.
+    if (
+      path &&
+      path !== ROUTES.HOME &&
+      path !== ROUTES.CALLBACK &&
+      _isRegisteredRoute(path)
+    ) {
       try {
         sessionStorage.setItem('tf_return_url', path);
       } catch (_e) { /* ignore quota / private-mode errors */ }
@@ -293,16 +304,33 @@ export async function routeHandler(path, params = {}) {
       path.startsWith('/admin/cms/');
     const canManageCms = hasPermission('cms:manage');
 
+    const isRolesRoute = path === ROUTES.ROLES || path.startsWith('/roles/');
+    const isUsersRoute = path === ROUTES.USERS || path.startsWith('/users/');
+    const isAccessRequestsRoute =
+      path === ROUTES.ACCESS_REQUESTS || path.startsWith('/access-requests/');
+    const isPrefixCreateRoute = path === ROUTES.PREFIX_CREATE;
+    const isPrefixRoute =
+      !isPrefixCreateRoute && (path === ROUTES.PREFIXES || path.startsWith('/prefixes/'));
+
     const isAllowed =
-      isAdminUser() ||
-      (isBusinessAreaCreateRoute && canCreateBA) ||
+      (isRolesRoute && hasPermission('role:read')) ||
+      (isUsersRoute && hasPermission('user:manage_roles')) ||
+      (isAccessRequestsRoute && hasPermission('user:manage_roles')) ||
       (isBusinessAreaListOrDetail && canManageBA) ||
+      (isBusinessAreaCreateRoute && canCreateBA) ||
+      (isPrefixCreateRoute && hasPermission('form_number_prefix:create')) ||
+      (isPrefixRoute && hasPermission('form_number_prefix:read')) ||
       (isCmsRoute && canManageCms);
 
     if (!isAllowed) {
       showAlert('You do not have permission to access that page.', 'warning');
-      window.history.replaceState({}, '', ROUTES.HOME);
-      await routeHandler(ROUTES.HOME);
+      window.dispatchEvent(new CustomEvent('app:route-changing', { detail: { path: 'denied' } }));
+      hideAllViews();
+      _currentRoute = 'not-found';
+      _routeParams = {};
+      const { showNotFoundView } = await import('./views/not-found.js');
+      showNotFoundView();
+      updateNavbar();
       return;
     }
   }
@@ -513,6 +541,9 @@ export async function routeHandler(path, params = {}) {
 export function initRouter() {
   // auth.js signals that the session has expired / user signed out → go home.
   window.addEventListener('auth:navigate-home', () => navigateTo(ROUTES.HOME));
+  window.addEventListener('auth:authorization-refreshed', () => {
+    routeHandler(window.location.pathname);
+  });
 
   // auth.js signals that the OIDC callback exchange completed → resume at
   // the return URL if auth.js selected one, otherwise fall back to Forms.

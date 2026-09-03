@@ -44,6 +44,8 @@ let _currentPopupFormId = null;
 let _currentPopupMode = 'default';
 let _currentApprovalContext = null;  // { requesterName, submittedAt }
 let _listenersAttached = false;
+let _formRequestController = null;
+let _popupGeneration = 0;
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -70,6 +72,11 @@ export async function openFormViewPopup(options) {
         onNotFound = null,
     } = options || {};
 
+    _formRequestController?.abort();
+    const requestController = new AbortController();
+    _formRequestController = requestController;
+    const popupGeneration = ++_popupGeneration;
+
     _openerElement = openerElement || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     _currentPopupFormId = formId;
     _currentPopupMode = mode;
@@ -79,7 +86,11 @@ export async function openFormViewPopup(options) {
 
     _ensureFocusReturnHandler();
 
-    const form = await _fetchForm(formId);
+    const form = await _fetchForm(formId, requestController.signal);
+    if (popupGeneration !== _popupGeneration || requestController.signal.aborted) {
+        return;
+    }
+    _formRequestController = null;
     if (!form) {
         if (typeof onNotFound === 'function') {
             onNotFound();
@@ -97,10 +108,11 @@ export async function openFormViewPopup(options) {
 
 // ─── Rendering ────────────────────────────────────────────────────────────────
 
-async function _fetchForm(formId) {
+async function _fetchForm(formId, signal) {
     try {
         const response = await fetch(`${API_BASE}/forms/${encodeURIComponent(formId)}`, {
             headers: { Authorization: `Bearer ${getAuthToken()}` },
+            signal,
         });
         if (!response.ok) {
             return null;
@@ -324,7 +336,44 @@ function _hideModal() {
     // eslint-disable-next-line no-undef
     const inst = window.bootstrap.Modal.getInstance(modalEl);
     if (inst) inst.hide();
+
+    if (modalEl.contains(document.activeElement)) document.activeElement.blur();
+    modalEl.classList.remove('show');
+    modalEl.style.display = 'none';
+    modalEl.setAttribute('aria-hidden', 'true');
+    modalEl.removeAttribute('aria-modal');
+    modalEl.removeAttribute('role');
+    if (!document.querySelector('.modal.show')) {
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    }
 }
+
+function _resetPopupLifecycle() {
+    _popupGeneration += 1;
+    _formRequestController?.abort();
+    _formRequestController = null;
+    _openerElement = null;
+    _currentPopupFormId = null;
+    _currentPopupMode = 'default';
+    _currentApprovalContext = null;
+    _hideModal();
+
+    const title = document.getElementById('formModalTitle');
+    const body = document.getElementById('formModalBody');
+    const footer = _getModalFooter();
+    if (title) title.textContent = '';
+    if (body) body.replaceChildren();
+    if (footer) footer.replaceChildren();
+}
+
+window.addEventListener('app:route-changing', _resetPopupLifecycle);
+window.addEventListener('auth:session-expired', _resetPopupLifecycle);
+window.addEventListener('auth:session-started', _resetPopupLifecycle);
+window.addEventListener('auth:session-cleared', _resetPopupLifecycle);
+window.addEventListener('auth:authorization-refreshed', _resetPopupLifecycle);
 
 // ─── Event handlers ───────────────────────────────────────────────────────────
 

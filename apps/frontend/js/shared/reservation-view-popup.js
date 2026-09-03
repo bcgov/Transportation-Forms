@@ -44,6 +44,8 @@ const MODAL_ID = 'reservationViewModal';
 
 let _openerElement = null;
 let _focusHandlerAttached = false;
+let _reservationRequestController = null;
+let _popupGeneration = 0;
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -59,6 +61,11 @@ export async function openReservationViewPopup(options) {
     const { reservationId, openerElement = null } = options || {};
     if (!reservationId) return;
 
+    _reservationRequestController?.abort();
+    const requestController = new AbortController();
+    _reservationRequestController = requestController;
+    const popupGeneration = ++_popupGeneration;
+
     _openerElement = openerElement
         || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
 
@@ -71,7 +78,11 @@ export async function openReservationViewPopup(options) {
 
     _ensureFocusReturnHandler();
 
-    const reservation = await _fetchReservation(reservationId);
+    const reservation = await _fetchReservation(reservationId, requestController.signal);
+    if (popupGeneration !== _popupGeneration || requestController.signal.aborted) {
+        return;
+    }
+    _reservationRequestController = null;
     if (!reservation) {
         showNotification(DENIED_MESSAGE, 'warning');
         _openerElement = null;
@@ -84,11 +95,14 @@ export async function openReservationViewPopup(options) {
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-async function _fetchReservation(reservationId) {
+async function _fetchReservation(reservationId, signal) {
     try {
         const response = await fetch(
             `${API_BASE}/reservations/${encodeURIComponent(reservationId)}`,
-            { headers: { Authorization: `Bearer ${getAuthToken()}` } },
+            {
+                headers: { Authorization: `Bearer ${getAuthToken()}` },
+                signal,
+            },
         );
         if (!response.ok) return null;
         return await response.json();
@@ -274,4 +288,36 @@ function _hideModal() {
     // eslint-disable-next-line no-undef
     const inst = window.bootstrap.Modal.getInstance(modalEl);
     if (inst) inst.hide();
+
+    if (modalEl.contains(document.activeElement)) document.activeElement.blur();
+    modalEl.classList.remove('show');
+    modalEl.style.display = 'none';
+    modalEl.setAttribute('aria-hidden', 'true');
+    modalEl.removeAttribute('aria-modal');
+    modalEl.removeAttribute('role');
+    if (!document.querySelector('.modal.show')) {
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    }
 }
+
+function _resetPopupLifecycle() {
+    _popupGeneration += 1;
+    _reservationRequestController?.abort();
+    _reservationRequestController = null;
+    _openerElement = null;
+    _hideModal();
+
+    const body = document.getElementById('reservationViewModalBody');
+    const footer = document.getElementById('reservationViewModalFooter');
+    if (body) body.replaceChildren();
+    if (footer) footer.replaceChildren();
+}
+
+window.addEventListener('app:route-changing', _resetPopupLifecycle);
+window.addEventListener('auth:session-expired', _resetPopupLifecycle);
+window.addEventListener('auth:session-started', _resetPopupLifecycle);
+window.addEventListener('auth:session-cleared', _resetPopupLifecycle);
+window.addEventListener('auth:authorization-refreshed', _resetPopupLifecycle);

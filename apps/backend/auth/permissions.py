@@ -87,6 +87,9 @@ class Permission(str, Enum):
     # granted to other roles (e.g., admin) via the existing role-management UI.
     CMS_MANAGE = "cms:manage"
 
+    # Staff Portal Permissions
+    PORTAL_NAVIGATION = "portal:navigation"
+
     # System Configuration Permissions
     SYSTEM_CONFIG = "system:config"
     SYSTEM_HEALTH = "system:health"
@@ -156,6 +159,8 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.FORM_NUMBER_PREFIX_ARCHIVE,
             # CMS management (FEAT-0026 US-010 — admin holds CMS_MANAGE by default)
             Permission.CMS_MANAGE,
+            # Staff portal navigation
+            Permission.PORTAL_NAVIGATION,
             # System configuration
             Permission.SYSTEM_CONFIG,
             Permission.SYSTEM_HEALTH,
@@ -193,6 +198,8 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             # Audit log viewing
             Permission.AUDIT_LOG_VIEW,
             Permission.REPORT_VIEW,
+            # Staff portal navigation
+            Permission.PORTAL_NAVIGATION,
         ],
     },
     "reviewer": {
@@ -216,6 +223,8 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.RESERVATION_RELEASE,
             # Audit log viewing
             Permission.AUDIT_LOG_VIEW,
+            # Staff portal navigation
+            Permission.PORTAL_NAVIGATION,
         ],
     },
     "staff_viewer": {
@@ -228,10 +237,6 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.BUSINESS_AREA_READ,
             # Categories (read only)
             Permission.CATEGORY_READ,
-            # Reservation basic permissions
-            Permission.RESERVATION_CREATE,
-            Permission.RESERVATION_READ,
-            Permission.RESERVATION_SUBMIT,
         ],
     },
     # FEAT-0026 US-010 — Content Editor role: holds exactly CMS_MANAGE.
@@ -242,6 +247,7 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
         "is_system": True,
         "permissions": [
             Permission.CMS_MANAGE,
+            Permission.PORTAL_NAVIGATION,
         ],
     },
 }

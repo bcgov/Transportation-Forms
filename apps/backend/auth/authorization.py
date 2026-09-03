@@ -9,6 +9,7 @@ This module provides:
 """
 
 from typing import Optional, List, Set
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -21,6 +22,8 @@ from backend.auth.permissions import (
     get_permission_for_resource_action,
 )
 from backend.models import User, UserRole, AuditLog
+
+_AUTHORIZATION_DENIED_DETAIL = "Insufficient permissions for this action"
 
 
 # Lazy import to avoid circular dependency
@@ -46,8 +49,21 @@ async def get_user_permissions(user_id: str, db: Session) -> Set[str]:
     Returns:
         Set of permission strings the user has
     """
+    try:
+        normalized_user_id = UUID(str(user_id))
+    except (AttributeError, TypeError, ValueError):
+        return set()
+
     # Get user with roles
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (
+        db.query(User)
+        .filter(
+            User.id == normalized_user_id,
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not user:
         return set()
 
@@ -55,17 +71,41 @@ async def get_user_permissions(user_id: str, db: Session) -> Set[str]:
     all_permissions = set()
     user_roles = (
         db.query(UserRole)
-        .filter(UserRole.user_id == user_id, UserRole.deleted_at.is_(None))
+        .filter(
+            UserRole.user_id == normalized_user_id,
+            UserRole.deleted_at.is_(None),
+        )
         .all()
     )
 
+    normalized_role_names: set[str] = set()
     for user_role in user_roles:
         role = user_role.role
         if role and role.is_active and not role.deleted_at:
+            if not isinstance(role.name, str) or not role.name.strip():
+                return set()
+            normalized_role_name = role.name.strip().lower()
+            if normalized_role_name in normalized_role_names:
+                return set()
+            normalized_role_names.add(normalized_role_name)
+
             if isinstance(role.permissions, list):
-                all_permissions.update(role.permissions)
+                permissions = role.permissions
             elif isinstance(role.permissions, dict):
-                all_permissions.update(role.permissions.keys())
+                permissions = list(role.permissions.keys())
+            else:
+                return set()
+
+            if any(
+                not isinstance(permission, str)
+                or not permission
+                or permission != permission.strip()
+                for permission in permissions
+            ):
+                return set()
+            if len(permissions) != len(set(permissions)):
+                return set()
+            all_permissions.update(permissions)
 
     # Apply inheritance rules
     inherited = get_inherited_permissions(list(all_permissions))
@@ -194,13 +234,18 @@ async def log_permission_check(
         Permission.AUDIT_LOG_EXPORT,
     ]:
         try:
+            try:
+                normalized_user_id = UUID(str(user_id))
+            except (AttributeError, TypeError, ValueError):
+                return
+
             # Verify user exists before creating audit log entry
-            user_exists = db.query(User).filter(User.id == user_id).first()
+            user_exists = db.query(User).filter(User.id == normalized_user_id).first()
             if not user_exists:
                 return
 
             audit_entry = AuditLog(
-                user_id=user_id,
+                user_id=normalized_user_id,
                 action="permission_check",
                 entity_type="permission",
                 entity_id=permission,
@@ -274,7 +319,7 @@ def require_permission(resource: str, action: str):
         if not has_perm:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions. Required: {resource}:{action}",
+                detail=_AUTHORIZATION_DENIED_DETAIL,
             )
 
         return user
@@ -318,7 +363,7 @@ def require_any_permission(*permissions: str):
 
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions. Required one of: {', '.join(permissions)}",
+                detail=_AUTHORIZATION_DENIED_DETAIL,
             )
 
         await log_permission_check(
@@ -369,7 +414,7 @@ def require_all_permissions(*permissions: str):
 
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions. Required all of: {', '.join(permissions)}",
+                detail=_AUTHORIZATION_DENIED_DETAIL,
             )
 
         await log_permission_check(

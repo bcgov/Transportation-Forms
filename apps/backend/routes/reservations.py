@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.auth.dependencies import get_current_user
+from backend.auth.authorization import has_permission, require_permission
 from backend.auth.jwt_handler import TokenData
 from backend.services.reservations import ReservationService
 
@@ -89,6 +89,7 @@ class ReservationResponse(BaseModel):
     created_at: str
     updated_at: str
 
+
 # TASK-406: Approval workflow schemas
 
 
@@ -129,6 +130,7 @@ class ApproverDecisionResponse(BaseModel):
     decided_at: Optional[str] = None
     created_at: str
 
+
 class PrefixInfoResponse(BaseModel):
     """Compact prefix info included in reservation detail."""
 
@@ -138,6 +140,7 @@ class PrefixInfoResponse(BaseModel):
     prefix: str
     description: Optional[str] = None
     is_active: bool
+
 
 class ReservationDetailResponse(BaseModel):
     """Detailed response with nested approver and prefix information (TASK-408)."""
@@ -161,6 +164,7 @@ class ReservationDetailResponse(BaseModel):
     updated_at: str
     prefix: Optional[PrefixInfoResponse] = None
     approvers: List[ApproverDecisionResponse] = []
+
 
 class ReservationListResponse(BaseModel):
     """Paginated list of reservations."""
@@ -300,7 +304,7 @@ router = APIRouter(
 )
 async def reserve_auto_generated(
     body: AutoGenerateRequest,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "create")),
     db: Session = Depends(get_db),
 ) -> ReservationResponse:
     """
@@ -331,10 +335,10 @@ async def reserve_auto_generated(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate sequential number: {e}",
+            detail="Failed to generate sequential number",
         )
 
 
@@ -351,7 +355,7 @@ async def reserve_auto_generated(
 )
 async def reserve_custom(
     body: CustomReserveRequest,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "create")),
     db: Session = Depends(get_db),
 ) -> ReservationResponse:
     """
@@ -393,10 +397,10 @@ async def reserve_custom(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error_msg,
         )
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to reserve custom number: {e}",
+            detail="Failed to reserve custom number",
         )
 
 
@@ -412,7 +416,7 @@ async def reserve_custom(
 )
 async def submit_for_approval(
     reservation_id: UUID,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "submit")),
     db: Session = Depends(get_db),
 ) -> ReservationResponse:
     """
@@ -443,7 +447,7 @@ async def submit_for_approval(
 async def list_pending_approvals(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(20, ge=1, le=100, description="Max records to return"),
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "read")),
     db: Session = Depends(get_db),
 ) -> ReservationListResponse:
     """
@@ -451,7 +455,7 @@ async def list_pending_approvals(
     reservations assigned to them. Admins see all pending requests.
     """
     approver_id = None
-    if "admin" not in current_user.roles:
+    if not await has_permission(current_user.sub, "reservation:admin", db):
         approver_id = UUID(current_user.sub)
 
     items, total = ReservationService.list_pending_approvals(
@@ -475,7 +479,7 @@ async def list_pending_approvals(
 )
 async def approve_reservation(
     reservation_id: UUID,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "approve")),
     db: Session = Depends(get_db),
 ) -> ReservationResponse:
     """
@@ -483,7 +487,6 @@ async def approve_reservation(
 
     Requires an approver role (admin, reviewer, or staff_manager).
     """
-    _require_approver_role(current_user)
     try:
         reservation = ReservationService.approve_reservation(
             db=db,
@@ -506,7 +509,7 @@ async def approve_reservation(
 async def reject_reservation(
     reservation_id: UUID,
     body: RejectRequest,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "reject")),
     db: Session = Depends(get_db),
 ) -> ReservationResponse:
     """
@@ -515,7 +518,6 @@ async def reject_reservation(
     Requires an approver role and a mandatory rejection reason.
     The reserved number is released and becomes available.
     """
-    _require_approver_role(current_user)
     try:
         reservation = ReservationService.reject_reservation(
             db=db,
@@ -539,7 +541,9 @@ async def reject_reservation(
 async def request_changes(
     reservation_id: UUID,
     body: RequestChangesRequest,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(
+        require_permission("reservations", "request_changes")
+    ),
     db: Session = Depends(get_db),
 ) -> ReservationResponse:
     """
@@ -547,7 +551,6 @@ async def request_changes(
 
     Requires an approver role and mandatory comments describing what needs to change.
     """
-    _require_approver_role(current_user)
     try:
         reservation = ReservationService.request_changes(
             db=db,
@@ -570,7 +573,7 @@ async def request_changes(
 )
 async def resubmit_reservation(
     reservation_id: UUID,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "submit")),
     db: Session = Depends(get_db),
 ) -> ReservationResponse:
     """
@@ -604,7 +607,7 @@ async def resubmit_reservation(
 )
 async def release_reservation(
     reservation_id: UUID,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "release")),
     db: Session = Depends(get_db),
 ) -> ReservationResponse:
     """
@@ -616,11 +619,14 @@ async def release_reservation(
     - Cannot release already-approved reservations (returns 400).
     """
     try:
+        can_release_any = await has_permission(
+            current_user.sub, "reservation:admin", db
+        )
         reservation = ReservationService.release_reservation(
             db=db,
             reservation_id=reservation_id,
             released_by_id=UUID(current_user.sub),
-            user_roles=current_user.roles,
+            can_release_any=can_release_any,
         )
         return _to_response(reservation)
     except ValueError as e:
@@ -628,7 +634,7 @@ async def release_reservation(
         if "permission" in error_msg.lower():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=error_msg,
+                detail="Insufficient permissions for this action",
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -647,7 +653,7 @@ async def list_expiring_reservations(
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=100, description="Max records to return"),
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "admin")),
     db: Session = Depends(get_db),
 ) -> ReservationListResponse:
     """
@@ -656,7 +662,6 @@ async def list_expiring_reservations(
     Returns reservations in 'reserved' or 'changes_requested' status that are
     within the specified number of days of the 14-day expiry limit.
     """
-    _require_admin_role(current_user)
     items, total = ReservationService.list_expiring_reservations(
         db,
         days_threshold=days_threshold,
@@ -677,7 +682,7 @@ async def list_expiring_reservations(
     summary="Trigger auto-expiry of stale reservations",
 )
 async def trigger_expiry(
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "admin")),
     db: Session = Depends(get_db),
 ) -> ExpiryResultResponse:
     """
@@ -686,7 +691,6 @@ async def trigger_expiry(
     Expires all reservations in 'reserved' or 'changes_requested' status
     that are older than 14 days.
     """
-    _require_admin_role(current_user)
     count = ReservationService.expire_stale_reservations(db)
     return ExpiryResultResponse(
         expired_count=count,
@@ -711,7 +715,7 @@ async def trigger_expiry(
 async def list_my_reservations(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(20, ge=1, le=100, description="Max records to return"),
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "read")),
     db: Session = Depends(get_db),
 ) -> ReservationListResponse:
     """
@@ -757,7 +761,7 @@ async def list_reservations(
     sort_order: Optional[str] = Query("desc", description="Sort order: asc or desc"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(20, ge=1, le=100, description="Max records to return"),
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "read")),
     db: Session = Depends(get_db),
 ) -> ReservationListResponse:
     """
@@ -841,7 +845,7 @@ async def list_reservations(
     summary="Get all approved and unused form number reservations",
 )
 async def get_approved_unused_reservations(
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "read")),
     db: Session = Depends(get_db),
 ) -> ApprovedUnusedReservationsResponse:
     """
@@ -872,7 +876,7 @@ async def get_approved_unused_reservations(
 )
 async def get_reservation(
     reservation_id: UUID,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("reservations", "read")),
     db: Session = Depends(get_db),
 ) -> ReservationDetailResponse:
     """
@@ -886,27 +890,3 @@ async def get_reservation(
             detail="Reservation not found",
         )
     return _to_detail_response(reservation)
-
-
-# ============================================================================
-# Helpers
-# ============================================================================
-
-
-def _require_approver_role(user: TokenData) -> None:
-    """Raise 403 if user lacks an approver role."""
-    approver_roles = {"admin", "reviewer", "staff_manager"}
-    if not any(r in approver_roles for r in user.roles):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Approver role required (admin, reviewer, or staff_manager).",
-        )
-
-
-def _require_admin_role(user: TokenData) -> None:
-    """Raise 403 if user is not an admin."""
-    if "admin" not in user.roles:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required.",
-        )

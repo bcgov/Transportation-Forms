@@ -10,13 +10,23 @@ from backend.main import app
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-from backend.models import BusinessArea, Form
+from backend.models import BusinessArea, Form, Role, UserRole
 
 
 @pytest.fixture()
 def search_client(db, user_factory):
     """Test client with DB and auth overrides for search API tests."""
     user = user_factory(email="search-client@example.com")
+    role = Role(
+        name="search_api_reader",
+        permissions=["form:read"],
+        is_system=False,
+        is_active=True,
+    )
+    db.add(role)
+    db.flush()
+    db.add(UserRole(user_id=user.id, role_id=role.id))
+    db.flush()
     token = TokenData(
         sub=str(user.id),
         email=user.email,

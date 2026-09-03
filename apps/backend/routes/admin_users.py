@@ -66,7 +66,10 @@ def _active_user_roles(user: User) -> list[UserRole]:
     return [
         ur
         for ur in (user.roles or [])
-        if ur.deleted_at is None and ur.role and ur.role.deleted_at is None
+        if ur.deleted_at is None
+        and ur.role
+        and ur.role.is_active
+        and ur.role.deleted_at is None
     ]
 
 

@@ -25,7 +25,7 @@ from backend.auth.authorization import require_permission
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-from backend.models import AuditLog
+from backend.models import AuditLog, Role, UserRole
 from backend.services.forms import FormService
 from backend.services import s3_service
 from backend.services.s3_service import S3ObjectNotFound, MIME_TYPE_MAP
@@ -241,6 +241,42 @@ router = APIRouter(
 )
 
 
+def _is_staff_viewer_only(user: TokenData, db: Session) -> bool:
+    try:
+        user_id = UUID(str(user.sub))
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        ) from exc
+
+    roles = (
+        db.query(Role)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .filter(
+            UserRole.user_id == user_id,
+            UserRole.deleted_at.is_(None),
+            Role.is_active.is_(True),
+            Role.deleted_at.is_(None),
+        )
+        .all()
+    )
+    normalized_names = []
+    for role in roles:
+        if not isinstance(role.name, str) or not role.name.strip():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions for this action",
+            )
+        normalized_names.append(role.name.strip().lower())
+    if len(normalized_names) != len(set(normalized_names)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
+    return normalized_names == ["staff_viewer"]
+
+
 # ============================================================================
 # FILE UPLOAD ENDPOINT (TASK-110C)
 # ============================================================================
@@ -398,7 +434,7 @@ async def autocomplete_forms(    q: str = Query(
     max_suggestions: int = Query(
         10, ge=1, le=10, description="Maximum suggestions (1-10)"
     ),
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("forms", "read")),
     db: Session = Depends(get_db),
 ) -> FormAutocompleteResponse:
     """Return autocomplete suggestions for form titles/keywords."""
@@ -413,6 +449,7 @@ async def autocomplete_forms(    q: str = Query(
         db=db,
         query_text=q,
         max_suggestions=max_suggestions,
+        published_only=_is_staff_viewer_only(current_user, db),
     )
     return FormAutocompleteResponse(query=q, suggestions=suggestions)
 
@@ -421,7 +458,7 @@ async def autocomplete_forms(    q: str = Query(
 async def download_form_attachment(
     form_id: str,
     request: Request,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("forms", "read")),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     """Stream a form's uploaded attachment directly to the client.
@@ -455,7 +492,9 @@ async def download_form_attachment(
         )
 
     form = FormService.get_form_by_id(db, form_uuid)
-    if not form:
+    if not form or (
+        _is_staff_viewer_only(current_user, db) and form.status != "published"
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Form not found",
@@ -560,7 +599,7 @@ async def download_form_attachment(
 @router.get("/{form_id}", response_model=FormResponse)
 async def get_form(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("forms", "read")),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """Get a form by ID."""
@@ -576,6 +615,14 @@ async def get_form(
         form_data = FormService.get_form_with_details(db, form_uuid)
 
         if not form_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+            )
+
+        if (
+            _is_staff_viewer_only(current_user, db)
+            and form_data.get("status") != "published"
+        ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
@@ -747,7 +794,7 @@ async def list_forms(
         pattern="^(created_at|form_number)$",
         description="Sort field (created_at or form_number)",
     ),
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("forms", "read")),
     db: Session = Depends(get_db),
 ) -> FormListResponse:
     """
@@ -815,7 +862,11 @@ async def list_forms(
         skip=skip,
         limit=limit,
         q=q,
-        status=status_filter or None,
+        status=(
+            ["published"]
+            if _is_staff_viewer_only(current_user, db)
+            else status_filter or None
+        ),
         business_area_ids=business_area_uuid_list,
         form_source=form_source or None,
         is_public=is_public,

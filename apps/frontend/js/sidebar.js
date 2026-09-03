@@ -47,7 +47,10 @@ function _render() {
   const overlayOpen = isMobile && isVisible;
 
   document.body.classList.toggle('sidebar-available', _available);
-  document.body.classList.toggle('sidebar-collapsed', !isMobile && !isVisible);
+  document.body.classList.toggle(
+    'sidebar-collapsed',
+    _available && !isMobile && !isVisible,
+  );
   document.body.classList.toggle('sidebar-overlay-open', overlayOpen);
 
   sidebar.hidden = !_available;
@@ -114,7 +117,20 @@ export function initSidebarNavigation() {
 }
 
 export function setSidebarAvailability(available) {
+  const { sidebar, toggle } = _elements();
+  const navigationHadFocus = sidebar?.contains(document.activeElement) || toggle === document.activeElement;
   _available = Boolean(available);
-  if (!_available) _mobileOpen = false;
+  if (!_available) {
+    _mobileOpen = false;
+    if (_sidebarTopFrame !== null) {
+      window.cancelAnimationFrame(_sidebarTopFrame);
+      _sidebarTopFrame = null;
+    }
+    _lastSidebarTop = null;
+    document.documentElement.style.removeProperty('--staff-sidebar-top');
+    if (navigationHadFocus && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  }
   _render();
 }

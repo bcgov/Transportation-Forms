@@ -20,7 +20,9 @@ from backend.models import (
     Form,
     FormNumberPrefix,
     FormNumberReservation,
+    Role,
     User,
+    UserRole,
 )
 
 
@@ -37,6 +39,29 @@ def feat14_client(db, user_factory):
     """
     staff = user_factory(email="feat14-staff@example.com")
     admin = user_factory(email="feat14-admin@example.com")
+    staff_role = Role(
+        id=uuid.uuid4(),
+        name=f"feat14_staff_{uuid.uuid4().hex}",
+        permissions=["form:read"],
+        is_system=False,
+        is_active=True,
+    )
+    admin_role = Role(
+        id=uuid.uuid4(),
+        name=f"feat14_admin_{uuid.uuid4().hex}",
+        permissions=["form:read", "form:edit", "form:delete"],
+        is_system=False,
+        is_active=True,
+    )
+    db.add_all([staff_role, admin_role])
+    db.flush()
+    db.add_all(
+        [
+            UserRole(id=uuid.uuid4(), user_id=staff.id, role_id=staff_role.id),
+            UserRole(id=uuid.uuid4(), user_id=admin.id, role_id=admin_role.id),
+        ]
+    )
+    db.flush()
 
     def _get_user(request: Request) -> TokenData:
         auth = request.headers.get("Authorization", "")

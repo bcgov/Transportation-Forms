@@ -353,6 +353,13 @@ body.sidebar-collapsed > .container {
     padding-top: 3rem;
 }
 
+body:not(.sidebar-available) > .container {
+    width: 100%;
+    max-width: none;
+    margin-right: 0;
+    margin-left: 0;
+}
+
 @media (max-width: 767.98px) {
     .staff-header {
         margin-bottom: 0;

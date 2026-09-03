@@ -21,7 +21,7 @@ from backend.main import app
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData, jwt_handler
-from backend.models import Form
+from backend.models import Form, Role, UserRole
 
 
 # ── Sensitive field names that must never appear in 401/403 response bodies ──
@@ -68,6 +68,17 @@ def _seed_form(db, user_factory):
 def auth_client_with_read(db, user_factory, _seed_form):
     """Authenticated test client whose user has form:read permission."""
     user = user_factory(email="reader-0018@example.com")
+    role = Role(
+        id=uuid.uuid4(),
+        name=f"staff_viewer_{uuid.uuid4().hex}",
+        permissions=["form:read"],
+        is_system=False,
+        is_active=True,
+    )
+    db.add(role)
+    db.flush()
+    db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
+    db.flush()
 
     def _get_user(request: Request) -> TokenData:
         return TokenData(
@@ -90,6 +101,17 @@ def auth_client_with_read(db, user_factory, _seed_form):
 def auth_client_no_read(db, user_factory, _seed_form):
     """Authenticated test client whose user lacks form:read permission."""
     user = user_factory(email="noperm-0018@example.com")
+    role = Role(
+        id=uuid.uuid4(),
+        name=f"no_read_{uuid.uuid4().hex}",
+        permissions=[],
+        is_system=False,
+        is_active=True,
+    )
+    db.add(role)
+    db.flush()
+    db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
+    db.flush()
 
     def _get_user(request: Request) -> TokenData:
         return TokenData(

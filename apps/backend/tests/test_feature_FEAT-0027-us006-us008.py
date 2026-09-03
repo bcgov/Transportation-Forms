@@ -360,9 +360,11 @@ class TestUS008DeepLinkRouter:
         assert "sessionStorage.setItem('tf_return_url'" in body, (
             "Router must remember the deep-link target for post-login resume — AC9"
         )
-        assert "'/forms/'" in body, (
-            "Return-url stash must be scoped to `/forms/` deep-links — AC9"
+        assert "_isRegisteredRoute(path)" in body, (
+            "Return-url stash must remain scoped to registered routes — AC9"
         )
+        assert "path !== ROUTES.HOME" in body
+        assert "path !== ROUTES.CALLBACK" in body
 
     def test_router_resumes_at_return_url_on_callback_complete(self):
         """AC9 — after the OIDC callback completes, the app resumes at the

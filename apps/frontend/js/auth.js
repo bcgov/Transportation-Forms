@@ -14,6 +14,7 @@ import { showAlert } from './utils.js';
 import { getCurrentUser, setCurrentUser, isAuthInitialized, setAuthInitialized } from './state.js';
 import { tryRefreshToken } from './token-refresh.js';
 import { setSidebarAvailability } from './sidebar.js';
+import { parseAuthorizationContext } from './authorization-context.js';
 
 export { tryRefreshToken };
 
@@ -160,22 +161,36 @@ export function isAuthenticated() {
   return Boolean(getAuthToken());
 }
 
+function _getAuthorizationContext() {
+  return parseAuthorizationContext(getCurrentUser());
+}
+
+export function hasValidAuthorizationContext() {
+  return _getAuthorizationContext() !== null;
+}
+
 /**
  * Returns true when the current user has the "admin" role.
  */
 export function isAdminUser() {
-  const user = getCurrentUser();
-  const roles = Array.isArray(user?.roles) ? user.roles : [];
-  return roles.some(role => String(role || '').toLowerCase() === 'admin');
+  const context = _getAuthorizationContext();
+  return context?.roles.includes('admin') ?? false;
 }
 
 /**
  * Returns true when the current user has at least one portal role assigned.
  */
 export function hasPortalRoles() {
-  const user = getCurrentUser();
-  const roles = Array.isArray(user?.roles) ? user.roles : [];
-  return roles.length > 0;
+  const context = _getAuthorizationContext();
+  return context !== null && context.roles.length > 0;
+}
+
+/**
+ * Returns true only when the current user has one Staff Viewer role.
+ */
+export function isStaffViewerOnly() {
+  const context = _getAuthorizationContext();
+  return context?.roles.length === 1 && context.roles[0] === 'staff_viewer';
 }
 
 /**
@@ -186,9 +201,8 @@ export function hasPortalRoles() {
  * @returns {boolean}
  */
 export function hasPermission(permission) {
-  const user = getCurrentUser();
-  const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
-  return permissions.includes(permission);
+  const context = _getAuthorizationContext();
+  return context?.permissions.includes(permission) ?? false;
 }
 
 /**
@@ -196,11 +210,15 @@ export function hasPermission(permission) {
  */
 export function canReviewApprovals() {
   return (
-    isAdminUser() ||
     (hasPermission('form:approve') && hasPermission('form:review')) ||
-    hasPermission('reservation:approve') ||
-    hasPermission('reservation:request_changes') ||
-    hasPermission('reservation:reject')
+    (
+      hasPermission('reservation:read') &&
+      (
+        hasPermission('reservation:approve') ||
+        hasPermission('reservation:request_changes') ||
+        hasPermission('reservation:reject')
+      )
+    )
   );
 }
 
@@ -449,13 +467,13 @@ export function updateAuthUi() {
     if (authDropdown) authDropdown.setAttribute('aria-label', `Open user menu for ${displayName}`);
     setVisible(authDropdownContainer, true);
 
-    if (hasPortalRoles()) {
+    if (hasPortalRoles() && hasPermission('portal:navigation')) {
       const operationalLinkVisibility = {
         approvalsLink: canReviewApprovals(),
-        manageFormsLink: isAdmin || hasPermission('form:read'),
-        createFormLink: isAdmin || hasPermission('form:create'),
-        reserveNumberLink: isAdmin || hasPermission('reservation:create'),
-        myReservationsLink: isAdmin || hasPermission('reservation:read'),
+        manageFormsLink: hasPermission('form:read'),
+        createFormLink: hasPermission('form:create'),
+        reserveNumberLink: hasPermission('reservation:create'),
+        myReservationsLink: hasPermission('reservation:read'),
       };
 
       for (const [linkId, visible] of Object.entries(operationalLinkVisibility)) {
@@ -467,22 +485,20 @@ export function updateAuthUi() {
       // the corresponding API surface. The accordion item itself is shown
       // when the user can access *any* admin link, otherwise it is hidden
       // so non-admin users don't see disabled/forbidden navigation entries.
-      const canManageBA =
-        isAdmin ||
-        hasPermission('business_area:manage');
+      const canManageBA = hasPermission('business_area:manage');
 
       // CMS admin surfaces are gated on ``cms:manage`` — the same
       // permission the backend requires. Users with only ``cms:manage``
       // (e.g. ``content_editor``) MUST see the CMS links even without
       // full admin role, and admin-only users without ``cms:manage``
       // still see them via ``isAdmin``.
-      const canManageCms = isAdmin || hasPermission('cms:manage');
+      const canManageCms = hasPermission('cms:manage');
 
       const adminLinkVisibility = {
-        rolesLink: isAdmin,
-        usersLink: isAdmin,
-        accessRequestsLink: isAdmin,
-        prefixesLink: isAdmin,
+        rolesLink: hasPermission('role:read'),
+        usersLink: hasPermission('user:manage_roles'),
+        accessRequestsLink: hasPermission('user:manage_roles'),
+        prefixesLink: hasPermission('form_number_prefix:read'),
         businessAreasLink: canManageBA,
         cmsPagesLink: canManageCms,
         cmsRedirectsLink: canManageCms,
@@ -510,3 +526,5 @@ export function updateAuthUi() {
     hideSidebarDestinations();
   }
 }
+
+window.addEventListener('auth:authorization-refreshed', updateAuthUi);

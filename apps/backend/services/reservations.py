@@ -367,24 +367,27 @@ class ReservationService:
 
     @staticmethod
     def _find_approvers(db: Session) -> List[User]:
-        """Find users who have an approver-eligible role (admin, reviewer, staff_manager)."""
-        approver_roles = ["admin", "reviewer", "staff_manager"]
-        users = (
-            db.query(User)
+        """Find active users granted reservation approval permission."""
+        assignments = (
+            db.query(User, Role)
             .join(UserRole, UserRole.user_id == User.id)
             .join(Role, Role.id == UserRole.role_id)
             .filter(
-                Role.name.in_(approver_roles),
                 Role.is_active.is_(True),
                 Role.deleted_at.is_(None),
                 UserRole.deleted_at.is_(None),
                 User.is_active.is_(True),
                 User.deleted_at.is_(None),
             )
-            .distinct()
             .all()
         )
-        return users
+        users_by_id = {
+            user.id: user
+            for user, role in assignments
+            if isinstance(role.permissions, list)
+            and "reservation:approve" in role.permissions
+        }
+        return list(users_by_id.values())
 
     @staticmethod
     def submit_for_approval(
@@ -756,7 +759,7 @@ class ReservationService:
         db: Session,
         reservation_id: UUID,
         released_by_id: UUID,
-        user_roles: List[str],
+        can_release_any: bool = False,
     ) -> FormNumberReservation:
         """Manually release a reserved form number.
 
@@ -777,11 +780,10 @@ class ReservationService:
         if reservation.status in ("released", "expired"):  # type: ignore[comparison-overlap]
             raise ValueError(f"Reservation is already '{reservation.status}'.")
 
-        is_admin = "admin" in user_roles
         is_owner = str(reservation.reserved_by_id) == str(released_by_id)
         is_assigned_approver = False
 
-        if not is_admin and not is_owner:
+        if not can_release_any and not is_owner:
             # Check if user is an assigned approver
             approver_record = (
                 db.query(FormReservationApprover)
@@ -794,7 +796,7 @@ class ReservationService:
             )
             is_assigned_approver = approver_record is not None
 
-        if not (is_admin or is_owner or is_assigned_approver):
+        if not (can_release_any or is_owner or is_assigned_approver):
             raise ValueError(
                 "You do not have permission to release this reservation. "
                 "Only the requester, an assigned approver, or an admin can release it."

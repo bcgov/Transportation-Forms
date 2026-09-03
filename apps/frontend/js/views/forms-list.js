@@ -12,7 +12,13 @@ import {
     loadBusinessAreas,
     resetBusinessAreas,
 } from './business-areas.js';
-import { hasPermission, getAuthToken, isAdminUser } from '../auth.js';
+import {
+    getAuthToken,
+    hasPermission,
+    hasPortalRoles,
+    isAdminUser,
+    isStaffViewerOnly,
+} from '../auth.js';
 import { getCurrentUser } from '../state.js';
 import { openFormViewPopup, downloadFormAttachment } from '../shared/form-view-popup.js';
 
@@ -100,6 +106,7 @@ window.addEventListener('app:route-changing', event => {
 window.addEventListener('auth:session-expired', _resetFormsListLifecycle);
 window.addEventListener('auth:session-started', _resetFormsListLifecycle);
 window.addEventListener('auth:session-cleared', _resetFormsListLifecycle);
+window.addEventListener('auth:authorization-refreshed', _resetFormsListLifecycle);
 
 /**
  * All available filter options, grouped by category.
@@ -192,6 +199,15 @@ export async function showFormsListView(navigateFn) {
         _initListViewEvents();
         _initialized = true;
     }
+
+    const hasNoRoles = !hasPortalRoles();
+    const requestAccessPanel = document.getElementById('requestAccessPanel');
+    const formsLibraryContent = document.getElementById('formsLibraryContent');
+    if (requestAccessPanel) {
+        requestAccessPanel.style.display = hasNoRoles ? 'flex' : 'none';
+    }
+    if (formsLibraryContent) formsLibraryContent.hidden = hasNoRoles;
+    if (hasNoRoles) return;
 
     await _restoreResultsLayoutPreference();
     if (lifecycleGeneration !== _formsLifecycleGeneration) return;
@@ -964,11 +980,10 @@ function _getVisibleFilterOptions() {
     const user = getCurrentUser();
     if (!user) return [];
 
-    const roles = Array.isArray(user.roles) ? user.roles.map(r => String(r).toLowerCase()) : [];
-    const isStaffViewerOnly = roles.length === 1 && roles[0] === 'staff_viewer';
+    const roles = Array.isArray(user.roles) ? user.roles : [];
     const hasNoRoles = roles.length === 0;
 
-    if (isStaffViewerOnly || hasNoRoles) {
+    if (isStaffViewerOnly() || hasNoRoles) {
         return _FILTER_OPTIONS.filter(
             o => o.category !== 'Workflow State' || o.key === 'ws:published'
         );

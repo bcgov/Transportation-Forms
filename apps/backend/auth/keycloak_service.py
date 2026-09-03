@@ -59,20 +59,17 @@ class KeyCloakService:
                 self.base_url = f"{self.base_url}/auth"
             self.realm_url = f"{self.base_url}/realms/{settings.KEYCLOAK_REALM}"
 
-            logger.info(
-                f"KeyCloak client initialized for realm: {settings.KEYCLOAK_REALM}"
-            )
-            logger.info(f"Realm URL: {self.realm_url}")
-        except Exception as e:
-            logger.error(f"Failed to initialize KeyCloak client: {str(e)}")
-            raise
+            logger.info("Identity provider client initialized")
+        except Exception:
+            logger.error("Failed to initialize identity provider client")
+            raise RuntimeError(
+                "Failed to initialize identity provider client"
+            ) from None
 
     def _ensure_enabled(self) -> None:
         """Ensure Keycloak is configured before use."""
         if not self.enabled:
-            raise ValueError(
-                "Keycloak is not configured. Set KEYCLOAK_* environment variables."
-            )
+            raise ValueError("Identity provider is not configured")
 
     def _get_well_known_config(self) -> Dict[str, Any]:
         """Get OpenID well-known configuration (cached)."""
@@ -112,11 +109,11 @@ class KeyCloakService:
             }
 
             auth_url = f"{auth_endpoint}?{urlencode(params)}"
-            logger.debug(f"Generated auth URL: {auth_url[:100]}...")
+            logger.debug("Generated identity provider authorization URL")
             return auth_url
-        except Exception as e:
-            logger.error(f"Failed to generate auth URL: {str(e)}")
-            raise ValueError(f"Failed to generate authorization URL: {str(e)}")
+        except Exception:
+            logger.error("Failed to generate identity provider authorization URL")
+            raise ValueError("Failed to generate authorization URL") from None
 
     def exchange_code_for_token(
         self, code: str, redirect_uri: Optional[str] = None
@@ -161,14 +158,12 @@ class KeyCloakService:
 
             logger.info("Successfully exchanged authorization code for tokens")
             return token_response
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP error during token exchange: {str(e)}")
-            if e.response is not None:
-                logger.error(f"Response: {e.response.text[:200]}")
-            raise ValueError(f"Authentication failed: {str(e)}")
-        except Exception as e:
-            logger.error(f"Token exchange failed: {str(e)}")
-            raise ValueError(f"Token exchange failed: {str(e)}")
+        except requests.exceptions.HTTPError:
+            logger.error("Identity provider rejected token exchange")
+            raise ValueError("Authentication failed") from None
+        except Exception:
+            logger.error("Identity provider token exchange failed")
+            raise ValueError("Token exchange failed") from None
 
     def get_user_info(self, access_token: str) -> Dict[str, Any]:
         """
@@ -197,14 +192,14 @@ class KeyCloakService:
             response.raise_for_status()
             userinfo = response.json()
 
-            logger.info(f"Retrieved user info for: {userinfo.get('email', 'unknown')}")
+            logger.info("Retrieved identity provider user information")
             return userinfo
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"Failed to get user info: {str(e)}")
-            raise ValueError(f"Failed to retrieve user information: {str(e)}")
-        except Exception as e:
-            logger.error(f"User info retrieval error: {str(e)}")
-            raise ValueError(f"User info retrieval failed: {str(e)}")
+        except requests.exceptions.HTTPError:
+            logger.error("Identity provider rejected user information request")
+            raise ValueError("Failed to retrieve user information") from None
+        except Exception:
+            logger.error("Identity provider user information request failed")
+            raise ValueError("User info retrieval failed") from None
 
     def introspect_token(self, token: str) -> Dict[str, Any]:
         """
@@ -223,9 +218,9 @@ class KeyCloakService:
         try:
             introspection = self.keycloak_openid.introspect(token)
             return introspection
-        except Exception as e:
-            logger.error(f"Token introspection failed: {str(e)}")
-            raise ValueError(f"Token introspection failed: {str(e)}")
+        except Exception:
+            logger.error("Identity provider token introspection failed")
+            raise ValueError("Token introspection failed") from None
 
     def refresh_token(self, refresh_token: str) -> Dict[str, Any]:
         """
@@ -245,12 +240,12 @@ class KeyCloakService:
             token_response = self.keycloak_openid.refresh_token(refresh_token)
             logger.info("Successfully refreshed access token")
             return token_response
-        except KeycloakAuthenticationError as e:
-            logger.error(f"Token refresh authentication error: {str(e)}")
-            raise ValueError(f"Invalid refresh token: {str(e)}")
-        except Exception as e:
-            logger.error(f"Token refresh failed: {str(e)}")
-            raise ValueError(f"Token refresh failed: {str(e)}")
+        except KeycloakAuthenticationError:
+            logger.error("Identity provider rejected token refresh")
+            raise ValueError("Invalid refresh token") from None
+        except Exception:
+            logger.error("Identity provider token refresh failed")
+            raise ValueError("Token refresh failed") from None
 
     def logout(self, refresh_token: str) -> bool:
         """
@@ -289,13 +284,15 @@ class KeyCloakService:
             # Keep library call as fallback/compatibility.
             try:
                 self.keycloak_openid.logout(refresh_token)
-            except Exception as fallback_error:
-                logger.debug(f"Library logout fallback warning: {str(fallback_error)}")
+            except Exception:
+                logger.debug("Identity provider logout fallback failed")
 
             logger.info("Successfully logged out user")
             return True
-        except Exception as e:
-            logger.warning(f"Logout failed (token may already be invalid): {str(e)}")
+        except Exception:
+            logger.warning(
+                "Identity provider logout failed; token may already be invalid"
+            )
             # Return True anyway since the goal is to clear the session
             return True
 
@@ -315,9 +312,9 @@ class KeyCloakService:
 
             decoded = jwt.decode(token, options={"verify_signature": False})
             return decoded
-        except Exception as e:
-            logger.error(f"Token decode failed: {str(e)}")
-            raise ValueError(f"Invalid token format: {str(e)}")
+        except Exception:
+            logger.error("Identity provider token decode failed")
+            raise ValueError("Invalid token format") from None
 
     def extract_roles(self, keycloak_token_payload: Dict[str, Any]) -> list:
         """
@@ -335,12 +332,10 @@ class KeyCloakService:
             client_roles = resource_access.get(settings.KEYCLOAK_CLIENT_ID, {})
             roles = client_roles.get("roles", [])
 
-            logger.info(f"Extracted roles: {roles}")
+            logger.info("Extracted identity provider roles")
             return roles
-        except Exception as e:
-            logger.warning(
-                f"Failed to extract roles, defaulting to empty list: {str(e)}"
-            )
+        except Exception:
+            logger.warning("Failed to extract identity provider roles; using none")
             return []
 
     def generate_app_tokens(
