@@ -17,7 +17,9 @@ fullnameOverride: ""
 backend:
   image:
     tag: latest
+    digest: ""
     migrationsTag: latest
+    migrationsDigest: ""
 
   replicaCount: 1
 
@@ -114,6 +116,7 @@ backend:
 frontend:
   image:
     tag: latest
+    digest: ""
 
   replicaCount: 1
 
@@ -198,6 +201,7 @@ public-backend:
 
   image:
     tag: latest
+    digest: ""
 
   replicaCount: 1
 
@@ -272,6 +276,7 @@ public-backend:
 public-frontend:
   image:
     tag: latest
+    digest: ""
 
   replicaCount: 1
 

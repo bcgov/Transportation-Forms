@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v6.0.1
 
       - name: Build and push backend image
-        uses: bcgov/action-builder-ghcr@v4.2.1
+        uses: bcgov/actions/builder-ghcr@v0.5.0
         with:
           package: backend
           tags: ${{ github.event.number }}
@@ -46,7 +46,7 @@ jobs:
         uses: actions/checkout@v6.0.1
 
       - name: Build and push migrations image
-        uses: bcgov/action-builder-ghcr@v4.2.1
+        uses: bcgov/actions/builder-ghcr@v0.5.0
         with:
           package: migrations
           tags: ${{ github.event.number }}
@@ -69,7 +69,7 @@ jobs:
         uses: actions/checkout@v6.0.1
 
       - name: Build and push frontend image
-        uses: bcgov/action-builder-ghcr@v4.2.1
+        uses: bcgov/actions/builder-ghcr@v0.5.0
         with:
           package: frontend
           tags: ${{ github.event.number }}
@@ -92,7 +92,7 @@ jobs:
         uses: actions/checkout@v6.0.1
 
       - name: Build and push public-backend image
-        uses: bcgov/action-builder-ghcr@v4.2.1
+        uses: bcgov/actions/builder-ghcr@v0.5.0
         with:
           package: public-backend
           tags: ${{ github.event.number }}
@@ -115,7 +115,7 @@ jobs:
         uses: actions/checkout@v6.0.1
 
       - name: Build and push public-frontend image
-        uses: bcgov/action-builder-ghcr@v4.2.1
+        uses: bcgov/actions/builder-ghcr@v0.5.0
         with:
           package: public-frontend
           tags: ${{ github.event.number }}
@@ -136,12 +136,12 @@ jobs:
       backend_tag: ${{ github.event.number }}
       migrations_tag: ${{ github.event.number }}
       frontend_tag: ${{ github.event.number }}
+      public_backend_tag: ${{ github.event.number }}
+      public_frontend_tag: ${{ github.event.number }}
       public_forms_base_url: https://forms-public-transportation-forms-${{ github.event.number }}.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
       params: >-
         --set global.secrets.persist=false
         --set backend.env.corsOrigins=https://frontend-transportation-forms-${{ github.event.number }}.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
-        --set-string "public-backend.image.tag=${{ github.event.number }}"
-        --set-string "public-frontend.image.tag=${{ github.event.number }}"
     secrets:
       oc_token: ${{ secrets.OC_TOKEN }}
       database_url: ${{ secrets.DATABASE_URL }}

@@ -14,6 +14,7 @@ cache:
 image:
   repository: ghcr.io/bcgov/transportation-forms/public-frontend
   tag: latest
+  digest: ""
   pullPolicy: Always
 
 # ── OpenShift domain (used to build route hostnames) ─────────────────────────

@@ -10,7 +10,9 @@ global:
 # ── Image tags (split so backend and migrations can be versioned independently)
 image:
   tag: latest
+  digest: ""
   migrationsTag: latest
+  migrationsDigest: ""
 
 # ── OpenShift domain (used to build route hostnames) ─────────────────────────
 domain: apps.silver.devops.gov.bc.ca

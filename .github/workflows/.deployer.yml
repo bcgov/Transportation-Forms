@@ -9,16 +9,54 @@ on:
         type: string
       backend_tag:
         description: "Image tag for the backend container"
-        required: true
+        required: false
         type: string
+        default: latest
+      backend_digest:
+        description: "Optional immutable digest for the backend container"
+        required: false
+        type: string
+        default: ""
       migrations_tag:
         description: "Image tag for the migrations init container"
-        required: true
+        required: false
         type: string
+        default: latest
+      migrations_digest:
+        description: "Optional immutable digest for the migrations init container"
+        required: false
+        type: string
+        default: ""
       frontend_tag:
         description: "Image tag for the frontend container"
-        required: true
+        required: false
         type: string
+        default: latest
+      frontend_digest:
+        description: "Optional immutable digest for the frontend container"
+        required: false
+        type: string
+        default: ""
+      public_backend_tag:
+        description: "Image tag for the public-backend container"
+        required: false
+        type: string
+        default: latest
+      public_backend_digest:
+        description: "Optional immutable digest for the public-backend container"
+        required: false
+        type: string
+        default: ""
+      public_frontend_tag:
+        description: "Image tag for the public-frontend container"
+        required: false
+        type: string
+        default: latest
+      public_frontend_digest:
+        description: "Optional immutable digest for the public-frontend container"
+        required: false
+        type: string
+        default: ""
       params:
         description: "Extra helm --set parameters (space-separated key=value pairs)"
         required: false
@@ -147,7 +185,15 @@ jobs:
             BACKEND_TAG="${{ inputs.backend_tag }}"
             MIGRATIONS_TAG="${{ inputs.migrations_tag }}"
             FRONTEND_TAG="${{ inputs.frontend_tag }}"
+            PUBLIC_BACKEND_TAG="${{ inputs.public_backend_tag }}"
+            PUBLIC_FRONTEND_TAG="${{ inputs.public_frontend_tag }}"
             ENV="${{ inputs.environment }}"
+            TARGET_DOMAIN="${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}"
+            FRONTEND_BASE_URL="https://frontend-${RELEASE_NAME}.${TARGET_DOMAIN}"
+            PUBLIC_FORMS_BASE_URL="${{ inputs.public_forms_base_url }}"
+            if [[ -z "${PUBLIC_FORMS_BASE_URL}" ]]; then
+              PUBLIC_FORMS_BASE_URL="https://forms-public-${RELEASE_NAME}.${TARGET_DOMAIN}"
+            fi
             JWT_PRIVATE_KEY_FILE="$(mktemp)"
             JWT_PUBLIC_KEY_FILE="$(mktemp)"
             trap 'rm -f "${JWT_PRIVATE_KEY_FILE}" "${JWT_PUBLIC_KEY_FILE}"' EXIT
@@ -179,27 +225,36 @@ jobs:
               -f "${CHART}/values.yaml" \
               ${VALUES_OVERRIDE} \
               --set-string backend.image.tag="${BACKEND_TAG}" \
+              --set-string backend.image.digest="${{ inputs.backend_digest }}" \
               --set-string backend.image.migrationsTag="${MIGRATIONS_TAG}" \
+              --set-string backend.image.migrationsDigest="${{ inputs.migrations_digest }}" \
               --set-string frontend.image.tag="${FRONTEND_TAG}" \
-              --set global.registry=ghcr.io \
-              --set global.repository=bcgov/transportation-forms \
-              --set backend.secrets.databaseUrl="${{ secrets.database_url }}" \
-              --set backend.secrets.secretKey="${{ secrets.secret_key }}" \
+              --set-string frontend.image.digest="${{ inputs.frontend_digest }}" \
+              --set-string public-backend.image.tag="${PUBLIC_BACKEND_TAG}" \
+              --set-string public-backend.image.digest="${{ inputs.public_backend_digest }}" \
+              --set-string public-frontend.image.tag="${PUBLIC_FRONTEND_TAG}" \
+              --set-string public-frontend.image.digest="${{ inputs.public_frontend_digest }}" \
+              --set-string global.registry=ghcr.io \
+              --set-string global.repository=bcgov/transportation-forms \
+              --set-string backend.secrets.databaseUrl="${{ secrets.database_url }}" \
+              --set-string backend.secrets.secretKey="${{ secrets.secret_key }}" \
               --set-file backend.secrets.jwtPrivateKeyPem="${JWT_PRIVATE_KEY_FILE}" \
               --set-file backend.secrets.jwtPublicKeyPem="${JWT_PUBLIC_KEY_FILE}" \
-              --set backend.secrets.s3EndpointUrl="${S3_ENDPOINT_CLEAN}" \
-              --set backend.secrets.s3AccessKey="${{ secrets.s3_access_key }}" \
-              --set backend.secrets.s3SecretKey="${{ secrets.s3_secret_key }}" \
-              --set backend.secrets.s3Bucket="${S3_BUCKET_CLEAN}" \
-              --set backend.secrets.keycloakServerUrl="${{ secrets.keycloak_server_url }}" \
-              --set backend.secrets.keycloakRealm="${{ secrets.keycloak_realm }}" \
-              --set backend.secrets.keycloakClientId="${{ secrets.keycloak_client_id }}" \
-              --set backend.secrets.keycloakClientSecret="${{ secrets.keycloak_client_secret }}" \
-              --set backend.secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
-              --set backend.secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
-              --set "public-frontend.s3.internalUpstream=${S3_UPSTREAM}" \
-              --set "public-frontend.publicBaseUrl=${{ inputs.public_forms_base_url }}" \
-              --set "public-backend.publicBaseUrl=${{ inputs.public_forms_base_url }}" \
+              --set-string backend.secrets.s3EndpointUrl="${S3_ENDPOINT_CLEAN}" \
+              --set-string backend.secrets.s3AccessKey="${{ secrets.s3_access_key }}" \
+              --set-string backend.secrets.s3SecretKey="${{ secrets.s3_secret_key }}" \
+              --set-string backend.secrets.s3Bucket="${S3_BUCKET_CLEAN}" \
+              --set-string backend.secrets.keycloakServerUrl="${{ secrets.keycloak_server_url }}" \
+              --set-string backend.secrets.keycloakRealm="${{ secrets.keycloak_realm }}" \
+              --set-string backend.secrets.keycloakClientId="${{ secrets.keycloak_client_id }}" \
+              --set-string backend.secrets.keycloakClientSecret="${{ secrets.keycloak_client_secret }}" \
+              --set-string backend.secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
+              --set-string backend.secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
+              --set-string backend.env.corsOrigins="${FRONTEND_BASE_URL}" \
+              --set-string public-backend.env.publicCorsOrigins="${PUBLIC_FORMS_BASE_URL}" \
+              --set-string "public-frontend.s3.internalUpstream=${S3_UPSTREAM}" \
+              --set-string "public-frontend.publicBaseUrl=${PUBLIC_FORMS_BASE_URL}" \
+              --set-string "public-backend.publicBaseUrl=${PUBLIC_FORMS_BASE_URL}" \
               ${{ inputs.params }} \
               --timeout 10m \
               --wait \

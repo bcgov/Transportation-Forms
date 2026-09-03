@@ -48,8 +48,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/*
 Frontend image reference.
-  ghcr.io/bcgov/transportation-forms/frontend:<tag>
+  ghcr.io/bcgov/transportation-forms/frontend:<tag|@digest>
 */}}
 {{- define "frontend.image" -}}
+{{- if .Values.image.digest }}
+{{- printf "%s/%s/frontend@%s" .Values.global.registry .Values.global.repository .Values.image.digest }}
+{{- else }}
 {{- printf "%s/%s/frontend:%s" .Values.global.registry .Values.global.repository .Values.image.tag }}
+{{- end }}
 {{- end }}

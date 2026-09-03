@@ -7,10 +7,11 @@ global:
 
 image:
   tag: test
+  digest: ""
 
 domain: apps.silver.devops.gov.bc.ca
 
-replicaCount: 2
+replicaCount: 1
 
 deploymentStrategy:
   type: RollingUpdate
@@ -19,16 +20,15 @@ deploymentStrategy:
     maxUnavailable: 0
 
 autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 5
-  targetCPUUtilizationPercentage: 80
+  enabled: false
 
 podDisruptionBudget:
-  enabled: true
-  minAvailable: 1
+  enabled: false
 
 route:
+  enabled: true
+
+networkPolicy:
   enabled: true
 
 # ── DPR-2: enable Coraza block mode in TEST ──────────────────────────────────

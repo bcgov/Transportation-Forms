@@ -63,7 +63,11 @@ Image reference. Honours .Values.image.repository if set, else falls back to
 */}}
 {{- define "public-frontend.image" -}}
 {{- $repo := .Values.image.repository | default (printf "%s/%s/public-frontend" .Values.global.registry .Values.global.repository) -}}
+{{- if .Values.image.digest }}
+{{- printf "%s@%s" $repo .Values.image.digest }}
+{{- else }}
 {{- printf "%s:%s" $repo .Values.image.tag }}
+{{- end }}
 {{- end }}
 
 {{/*

@@ -9,7 +9,7 @@ on:
         type: string
     secrets:
       oc_token:
-        required: true
+        required: false
 
 jobs:
   integration-tests:
@@ -41,6 +41,9 @@ jobs:
 
           echo "backend_url=${BACKEND_URL}"   >> "$GITHUB_OUTPUT"
           echo "frontend_url=${FRONTEND_URL}" >> "$GITHUB_OUTPUT"
+          if [[ "$TARGET" == "test" ]]; then
+            echo "public_frontend_url=https://forms-public-${RELEASE}.${DOMAIN}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Health check — backend
         shell: bash
@@ -91,4 +94,27 @@ jobs:
             exit 0
           fi
           echo "Unexpected status: ${STATUS}"
+          exit 1
+
+      - name: Health check — public frontend root
+        if: inputs.target == 'test' && steps.urls.outputs.public_frontend_url != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="${{ steps.urls.outputs.public_frontend_url }}"
+          echo "Checking public frontend: ${URL}"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "${URL}" || echo "000")
+            if [[ "$STATUS" == "200" ]]; then
+              echo "Public frontend healthy (HTTP ${STATUS})"
+              exit 0
+            fi
+            if [[ "$STATUS" == "403" ]]; then
+              echo "Public frontend Route reachable; BCGOV IP allowlist rejected this hosted runner (HTTP ${STATUS})"
+              exit 0
+            fi
+            echo "Attempt ${i}: got HTTP ${STATUS}, retrying in 15s..."
+            sleep 15
+          done
+          echo "Public frontend Route check failed after 5 attempts"
           exit 1

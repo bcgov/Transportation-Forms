@@ -48,10 +48,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/*
 Public-backend image reference.
-  ghcr.io/bcgov/transportation-forms/public-backend:<tag>
+  ghcr.io/bcgov/transportation-forms/public-backend:<tag|@digest>
 */}}
 {{- define "public-backend.image" -}}
+{{- if .Values.image.digest }}
+{{- printf "%s/%s/public-backend@%s" .Values.global.registry .Values.global.repository .Values.image.digest }}
+{{- else }}
 {{- printf "%s/%s/public-backend:%s" .Values.global.registry .Values.global.repository .Values.image.tag }}
+{{- end }}
 {{- end }}
 
 {{/*
