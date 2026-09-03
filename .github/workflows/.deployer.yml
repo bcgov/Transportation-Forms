@@ -150,11 +150,7 @@ jobs:
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           environment: ${{ inputs.environment }}
-          values_file: >-
-            ${{
-              inputs.environment == 'prod' && 'infra/charts/crunchy/values-prod.yml' ||
-              'infra/charts/crunchy/values.yml'
-            }}
+          values_file: infra/charts/crunchy/values.yml
           s3_access_key: ${{ secrets.s3_access_key }}
           s3_secret_key: ${{ secrets.s3_secret_key }}
           s3_bucket: ${{ secrets.s3_bucket }}
