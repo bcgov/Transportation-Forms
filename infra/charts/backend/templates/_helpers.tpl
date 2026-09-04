@@ -48,16 +48,24 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/*
 Backend image reference.
-  ghcr.io/bcgov/transportation-forms/backend:<tag>
+  ghcr.io/bcgov/transportation-forms/backend:<tag|@digest>
 */}}
 {{- define "backend.image" -}}
+{{- if .Values.image.digest }}
+{{- printf "%s/%s/backend@%s" .Values.global.registry .Values.global.repository .Values.image.digest }}
+{{- else }}
 {{- printf "%s/%s/backend:%s" .Values.global.registry .Values.global.repository .Values.image.tag }}
+{{- end }}
 {{- end }}
 
 {{/*
 Migrations image reference.
-  ghcr.io/bcgov/transportation-forms/migrations:<tag>
+  ghcr.io/bcgov/transportation-forms/migrations:<tag|@digest>
 */}}
 {{- define "backend.migrationsImage" -}}
+{{- if .Values.image.migrationsDigest }}
+{{- printf "%s/%s/migrations@%s" .Values.global.registry .Values.global.repository .Values.image.migrationsDigest }}
+{{- else }}
 {{- printf "%s/%s/migrations:%s" .Values.global.registry .Values.global.repository .Values.image.migrationsTag }}
+{{- end }}
 {{- end }}

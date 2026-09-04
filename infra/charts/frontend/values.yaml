@@ -10,6 +10,7 @@ global:
 # ── Image tag (scoped to this chart; overridden by parent umbrella chart) ─────
 image:
   tag: latest
+  digest: ""
 
 # ── OpenShift domain (used to build route hostnames) ─────────────────────────
 domain: apps.silver.devops.gov.bc.ca
@@ -80,6 +81,7 @@ affinity:
 # ── OpenShift Routes (disable for local k8s / Rancher Desktop) ────────────────
 routes:
   enabled: true
+  host: ""
 
 # ── Network Policies ──────────────────────────────────────────────────────────
 networkPolicy:

@@ -1,0 +1,139 @@
+name: Deploy to TST
+
+on:
+  push:
+    tags:
+      - 'v*-rc.*'
+      # Pre-merge workflow test: tag this branch with test-tst-<name>.
+      # This executes branch workflow/chart code using the latest successful DEV images.
+      - 'test-tst-*'
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'DEV-validated Git revision to promote (branch, tag, or commit SHA)'
+        type: string
+        default: master
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+concurrency:
+  group: transportation-forms-test
+  cancel-in-progress: false
+
+jobs:
+  resolve-images:
+    name: Resolve immutable images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      commit_sha: ${{ steps.commit.outputs.sha }}
+      backend_digest: ${{ steps.digests.outputs.backend }}
+      migrations_digest: ${{ steps.digests.outputs.migrations }}
+      frontend_digest: ${{ steps.digests.outputs.frontend }}
+      public_backend_digest: ${{ steps.digests.outputs.public_backend }}
+      public_frontend_digest: ${{ steps.digests.outputs.public_frontend }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Resolve promotion commit
+        id: commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_REVISION: ${{ inputs.revision }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            if COMMIT_SHA="$(git rev-parse --verify "${REQUESTED_REVISION}^{commit}" 2>/dev/null)"; then
+              :
+            else
+              git fetch origin "$REQUESTED_REVISION" --quiet
+              COMMIT_SHA="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+            fi
+          elif [[ "$GITHUB_REF_NAME" == test-tst-* ]]; then
+            RUNS_JSON="$(gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/dev.yml/runs" \
+              -f branch=master \
+              -f status=success \
+              -f per_page=1)"
+            COMMIT_SHA="$(jq -er '.workflow_runs[0].head_sha' <<< "$RUNS_JSON")"
+            echo "Pre-merge test tag: promoting latest successful DEV commit ${COMMIT_SHA}"
+          else
+            COMMIT_SHA="$(git rev-list -n 1 "$GITHUB_REF")"
+          fi
+
+          if [[ ! "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Unable to resolve a DEV promotion commit" >&2
+            exit 1
+          fi
+          echo "sha=${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Require successful DEV deployment for commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ steps.commit.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUNS_JSON="$(gh api --method GET \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/dev.yml/runs" \
+            -f head_sha="${COMMIT_SHA}" \
+            -f status=completed \
+            -f per_page=100)"
+          MATCH_COUNT="$(jq --arg sha "$COMMIT_SHA" \
+            '[.workflow_runs[] | select(.head_sha == $sha and .conclusion == "success" and .path == ".github/workflows/dev.yml")] | length' \
+            <<< "$RUNS_JSON")"
+          if [[ "$MATCH_COUNT" -lt 1 ]]; then
+            echo "No successful dev.yml run found for ${COMMIT_SHA}" >&2
+            exit 1
+          fi
+
+      - name: Resolve package digests
+        id: tracker
+        uses: bcgov/actions/image-tracker@v0.5.0
+        with:
+          package: |
+            backend
+            migrations
+            frontend
+            public-backend
+            public-frontend
+          revision: ${{ steps.commit.outputs.sha }}
+          max_depth: 500
+          max_tags: 500
+
+      - name: Validate resolved digests
+        id: digests
+        env:
+          IMAGE_DIGESTS: ${{ steps.tracker.outputs.digests }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for PACKAGE in backend migrations frontend public-backend public-frontend; do
+            DIGEST="$(jq -er --arg package "$PACKAGE" '.[$package] | select(type == "string" and test("^sha256:[0-9a-f]{64}$"))' <<< "$IMAGE_DIGESTS")"
+            OUTPUT_NAME="${PACKAGE//-/_}"
+            echo "${OUTPUT_NAME}=${DIGEST}" >> "$GITHUB_OUTPUT"
+          done
+
+  deploy-test:
+    name: Deploy to TST
+    needs: resolve-images
+    uses: ./.github/workflows/.deployer.yml
+    with:
+      environment: test
+      backend_digest: ${{ needs.resolve-images.outputs.backend_digest }}
+      migrations_digest: ${{ needs.resolve-images.outputs.migrations_digest }}
+      frontend_digest: ${{ needs.resolve-images.outputs.frontend_digest }}
+      public_backend_digest: ${{ needs.resolve-images.outputs.public_backend_digest }}
+      public_frontend_digest: ${{ needs.resolve-images.outputs.public_frontend_digest }}
+      params: >-
+        --set global.secrets.persist=true
+    secrets: inherit

@@ -5,49 +5,10 @@ global:
   secrets:
     persist: true
 
-domain: apps.silver.devops.gov.bc.ca
-
 backend:
-  image:
-    tag: test
-    migrationsTag: test
-
-  replicaCount: 2
-
-  deploymentStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 5
-    targetCPUUtilizationPercentage: 80
-
   env:
     environment: test
-    sqlalchemyEcho: "false"
-    logLevel: WARNING
 
-  crunchy:
-    enabled: false
-
-frontend:
-  image:
-    tag: test
-
-  replicaCount: 2
-
-  deploymentStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 5
-    targetCPUUtilizationPercentage: 80
+public-backend:
+  env:
+    environment: test

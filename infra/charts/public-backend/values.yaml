@@ -8,6 +8,7 @@ global:
 # ── Image tag ─────────────────────────────────────────────────────────────────
 image:
   tag: latest
+  digest: ""
 
 # ── OpenShift domain (used to build route hostnames) ─────────────────────────
 domain: apps.silver.devops.gov.bc.ca

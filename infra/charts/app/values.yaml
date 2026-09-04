@@ -17,7 +17,9 @@ fullnameOverride: ""
 backend:
   image:
     tag: latest
+    digest: ""
     migrationsTag: latest
+    migrationsDigest: ""
 
   replicaCount: 1
 
@@ -90,6 +92,7 @@ backend:
 
   routes:
     enabled: true
+    host: ""
 
   networkPolicy:
     enabled: true
@@ -114,6 +117,7 @@ backend:
 frontend:
   image:
     tag: latest
+    digest: ""
 
   replicaCount: 1
 
@@ -181,12 +185,8 @@ frontend:
     enabled: true
 
 # ── Public-backend subchart values ──────────────────────────────────────────────
-# Disabled by default. Enable per-environment when ready to deploy.
-#
-# DPR-1 (FEAT-0005): the umbrella now gates this subchart on
-# `publicBackend.enabled` (camelCase top-level toggle below) instead of the
-# legacy `public-backend.enabled` flag. Default remains false so DEV/TEST/PROD
-# behaviour is unchanged.
+# The umbrella gates the public charts on the camelCase toggles below.
+# Both are enabled for cluster environments and disabled by values-local.yaml.
 publicBackend:
   enabled: true
 
@@ -198,6 +198,7 @@ public-backend:
 
   image:
     tag: latest
+    digest: ""
 
   replicaCount: 1
 
@@ -267,11 +268,10 @@ public-backend:
     enabled: true
 
 # ── Public-frontend subchart values ─────────────────────────────────────────────
-# Disabled by default. Enable per-environment alongside `publicFrontend.enabled`
-# once DPR-2 ships the NGINX + Coraza WAF config.
 public-frontend:
   image:
     tag: latest
+    digest: ""
 
   replicaCount: 1
 

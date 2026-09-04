@@ -1,0 +1,7 @@
+# TEST environment overrides for a minimal direct-chart deployment.
+global:
+  secrets:
+    persist: true
+
+env:
+  environment: test

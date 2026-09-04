@@ -11,6 +11,7 @@ on:
       - 'apps/public-frontend/**'
       - 'infra/charts/**'
       - 'requirements.txt'
+      - 'constraints.txt'
       - 'entrypoint.sh'
   workflow_dispatch:
     inputs:
@@ -36,16 +37,16 @@ jobs:
         include:
           - package: backend
             build_file: apps/backend/Dockerfile
-            triggers: ('apps/backend/' 'requirements.txt' 'entrypoint.sh')
+            triggers: ('apps/backend/' 'requirements.txt' 'constraints.txt' 'entrypoint.sh')
           - package: migrations
             build_file: apps/backend/migrations/Dockerfile
-            triggers: ('apps/backend/alembic/' 'apps/backend/alembic.ini' 'apps/backend/migrations/')
+            triggers: ('apps/backend/' 'requirements.txt' 'constraints.txt')
           - package: frontend
             build_file: apps/frontend/Dockerfile
             triggers: ('apps/frontend/')
           - package: public-backend
             build_file: apps/public-backend/Dockerfile
-            triggers: ('apps/public-backend/' 'infra/charts/public-backend/')
+            triggers: ('apps/public-backend/' 'requirements.txt' 'constraints.txt' 'infra/charts/public-backend/')
           - package: public-frontend
             build_file: apps/public-frontend/Dockerfile
             triggers: ('apps/public-frontend/' 'infra/charts/public-frontend/' 'infra/charts/public-frontend/files/')
@@ -64,7 +65,7 @@ jobs:
           fi
 
       - name: Build or retag ${{ matrix.package }}
-        uses: bcgov/action-builder-ghcr@v4.2.1
+        uses: bcgov/actions/builder-ghcr@v0.5.0
         with:
           package: ${{ matrix.package }}
           build_file: ${{ matrix.build_file }}
@@ -73,7 +74,8 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          #triggers: ${{ steps.triggers.outputs.value }}
+          ref: ${{ github.event_name == 'push' && github.event.before || 'HEAD^' }}
+          triggers: ${{ steps.triggers.outputs.value }}
 
   deploy-dev:
     name: Deploy to DEV
@@ -90,12 +92,12 @@ jobs:
       backend_tag: ${{ github.sha }}
       migrations_tag: ${{ github.sha }}
       frontend_tag: ${{ github.sha }}
+      public_backend_tag: ${{ github.sha }}
+      public_frontend_tag: ${{ github.sha }}
       public_forms_base_url: https://forms-public-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
       params: >-
         --set global.secrets.persist=false
         --set backend.env.corsOrigins=https://frontend-transportation-forms-dev.${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}
-        --set-string "public-backend.image.tag=${{ github.sha }}"
-        --set-string "public-frontend.image.tag=${{ github.sha }}"
     secrets:
       oc_token: ${{ secrets.OC_TOKEN }}
       database_url: ${{ secrets.DATABASE_URL }}

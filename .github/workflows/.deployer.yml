@@ -9,16 +9,54 @@ on:
         type: string
       backend_tag:
         description: "Image tag for the backend container"
-        required: true
+        required: false
         type: string
+        default: latest
+      backend_digest:
+        description: "Optional immutable digest for the backend container"
+        required: false
+        type: string
+        default: ""
       migrations_tag:
         description: "Image tag for the migrations init container"
-        required: true
+        required: false
         type: string
+        default: latest
+      migrations_digest:
+        description: "Optional immutable digest for the migrations init container"
+        required: false
+        type: string
+        default: ""
       frontend_tag:
         description: "Image tag for the frontend container"
-        required: true
+        required: false
         type: string
+        default: latest
+      frontend_digest:
+        description: "Optional immutable digest for the frontend container"
+        required: false
+        type: string
+        default: ""
+      public_backend_tag:
+        description: "Image tag for the public-backend container"
+        required: false
+        type: string
+        default: latest
+      public_backend_digest:
+        description: "Optional immutable digest for the public-backend container"
+        required: false
+        type: string
+        default: ""
+      public_frontend_tag:
+        description: "Image tag for the public-frontend container"
+        required: false
+        type: string
+        default: latest
+      public_frontend_digest:
+        description: "Optional immutable digest for the public-frontend container"
+        required: false
+        type: string
+        default: ""
       params:
         description: "Extra helm --set parameters (space-separated key=value pairs)"
         required: false
@@ -106,22 +144,68 @@ jobs:
 
       # ── Deploy Crunchy PostgreSQL ─────────────────────────────────────────
       - name: Deploy Crunchy PostgreSQL
+        id: crunchy
         uses: bcgov/action-crunchy@v2.1.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           environment: ${{ inputs.environment }}
-          values_file: >-
-            ${{
-              inputs.environment == 'prod' && 'infra/charts/crunchy/values-prod.yml' ||
-              inputs.environment == 'test' && 'infra/charts/crunchy/values-test.yml' ||
-              'infra/charts/crunchy/values.yml'
-            }}
+          values_file: infra/charts/crunchy/values.yml
           s3_access_key: ${{ secrets.s3_access_key }}
           s3_secret_key: ${{ secrets.s3_secret_key }}
           s3_bucket: ${{ secrets.s3_bucket }}
           s3_endpoint: ${{ secrets.s3_endpoint_url }}
+
+      - name: Configure application database schema
+        uses: bcgov/action-oc-runner@v1.4.1
+        with:
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_token: ${{ secrets.oc_token }}
+          oc_server: ${{ vars.OC_SERVER }}
+          commands: |
+            set -euo pipefail
+            CLUSTER="${{ steps.crunchy.outputs.cluster }}"
+            DATABASE="transportation_forms"
+            DATABASE_USER="${{ inputs.db_user }}"
+            PRIMARY_POD="$(oc get pods \
+              -l "postgres-operator.crunchydata.com/cluster=${CLUSTER},postgres-operator.crunchydata.com/role=master" \
+              -o jsonpath='{.items[0].metadata.name}')"
+
+            if oc exec "${PRIMARY_POD}" -c database -- \
+              psql -U postgres -d "${DATABASE}" -Atqc \
+              "SELECT to_regclass('public.alembic_version') IS NOT NULL" | grep -qx t; then
+              echo "Existing public-schema database detected; preserving its search path."
+              oc exec "${PRIMARY_POD}" -c database -- \
+                psql -U postgres -d "${DATABASE}" -v ON_ERROR_STOP=1 \
+                -c "GRANT USAGE, CREATE ON SCHEMA public TO \"${DATABASE_USER}\""
+            else
+              oc annotate postgrescluster "${CLUSTER}" \
+                postgres-operator.crunchydata.com/autoCreateUserSchema=true \
+                --overwrite
+
+              for ATTEMPT in $(seq 1 30); do
+                if oc exec "${PRIMARY_POD}" -c database -- \
+                  psql -U postgres -d "${DATABASE}" -Atqc \
+                  "SELECT EXISTS (
+                     SELECT 1
+                     FROM pg_namespace n
+                     JOIN pg_roles r ON r.oid = n.nspowner
+                     WHERE n.nspname = '${DATABASE_USER}'
+                       AND r.rolname = '${DATABASE_USER}'
+                   )" | grep -qx t; then
+                  echo "Application schema ${DATABASE_USER} is ready."
+                  break
+                fi
+
+                if [[ "${ATTEMPT}" -eq 30 ]]; then
+                  echo "Crunchy did not create schema ${DATABASE_USER}." >&2
+                  exit 1
+                fi
+                echo "Waiting for application schema (${ATTEMPT}/30)..."
+                sleep 2
+              done
+            fi
 
       # ── Deploy application via Helm ───────────────────────────────────────
       - name: Update Helm dependencies
@@ -147,7 +231,19 @@ jobs:
             BACKEND_TAG="${{ inputs.backend_tag }}"
             MIGRATIONS_TAG="${{ inputs.migrations_tag }}"
             FRONTEND_TAG="${{ inputs.frontend_tag }}"
+            PUBLIC_BACKEND_TAG="${{ inputs.public_backend_tag }}"
+            PUBLIC_FRONTEND_TAG="${{ inputs.public_frontend_tag }}"
             ENV="${{ inputs.environment }}"
+            TARGET_DOMAIN="${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}"
+            FRONTEND_HOST="frontend-${RELEASE_NAME}.${TARGET_DOMAIN}"
+            if [[ "${ENV}" == "test" ]]; then
+              FRONTEND_HOST="staff-${RELEASE_NAME}.${TARGET_DOMAIN}"
+            fi
+            FRONTEND_BASE_URL="https://${FRONTEND_HOST}"
+            PUBLIC_FORMS_BASE_URL="${{ inputs.public_forms_base_url }}"
+            if [[ -z "${PUBLIC_FORMS_BASE_URL}" ]]; then
+              PUBLIC_FORMS_BASE_URL="https://forms-public-${RELEASE_NAME}.${TARGET_DOMAIN}"
+            fi
             JWT_PRIVATE_KEY_FILE="$(mktemp)"
             JWT_PUBLIC_KEY_FILE="$(mktemp)"
             trap 'rm -f "${JWT_PRIVATE_KEY_FILE}" "${JWT_PUBLIC_KEY_FILE}"' EXIT
@@ -179,27 +275,37 @@ jobs:
               -f "${CHART}/values.yaml" \
               ${VALUES_OVERRIDE} \
               --set-string backend.image.tag="${BACKEND_TAG}" \
+              --set-string backend.image.digest="${{ inputs.backend_digest }}" \
               --set-string backend.image.migrationsTag="${MIGRATIONS_TAG}" \
+              --set-string backend.image.migrationsDigest="${{ inputs.migrations_digest }}" \
               --set-string frontend.image.tag="${FRONTEND_TAG}" \
-              --set global.registry=ghcr.io \
-              --set global.repository=bcgov/transportation-forms \
-              --set backend.secrets.databaseUrl="${{ secrets.database_url }}" \
-              --set backend.secrets.secretKey="${{ secrets.secret_key }}" \
+              --set-string frontend.image.digest="${{ inputs.frontend_digest }}" \
+              --set-string frontend.routes.host="${FRONTEND_HOST}" \
+              --set-string public-backend.image.tag="${PUBLIC_BACKEND_TAG}" \
+              --set-string public-backend.image.digest="${{ inputs.public_backend_digest }}" \
+              --set-string public-frontend.image.tag="${PUBLIC_FRONTEND_TAG}" \
+              --set-string public-frontend.image.digest="${{ inputs.public_frontend_digest }}" \
+              --set-string global.registry=ghcr.io \
+              --set-string global.repository=bcgov/transportation-forms \
+              --set-string backend.secrets.databaseUrl="${{ secrets.database_url }}" \
+              --set-string backend.secrets.secretKey="${{ secrets.secret_key }}" \
               --set-file backend.secrets.jwtPrivateKeyPem="${JWT_PRIVATE_KEY_FILE}" \
               --set-file backend.secrets.jwtPublicKeyPem="${JWT_PUBLIC_KEY_FILE}" \
-              --set backend.secrets.s3EndpointUrl="${S3_ENDPOINT_CLEAN}" \
-              --set backend.secrets.s3AccessKey="${{ secrets.s3_access_key }}" \
-              --set backend.secrets.s3SecretKey="${{ secrets.s3_secret_key }}" \
-              --set backend.secrets.s3Bucket="${S3_BUCKET_CLEAN}" \
-              --set backend.secrets.keycloakServerUrl="${{ secrets.keycloak_server_url }}" \
-              --set backend.secrets.keycloakRealm="${{ secrets.keycloak_realm }}" \
-              --set backend.secrets.keycloakClientId="${{ secrets.keycloak_client_id }}" \
-              --set backend.secrets.keycloakClientSecret="${{ secrets.keycloak_client_secret }}" \
-              --set backend.secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
-              --set backend.secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
-              --set "public-frontend.s3.internalUpstream=${S3_UPSTREAM}" \
-              --set "public-frontend.publicBaseUrl=${{ inputs.public_forms_base_url }}" \
-              --set "public-backend.publicBaseUrl=${{ inputs.public_forms_base_url }}" \
+              --set-string backend.secrets.s3EndpointUrl="${S3_ENDPOINT_CLEAN}" \
+              --set-string backend.secrets.s3AccessKey="${{ secrets.s3_access_key }}" \
+              --set-string backend.secrets.s3SecretKey="${{ secrets.s3_secret_key }}" \
+              --set-string backend.secrets.s3Bucket="${S3_BUCKET_CLEAN}" \
+              --set-string backend.secrets.keycloakServerUrl="${{ secrets.keycloak_server_url }}" \
+              --set-string backend.secrets.keycloakRealm="${{ secrets.keycloak_realm }}" \
+              --set-string backend.secrets.keycloakClientId="${{ secrets.keycloak_client_id }}" \
+              --set-string backend.secrets.keycloakClientSecret="${{ secrets.keycloak_client_secret }}" \
+              --set-string backend.secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
+              --set-string backend.secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
+              --set-string backend.env.corsOrigins="${FRONTEND_BASE_URL}" \
+              --set-string public-backend.env.publicCorsOrigins="${PUBLIC_FORMS_BASE_URL}" \
+              --set-string "public-frontend.s3.internalUpstream=${S3_UPSTREAM}" \
+              --set-string "public-frontend.publicBaseUrl=${PUBLIC_FORMS_BASE_URL}" \
+              --set-string "public-backend.publicBaseUrl=${PUBLIC_FORMS_BASE_URL}" \
               ${{ inputs.params }} \
               --timeout 10m \
               --wait \

@@ -14,6 +14,7 @@ cache:
 image:
   repository: ghcr.io/bcgov/transportation-forms/public-frontend
   tag: latest
+  digest: ""
   pullPolicy: Always
 
 # ── OpenShift domain (used to build route hostnames) ─────────────────────────
@@ -37,7 +38,7 @@ containerPort: 3000
 healthPort: 3001
 servicePort: 3000
 
-# Recreate when a single replica; switch to RollingUpdate in test/prod values.
+# Recreate is appropriate while cluster environments run a single replica.
 deploymentStrategy:
   type: Recreate
 
