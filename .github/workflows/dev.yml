@@ -11,6 +11,7 @@ on:
       - 'apps/public-frontend/**'
       - 'infra/charts/**'
       - 'requirements.txt'
+      - 'constraints.txt'
       - 'entrypoint.sh'
   workflow_dispatch:
     inputs:
@@ -36,16 +37,16 @@ jobs:
         include:
           - package: backend
             build_file: apps/backend/Dockerfile
-            triggers: ('apps/backend/' 'requirements.txt' 'entrypoint.sh')
+            triggers: ('apps/backend/' 'requirements.txt' 'constraints.txt' 'entrypoint.sh')
           - package: migrations
             build_file: apps/backend/migrations/Dockerfile
-            triggers: ('apps/backend/alembic/' 'apps/backend/alembic.ini' 'apps/backend/migrations/')
+            triggers: ('apps/backend/' 'requirements.txt' 'constraints.txt')
           - package: frontend
             build_file: apps/frontend/Dockerfile
             triggers: ('apps/frontend/')
           - package: public-backend
             build_file: apps/public-backend/Dockerfile
-            triggers: ('apps/public-backend/' 'infra/charts/public-backend/')
+            triggers: ('apps/public-backend/' 'requirements.txt' 'constraints.txt' 'infra/charts/public-backend/')
           - package: public-frontend
             build_file: apps/public-frontend/Dockerfile
             triggers: ('apps/public-frontend/' 'infra/charts/public-frontend/' 'infra/charts/public-frontend/files/')
@@ -73,6 +74,7 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
+          ref: ${{ github.event_name == 'push' && github.event.before || 'HEAD^' }}
           triggers: ${{ steps.triggers.outputs.value }}
 
   deploy-dev:
