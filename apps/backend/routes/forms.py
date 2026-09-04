@@ -4,6 +4,7 @@ Provides RESTful endpoints for form CRUD operations with proper validation,
 error handling, and authorization checks.
 """
 
+import logging
 from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
@@ -30,6 +31,8 @@ from backend.services.forms import FormService
 from backend.services import s3_service
 from backend.services.s3_service import S3ObjectNotFound, MIME_TYPE_MAP
 
+logger = logging.getLogger(__name__)
+
 # ============================================================================
 # Pydantic Models (Request/Response)
 # ============================================================================
@@ -40,6 +43,12 @@ class BusinessAreaRef(BaseModel):
 
     id: str
     name: str
+
+
+class BusinessAreaDetailRef(BusinessAreaRef):
+    """Business area data available only through an authorized form detail."""
+
+    mailbox: Optional[str] = None
 
 
 class FormCreateRequest(BaseModel):
@@ -198,6 +207,12 @@ class FormResponse(BaseModel):
     collects_personal_info: str
     created_at: str
     updated_at: str
+
+
+class FormDetailResponse(FormResponse):
+    """Single-form response with authorized Business Area contact data."""
+
+    business_area: Optional[BusinessAreaDetailRef] = None
 
 
 class FormListResponse(BaseModel):
@@ -359,10 +374,11 @@ async def upload_form_attachment(
             object_key=object_key,
             file_type=file_type,
         )
-    except Exception as exc:
+    except Exception:
+        logger.error("Form attachment upload failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"File upload failed: {exc}",
+            detail="File upload failed",
         )
 
 
@@ -596,12 +612,12 @@ async def download_form_attachment(
     )
 
 
-@router.get("/{form_id}", response_model=FormResponse)
+@router.get("/{form_id}", response_model=FormDetailResponse)
 async def get_form(
     form_id: str,
     current_user: TokenData = Depends(require_permission("forms", "read")),
     db: Session = Depends(get_db),
-) -> FormResponse:
+) -> FormDetailResponse:
     """Get a form by ID."""
     # FEAT-0018: Enforce form:read permission
     user_perms = set(current_user.permissions or [])
@@ -627,7 +643,7 @@ async def get_form(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
 
-        return FormResponse(**form_data)
+        return FormDetailResponse(**form_data)
 
     except ValueError:
         raise HTTPException(

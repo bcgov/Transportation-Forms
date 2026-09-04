@@ -20,7 +20,7 @@ import {
     isStaffViewerOnly,
 } from '../auth.js';
 import { getCurrentUser } from '../state.js';
-import { openFormViewPopup, downloadFormAttachment } from '../shared/form-view-popup.js';
+import { openFormDetailsDrawer, downloadFormAttachment } from '../shared/form-details-drawer.js';
 
 // ── Module-private pagination state ──────────────────────────────────────────
 let _currentSkip = 0;
@@ -43,6 +43,7 @@ const DEFAULT_RESULTS_LAYOUT = 'list';
 const RESULTS_LAYOUTS = new Set(['list', 'grid']);
 const RESULTS_LAYOUT_STORAGE_PREFIX = 'transportation-forms:forms-layout:v1:';
 const FORM_WORKFLOW_STATES = new Set(['draft', 'pending_review', 'published', 'archived']);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // ── Module-private setup flag & navigate callback ─────────────────────────────
 let _initialized = false;
@@ -388,7 +389,7 @@ function _formatStatus(status) {
  * @param {object} form  Form object from the API (includes status, created_by, id).
  * @returns {string} HTML string of buttons.
  */
-function _renderFormActionButtons(form) {
+export function _renderFormActionButtons(form) {
     const buttons = [];
     const id = _escapeAttribute(form.id);
     const formLabel = _escapeAttribute(getFormNumberDisplay(form));
@@ -396,8 +397,11 @@ function _renderFormActionButtons(form) {
     const user = getCurrentUser();
     const isKnownStatus = FORM_WORKFLOW_STATES.has(status);
     if (!isKnownStatus || !user || !Array.isArray(user.permissions)) return '';
-    const userId = user?.id || '';
-    const isOwner = form.created_by?.id === userId;
+    const userId = user?.id;
+    const creatorId = form.created_by?.id;
+    if (typeof userId !== 'string' || !UUID_PATTERN.test(userId)
+        || typeof creatorId !== 'string' || !UUID_PATTERN.test(creatorId)) return '';
+    const isOwner = creatorId === userId;
 
     // Edit — draft + published, form:edit
     if ((status === 'draft' || status === 'published') && hasPermission('form:edit')) {
@@ -637,29 +641,34 @@ function _applyResultsLayout(layout) {
 
 function _handleFormsListClick(e) {
     const viewBtn = e.target.closest('[data-action="view-form"]');
-    const deleteBtn = e.target.closest('[data-action="delete-form"]');
-    const navBtn = e.target.closest('[data-action="navigate"]');
-    const submitBtn = e.target.closest('[data-action="submit-form"]');
-    const archiveBtn = e.target.closest('[data-action="archive-form"]');
-    const restoreBtn = e.target.closest('[data-action="restore-form"]');
     const downloadBtn = e.target.closest('[data-action="download-form-file"]');
+    const workflowBtn = e.target.closest(
+        '[data-action="delete-form"], [data-action="navigate"], '
+        + '[data-action="submit-form"], [data-action="archive-form"], '
+        + '[data-action="restore-form"]'
+    );
 
     if (viewBtn) {
         _viewForm(viewBtn.dataset.formId, viewBtn);
     } else if (downloadBtn) {
         // US-009 — reuse the shared internal Download control (AC2 / BR-01).
         downloadFormAttachment(downloadBtn.dataset.formId, downloadBtn.dataset.formFilename);
-    } else if (deleteBtn) {
-        _deleteForm(deleteBtn.dataset.formId, deleteBtn.dataset.formTitle);
-    } else if (submitBtn) {
-        _submitForm(submitBtn.dataset.formId, submitBtn.dataset.formTitle);
-    } else if (archiveBtn) {
-        _archiveFormFromList(archiveBtn.dataset.formId, archiveBtn.dataset.formTitle);
-    } else if (restoreBtn) {
-        _restoreFormFromList(restoreBtn.dataset.formId, restoreBtn.dataset.formTitle);
-    } else if (navBtn) {
-        _navigate(navBtn.dataset.route);
+    } else if (workflowBtn) {
+        handleFormWorkflowAction(workflowBtn);
     }
+}
+
+export async function handleFormWorkflowAction(actionElement) {
+    const { action, formId, formTitle, route } = actionElement?.dataset || {};
+    if (action === 'delete-form') return _deleteForm(formId, formTitle);
+    if (action === 'submit-form') return _submitForm(formId, formTitle);
+    if (action === 'archive-form') return _archiveFormFromList(formId, formTitle);
+    if (action === 'restore-form') return _restoreFormFromList(formId, formTitle);
+    if (action === 'navigate' && route) {
+        _navigate(route);
+        return true;
+    }
+    return false;
 }
 
 function _updatePaginationControls(total) {
@@ -876,9 +885,7 @@ function _selectSearchSuggestion(value) {
 // ── Form card actions ─────────────────────────────────────────────────────────
 
 async function _viewForm(formId, openerElement = null) {
-    // FEAT-0027 US-006 / US-008 — delegate to the shared View Details popup
-    // component so the same UI is presented from every entry point.
-    await openFormViewPopup({
+    await openFormDetailsDrawer({
         formId,
         mode: 'default',
         openerElement,
@@ -887,7 +894,7 @@ async function _viewForm(formId, openerElement = null) {
 
 async function _deleteForm(formId, formTitle) {
     const title = formTitle || 'this form';
-    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return null;
 
     try {
         const response = await fetch(`${API_BASE}/forms/${formId}`, {
@@ -901,14 +908,16 @@ async function _deleteForm(formId, formTitle) {
 
         showAlert('Form deleted successfully', 'success');
         loadForms();
+        return true;
     } catch (error) {
         showAlert('Error deleting form: ' + error.message, 'danger');
+        return false;
     }
 }
 
 async function _submitForm(formId, formTitle) {
     const title = formTitle || 'this form';
-    if (!confirm(`Submit "${title}" for review?`)) return;
+    if (!confirm(`Submit "${title}" for review?`)) return null;
 
     try {
         const response = await fetch(`${API_BASE}/staff/forms/${formId}/submit`, {
@@ -922,14 +931,16 @@ async function _submitForm(formId, formTitle) {
 
         showAlert('Form submitted for review successfully.', 'success');
         loadForms();
+        return true;
     } catch (error) {
         showAlert('Error submitting form: ' + error.message, 'danger');
+        return false;
     }
 }
 
 async function _archiveFormFromList(formId, formTitle) {
     const title = formTitle || 'this form';
-    if (!confirm(`Archive "${title}"? It will no longer be publicly available.`)) return;
+    if (!confirm(`Archive "${title}"? It will no longer be publicly available.`)) return null;
 
     try {
         const response = await fetch(`${API_BASE}/staff/forms/${formId}/archive`, {
@@ -943,14 +954,16 @@ async function _archiveFormFromList(formId, formTitle) {
 
         showAlert('Form archived successfully.', 'success');
         loadForms();
+        return true;
     } catch (error) {
         showAlert('Error archiving form: ' + error.message, 'danger');
+        return false;
     }
 }
 
 async function _restoreFormFromList(formId, formTitle) {
     const title = formTitle || 'this form';
-    if (!confirm(`Restore "${title}" to published status?`)) return;
+    if (!confirm(`Restore "${title}" to published status?`)) return null;
 
     try {
         const response = await fetch(`${API_BASE}/staff/forms/${formId}/restore`, {
@@ -964,8 +977,10 @@ async function _restoreFormFromList(formId, formTitle) {
 
         showAlert('Form restored to published status.', 'success');
         loadForms();
+        return true;
     } catch (error) {
         showAlert('Error restoring form: ' + error.message, 'danger');
+        return false;
     }
 }
 

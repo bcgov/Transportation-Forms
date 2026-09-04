@@ -270,7 +270,13 @@ export async function routeHandler(path, params = {}) {
 
   if (isAuthenticated() && !_canAccessOperationalRoute(path)) {
     window.dispatchEvent(new CustomEvent('app:route-changing', { detail: { path: 'denied' } }));
-    showAlert('You do not have permission to access that page.', 'warning');
+    if (path.startsWith('/forms/')) {
+      const { DEEPLINK_DENIED_TOAST } = await import('./shared/form-details-drawer.js');
+      const { showNotification } = await import('./utils.js');
+      showNotification(DEEPLINK_DENIED_TOAST, 'warning');
+    } else {
+      showAlert('You do not have permission to access that page.', 'warning');
+    }
     _currentRoute = 'not-found';
     _routeParams = {};
     const { showNotFoundView } = await import('./views/not-found.js');
@@ -352,7 +358,7 @@ export async function routeHandler(path, params = {}) {
 
   } else if (path.startsWith('/forms/')) {
     // FEAT-0027 US-008 — deep-link `/forms/<form_uuid>` opens the Forms list
-    // and auto-opens the View Details popup for that form. All failure branches
+    // and auto-opens the form-details drawer for that form. All failure branches
     // (invalid UUID, form does not exist, caller lacks form:read) surface the
     // SAME generic toast to avoid the information leak in CC-BR-05 / AC7 / AC8.
     const formId = path.replace('/forms/', '').replace(/\/$/, '');
@@ -360,13 +366,13 @@ export async function routeHandler(path, params = {}) {
     _routeParams = { deepLinkFormId: formId };
     const { showListView } = await import('./views/list.js');
     await showListView();
-    const { openFormViewPopup, DEEPLINK_DENIED_TOAST } =
-      await import('./shared/form-view-popup.js');
+    const { openFormDetailsDrawer, DEEPLINK_DENIED_TOAST } =
+      await import('./shared/form-details-drawer.js');
     const { showNotification } = await import('./utils.js');
     if (!formId || !_isUuidLike(formId)) {
       showNotification(DEEPLINK_DENIED_TOAST, 'warning');
     } else {
-      await openFormViewPopup({ formId });
+      await openFormDetailsDrawer({ formId });
     }
 
   } else if (path === ROUTES.CALLBACK) {

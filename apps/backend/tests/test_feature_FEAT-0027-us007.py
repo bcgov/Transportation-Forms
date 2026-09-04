@@ -22,7 +22,6 @@ FRONTEND = APPS_DIR / "frontend"
 
 RESERVATION_POPUP = FRONTEND / "js" / "shared" / "reservation-view-popup.js"
 APPROVALS_VIEW = FRONTEND / "js" / "views" / "approvals.js"
-FORM_POPUP = FRONTEND / "js" / "shared" / "form-view-popup.js"
 INDEX_HTML = FRONTEND / "index.html"
 
 

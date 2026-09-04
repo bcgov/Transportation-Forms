@@ -85,7 +85,7 @@ def test_refresh_reloads_authorization_and_invalidates_sensitive_ui() -> None:
     refresh = _source("js/token-refresh.js")
     router = _source("js/router.js")
     forms = _source("js/views/forms-list.js")
-    popup = _source("js/shared/form-view-popup.js")
+    drawer = _source("js/shared/form-details-drawer.js")
 
     assert "fetch(`${API_BASE}/auth/me`" in refresh
     assert "parseAuthorizationContext(user)" in refresh
@@ -94,10 +94,10 @@ def test_refresh_reloads_authorization_and_invalidates_sensitive_ui() -> None:
     assert "auth:authorization-refreshed', updateAuthUi" in auth
     assert "auth:authorization-refreshed', () =>" in router
     assert "auth:authorization-refreshed', _resetFormsListLifecycle" in forms
-    assert "_formRequestController?.abort()" in popup
-    assert "popupGeneration !== _popupGeneration" in popup
-    assert "auth:authorization-refreshed', _resetPopupLifecycle" in popup
-    assert "body.replaceChildren()" in popup
+    assert "_formRequestController?.abort()" in drawer
+    assert "drawerGeneration !== _drawerGeneration" in drawer
+    assert "auth:authorization-refreshed', _resetDrawerLifecycle" in drawer
+    assert "_clearDrawerContent()" in drawer
 
 
 def test_reservation_popup_is_invalidated_on_route_and_auth_changes() -> None:

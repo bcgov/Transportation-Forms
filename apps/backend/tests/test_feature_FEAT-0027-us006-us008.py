@@ -18,7 +18,7 @@ from pathlib import Path
 APPS_DIR = Path(__file__).resolve().parents[2]
 FRONTEND = APPS_DIR / "frontend"
 
-SHARED_POPUP = FRONTEND / "js" / "shared" / "form-view-popup.js"
+SHARED_POPUP = FRONTEND / "js" / "shared" / "form-details-drawer.js"
 FORMS_LIST_VIEW = FRONTEND / "js" / "views" / "forms-list.js"
 APPROVALS_VIEW = FRONTEND / "js" / "views" / "approvals.js"
 ROUTER_JS = FRONTEND / "js" / "router.js"
@@ -73,10 +73,10 @@ class TestUS006ApprovalsViewButton:
         """AC2 / BR-02 — the click handler opens the SHARED popup with
         mode='approvals' and forwards the row context."""
         src = _strip_js_comments(_read(APPROVALS_VIEW))
-        # Match a call to openFormViewPopup(...) whose argument object contains
+        # Match a call to openFormDetailsDrawer(...) whose argument object contains
         # mode: 'approvals' and forwards requesterName + submittedAt.
         pattern = re.compile(
-            r"openFormViewPopup\s*\(\s*\{[^}]*mode\s*:\s*['\"]approvals['\"][^}]*\}\s*\)",
+            r"openFormDetailsDrawer\s*\(\s*\{[^}]*mode\s*:\s*['\"]approvals['\"][^}]*\}\s*\)",
             re.DOTALL,
         )
         assert pattern.search(src), (
@@ -87,8 +87,8 @@ class TestUS006ApprovalsViewButton:
         """BR-02 — the approvals view MUST import the shared popup module
         rather than duplicating rendering logic."""
         src = _read(APPROVALS_VIEW)
-        assert "from '../shared/form-view-popup.js'" in src, (
-            "approvals.js must import the shared form-view-popup module"
+        assert "from '../shared/form-details-drawer.js'" in src, (
+            "approvals.js must import the shared form-details drawer module"
         )
 
 
@@ -99,14 +99,15 @@ class TestUS006SharedPopupApprovalsMode:
         """AC2 — approvals mode renders a labelled Request Context section
         with Requester + Submitted date."""
         src = _strip_js_comments(_read(SHARED_POPUP))
-        assert "_renderRequestContextHtml" in src, (
+        assert "_renderRequestContext" in src, (
             "Shared popup must render request-context section in approvals mode"
         )
+        markup = _read(FRONTEND / "index.html")
         # The context section must expose test hooks for both fields.
-        assert 'data-testid="request-context-requester"' in src, (
+        assert 'data-testid="request-context-requester"' in markup, (
             "Request context must expose a Requester field — US-006 AC2"
         )
-        assert 'data-testid="request-context-submitted-at"' in src, (
+        assert 'data-testid="request-context-submitted-at"' in markup, (
             "Request context must expose a Submitted date field — US-006 AC2"
         )
 
@@ -135,7 +136,7 @@ class TestUS006SharedPopupApprovalsMode:
         assert "approvalsFormRejectModal" in src, (
             "Popup Reject must reuse the existing Approvals Reject modal — CC-BR-04"
         )
-        assert "form-view-popup:reject-request" in src, (
+        assert "form-details-drawer:reject-request" in src, (
             "Popup Reject must hand the target formId back to approvals.js "
             "via the form-view-popup:reject-request event"
         )
@@ -145,11 +146,11 @@ class TestUS006SharedPopupApprovalsMode:
         emitted by the shared popup so a single _actionFormId flows through
         the same server call as the inline Reject control."""
         src = _strip_js_comments(_read(APPROVALS_VIEW))
-        assert "'form-view-popup:reject-request'" in src, (
+        assert "'form-details-drawer:reject-request'" in src, (
             "approvals.js must listen for form-view-popup:reject-request "
             "so the popup and inline reject share one server flow — CC-BR-04"
         )
-        assert "'form-view-popup:action-complete'" in src, (
+        assert "'form-details-drawer:action-complete'" in src, (
             "approvals.js must listen for form-view-popup:action-complete "
             "so the list refresh mirrors the inline flow — CC-BR-04"
         )
@@ -166,10 +167,11 @@ class TestUS006SharedPopupApprovalsMode:
         )
         assert m, "Approve render helper missing"
         body = m.group(1)
-        assert "hasPermission('form:approve')" in body, (
+        policy = src.split("function getFormApprovalActionState", maxsplit=1)[1]
+        assert "hasPermission('form:approve')" in policy, (
             "Approve button gating must check form:approve — US-006 AC5"
         )
-        assert "hasPermission('form:review')" in body, (
+        assert "hasPermission('form:review')" in policy, (
             "Approve button gating must check form:review — US-006 AC5"
         )
         assert "disabled" in body, (
@@ -202,7 +204,8 @@ class TestUS006SharedPopupApprovalsMode:
         )
         assert m, "Reject render helper missing"
         body = m.group(1)
-        assert "hasPermission('form:approve')" in body, (
+        policy = src.split("function getFormApprovalActionState", maxsplit=1)[1]
+        assert "hasPermission('form:approve')" in policy, (
             "Reject gating must check form:approve — US-006 AC6"
         )
         assert "disabled" in body
@@ -211,10 +214,8 @@ class TestUS006SharedPopupApprovalsMode:
         """AC8 — closing the popup returns keyboard focus to the opener
         element (View button)."""
         src = _strip_js_comments(_read(SHARED_POPUP))
-        assert "hidden.bs.modal" in src, (
-            "Popup must handle Bootstrap's hidden.bs.modal event — AC8"
-        )
-        assert "_openerElement" in src and ".focus(" in src, (
+        assert "_closeDrawer" in src
+        assert "_openerElement" in src and "focusTarget?.focus()" in src, (
             "Popup must call opener.focus() on close — AC8"
         )
 
@@ -230,10 +231,11 @@ class TestUS008ShareButton:
     def test_shared_popup_renders_share_button(self):
         """AC2 — the popup renders a Share button in every entry point."""
         src = _strip_js_comments(_read(SHARED_POPUP))
-        assert 'data-action="form-view-share"' in src, (
+        markup = _read(FRONTEND / "index.html")
+        assert 'data-action="form-details-share"' in markup, (
             "Popup must render a Share button — US-008 AC2"
         )
-        assert 'aria-label="Share"' in src, (
+        assert 'aria-label="Share"' in markup, (
             "Share button must expose an aria-label (AC12 / CC-BR-06)"
         )
 
@@ -317,8 +319,8 @@ class TestUS008DeepLinkRouter:
         assert "path.startsWith('/forms/')" in src, (
             "Router must handle `/forms/<uuid>` — US-008 AC6"
         )
-        assert "openFormViewPopup" in src, (
-            "Deep-link route must open the shared popup — US-008 AC6"
+        assert "openFormDetailsDrawer" in src, (
+            "Deep-link route must open the shared drawer — US-008 AC6"
         )
 
     def test_router_uses_uuid_shape_guard(self):
@@ -388,11 +390,11 @@ class TestUS008AndUS006SharedComponent:
 
     def test_forms_list_delegates_to_shared_popup(self):
         src = _strip_js_comments(_read(FORMS_LIST_VIEW))
-        assert "from '../shared/form-view-popup.js'" in src, (
-            "forms-list.js must import the shared popup component — BR-02"
+        assert "from '../shared/form-details-drawer.js'" in src, (
+            "forms-list.js must import the shared drawer component — BR-02"
         )
-        assert "openFormViewPopup" in src, (
-            "forms-list.js must call openFormViewPopup — BR-02"
+        assert "openFormDetailsDrawer" in src, (
+            "forms-list.js must call openFormDetailsDrawer — BR-02"
         )
 
     def test_forms_list_no_longer_inlines_form_details_markup(self):

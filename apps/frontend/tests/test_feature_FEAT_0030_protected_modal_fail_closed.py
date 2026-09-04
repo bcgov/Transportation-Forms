@@ -11,10 +11,7 @@ def _source(relative_path: str) -> str:
 
 
 def test_protected_modals_force_closed_state_on_lifecycle_reset() -> None:
-    for relative_path in (
-        "js/shared/form-view-popup.js",
-        "js/shared/reservation-view-popup.js",
-    ):
+    for relative_path in ("js/shared/reservation-view-popup.js",):
         popup = _source(relative_path)
         hide_modal = popup.split("function _hideModal()", maxsplit=1)[1].split(
             "function _resetPopupLifecycle()", maxsplit=1
@@ -30,3 +27,17 @@ def test_protected_modals_force_closed_state_on_lifecycle_reset() -> None:
         assert "if (!document.querySelector('.modal.show'))" in hide_modal
         assert "document.body.classList.remove('modal-open')" in hide_modal
         assert "backdrop.remove()" in hide_modal
+
+
+def test_form_details_drawer_forces_closed_state_on_lifecycle_reset() -> None:
+    drawer = _source("js/shared/form-details-drawer.js")
+    close_drawer = drawer.split("function _closeDrawer(", maxsplit=1)[1].split(
+        "function _clearDrawerContent()", maxsplit=1
+    )[0]
+
+    assert "_formRequestController?.abort()" in close_drawer
+    assert "drawer.hidden = true" in close_drawer
+    assert "drawer.inert = true" in close_drawer
+    assert "drawer.setAttribute('aria-hidden', 'true')" in close_drawer
+    assert "document.body.classList.remove('form-details-drawer-open')" in close_drawer
+    assert "_clearDrawerContent()" in close_drawer

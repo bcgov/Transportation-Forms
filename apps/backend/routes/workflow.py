@@ -85,6 +85,7 @@ class PendingFormItem(BaseModel):
     status: str
     submitted_at: Optional[str] = None
     submitted_by: Optional[str] = None
+    submitted_by_id: Optional[str] = None
 
 
 class PendingApprovalsResponse(BaseModel):
@@ -193,6 +194,9 @@ async def list_pending_approvals(
             status=str(form.status),
             submitted_at=submitted_at,
             submitted_by=str(submitted_by) if submitted_by is not None else None,
+            submitted_by_id=(
+                str(submit_entry.triggered_by_id) if submit_entry else None
+            ),
         ))
 
     return PendingApprovalsResponse(total=len(items), items=items)

@@ -1459,23 +1459,61 @@
         <div class="toast-container position-fixed bottom-0 end-0 p-3" id="notificationContainer"
             style="z-index: 11000;"></div>
 
-        <!-- Modal for viewing/editing form details -->
-        <div class="modal fade" id="formModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header" style="border-bottom: 2px solid var(--bc-blue);">
-                        <h5 class="modal-title" id="formModalTitle">Form Details</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body" id="formModalBody">
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <div class="form-details-drawer__scrim" id="formDetailsScrim" aria-hidden="true" hidden></div>
+        <aside class="form-details-drawer" id="formDetailsDrawer" role="dialog" aria-modal="true"
+            aria-labelledby="formDetailsDrawerLabel" aria-hidden="true" tabindex="-1" hidden inert>
+            <div class="form-details-drawer__header">
+                <strong id="formDetailsDrawerLabel">Form details</strong>
+                <button class="form-details-drawer__close" id="closeFormDetailsDrawer" type="button"
+                    data-action="close-form-details" aria-label="Close form details" title="Close">
+                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="form-details-drawer__body" id="formDetailsDrawerBody">
+                <p class="form-details-drawer__number" id="formDetailsNumber"></p>
+                <h2 class="form-details-drawer__title" id="formDetailsTitle"></h2>
 
-                    </div>
+                <div class="form-details-drawer__primary-actions">
+                    <div class="form-details-drawer__source-actions" id="formDetailsSourceActions"></div>
+                    <button class="btn btn-outline-primary" type="button" data-action="form-details-share"
+                        aria-label="Share">
+                        <i class="fas fa-link" aria-hidden="true"></i> Share
+                    </button>
+                </div>
+
+                <div class="form-details-drawer__workflow-actions" id="formDetailsWorkflowActions"
+                    aria-label="Available form actions" hidden></div>
+
+                <section class="form-details-drawer__request-context" id="formDetailsRequestContext"
+                    aria-labelledby="formDetailsRequestContextLabel" hidden>
+                    <h3 id="formDetailsRequestContextLabel">Approval request</h3>
+                    <dl class="form-details-drawer__definitions">
+                        <dt>Requester</dt><dd id="formDetailsRequester" data-testid="request-context-requester"></dd>
+                        <dt>Submitted</dt><dd id="formDetailsSubmitted" data-testid="request-context-submitted-at"></dd>
+                    </dl>
+                </section>
+
+                <dl class="form-details-drawer__definitions">
+                    <dt>Status</dt><dd><span class="form-details-drawer__status" id="formDetailsStatus"></span></dd>
+                    <dt id="formDetailsBusinessAreaTerm">Business Area</dt>
+                    <dd id="formDetailsBusinessArea"></dd>
+                    <dt>File Type</dt><dd id="formDetailsFileType"></dd>
+                    <dt>Public</dt><dd id="formDetailsPublic"></dd>
+                    <dt>Form Requires Personal Information</dt><dd id="formDetailsPersonalInfo"></dd>
+                    <dt>Last updated</dt><dd id="formDetailsUpdated"></dd>
+                </dl>
+
+                <section class="form-details-drawer__description" aria-labelledby="formDetailsDescriptionLabel">
+                    <h3 id="formDetailsDescriptionLabel">Description</h3>
+                    <p id="formDetailsDescription"></p>
+                </section>
+
+                <div class="form-details-drawer__note" id="formDetailsContactNote" role="note" hidden>
+                    <i class="fas fa-circle-info" aria-hidden="true"></i>
+                    <span id="formDetailsContactNoteText"></span>
                 </div>
             </div>
-        </div>
+        </aside>
 
         <!-- FEAT-0027 US-007 — compact Form Number Reservation view popup -->
         <div class="modal fade" id="reservationViewModal" tabindex="-1"

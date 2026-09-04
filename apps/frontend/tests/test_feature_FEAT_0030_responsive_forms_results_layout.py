@@ -40,29 +40,25 @@ def test_cards_preserve_existing_source_and_workflow_handlers():
     assert "_renderFormSourceButton(form)" in forms_js
     assert "_renderFormActionButtons(form)" in forms_js
     assert 'data-action="view-form"' in forms_js
-    assert "openFormViewPopup" in forms_js
+    assert "openFormDetailsDrawer" in forms_js
     assert "downloadFormAttachment" in forms_js
     assert "_isSafeHttpUrl" in forms_js
     assert "Open details for form ${_escapeAttribute(" in forms_js
     assert "from form number" in forms_js
 
 
-def test_details_popup_rejects_unsafe_external_source_urls():
-    popup_js = _source("js/shared/form-view-popup.js")
+def test_details_drawer_rejects_unsafe_external_source_urls():
+    drawer_js = _source("js/shared/form-details-drawer.js")
     guarded_url_branch = (
         "form.form_source === 'URL' && "
         "_isSafeHttpUrl(form.form_source_url)"
     )
-    encoded_href = (
-        'href="${_escapeAttribute(form.form_source_url.trim())}"'
-    )
-
-    assert guarded_url_branch in popup_js
-    assert "function _isSafeHttpUrl(value)" in popup_js
-    assert "url.protocol === 'http:'" in popup_js
-    assert "url.protocol === 'https:'" in popup_js
-    assert encoded_href in popup_js
-    assert 'rel="noopener noreferrer"' in popup_js
+    assert guarded_url_branch in drawer_js
+    assert "function _isSafeHttpUrl(value)" in drawer_js
+    assert "url.protocol === 'http:'" in drawer_js
+    assert "url.protocol === 'https:'" in drawer_js
+    assert "link.href = form.form_source_url.trim()" in drawer_js
+    assert "link.rel = 'noopener noreferrer'" in drawer_js
 
 
 def test_list_view_shim_awaits_preference_restoration():

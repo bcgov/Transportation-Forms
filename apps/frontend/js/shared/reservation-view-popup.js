@@ -1,7 +1,7 @@
 // frontend/js/shared/reservation-view-popup.js
 // FEAT-0027 US-007 — compact "View" popup for Form Number Reservations in the
 // Approvals queue. This is a SEPARATE component from the Forms-list View Details
-// popup (form-view-popup.js): reservations are not forms, so it renders only the
+// drawer (form-details-drawer.js): reservations are not forms, so it renders only the
 // four reservation facts required by the intake and never touches form data
 // (AC2 / AC10 / BR-01).
 //

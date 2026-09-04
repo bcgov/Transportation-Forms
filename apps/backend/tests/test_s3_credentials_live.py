@@ -15,6 +15,7 @@ Run with:
 Mark: s3_live  (skip in normal CI with:  pytest -m "not s3_live")
 """
 
+import base64
 import uuid
 import hashlib
 import pytest
@@ -104,9 +105,9 @@ class TestS3LiveCredentials:
         s = _fresh_settings()
         client = _make_client()
         
-        hasher = hashlib.sha256()
-        hasher.update(self.PAYLOAD)
-        local_sha256 = hasher.hexdigest()
+        checksum_sha256 = base64.b64encode(
+            hashlib.sha256(self.PAYLOAD).digest()
+        ).decode("ascii")
 
         try:
             client.put_object(
@@ -114,8 +115,8 @@ class TestS3LiveCredentials:
                 Key=self.OBJECT_KEY,
                 Body=self.PAYLOAD,
                 ContentType="text/plain",
-                ChecksumAlgorithm='SHA256',
-                ChecksumSHA256=local_sha256
+                ChecksumAlgorithm="SHA256",
+                ChecksumSHA256=checksum_sha256,
             )
         except (ClientError, NoCredentialsError, EndpointResolutionError) as exc:
             pytest.fail(

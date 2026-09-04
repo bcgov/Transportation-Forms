@@ -1109,7 +1109,11 @@ class FormService:
             "current_version": form.current_version,
             "keywords": form.keywords,
             "business_area": (
-                {"id": str(form.business_area.id), "name": form.business_area.name}
+                {
+                    "id": str(form.business_area.id),
+                    "name": form.business_area.name,
+                    "mailbox": form.business_area.mailbox or None,
+                }
                 if form.business_area else None
             ),
             "created_by": {
