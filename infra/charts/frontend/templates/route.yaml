@@ -17,7 +17,7 @@ metadata:
     # Disable cookie-based session affinity (Caddy is stateless)
     haproxy.router.openshift.io/disable_cookies: "true"
 spec:
-  host: frontend-{{ .Release.Name }}.{{ .Values.domain }}
+  host: {{ .Values.routes.host | default (printf "frontend-%s.%s" .Release.Name .Values.domain) }}
   to:
     kind: Service
     name: {{ include "frontend.fullname" . }}

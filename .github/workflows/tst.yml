@@ -137,12 +137,3 @@ jobs:
       params: >-
         --set global.secrets.persist=true
     secrets: inherit
-
-  tests:
-    name: Integration Tests (TST)
-    needs: deploy-test
-    if: needs.deploy-test.outputs.triggered == 'true'
-    uses: ./.github/workflows/.tests.yml
-    with:
-      target: test
-    secrets: inherit

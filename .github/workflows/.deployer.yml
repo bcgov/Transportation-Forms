@@ -235,7 +235,11 @@ jobs:
             PUBLIC_FRONTEND_TAG="${{ inputs.public_frontend_tag }}"
             ENV="${{ inputs.environment }}"
             TARGET_DOMAIN="${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}"
-            FRONTEND_BASE_URL="https://frontend-${RELEASE_NAME}.${TARGET_DOMAIN}"
+            FRONTEND_HOST="frontend-${RELEASE_NAME}.${TARGET_DOMAIN}"
+            if [[ "${ENV}" == "test" ]]; then
+              FRONTEND_HOST="staff-${RELEASE_NAME}.${TARGET_DOMAIN}"
+            fi
+            FRONTEND_BASE_URL="https://${FRONTEND_HOST}"
             PUBLIC_FORMS_BASE_URL="${{ inputs.public_forms_base_url }}"
             if [[ -z "${PUBLIC_FORMS_BASE_URL}" ]]; then
               PUBLIC_FORMS_BASE_URL="https://forms-public-${RELEASE_NAME}.${TARGET_DOMAIN}"
@@ -276,6 +280,7 @@ jobs:
               --set-string backend.image.migrationsDigest="${{ inputs.migrations_digest }}" \
               --set-string frontend.image.tag="${FRONTEND_TAG}" \
               --set-string frontend.image.digest="${{ inputs.frontend_digest }}" \
+              --set-string frontend.routes.host="${FRONTEND_HOST}" \
               --set-string public-backend.image.tag="${PUBLIC_BACKEND_TAG}" \
               --set-string public-backend.image.digest="${{ inputs.public_backend_digest }}" \
               --set-string public-frontend.image.tag="${PUBLIC_FRONTEND_TAG}" \

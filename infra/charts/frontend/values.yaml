@@ -81,6 +81,7 @@ affinity:
 # ── OpenShift Routes (disable for local k8s / Rancher Desktop) ────────────────
 routes:
   enabled: true
+  host: ""
 
 # ── Network Policies ──────────────────────────────────────────────────────────
 networkPolicy:
