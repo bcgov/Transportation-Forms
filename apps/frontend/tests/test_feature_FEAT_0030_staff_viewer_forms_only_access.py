@@ -33,13 +33,14 @@ def test_staff_viewer_classification_is_case_insensitive_and_shared() -> None:
     assert "if (isStaffViewerOnly() || hasNoRoles)" in forms
 
 
-def test_unavailable_sidebar_clears_all_layout_and_focus_state() -> None:
+def test_unavailable_sidebar_clears_navigation_layout_and_keeps_header_offset() -> None:
     sidebar = _source("js/sidebar.js")
     css = _source("css/main.css")
 
     assert "_available && !isMobile && !isVisible" in sidebar
-    assert "document.documentElement.style.removeProperty('--staff-sidebar-top')" in sidebar
-    assert "window.cancelAnimationFrame(_sidebarTopFrame)" in sidebar
+    assert "document.documentElement.style.removeProperty('--staff-sidebar-top')" not in sidebar
+    assert "window.addEventListener('resize', _scheduleSidebarTopSync)" in sidebar
+    assert "window.addEventListener('scroll', _scheduleSidebarTopSync" in sidebar
     assert "document.activeElement.blur()" in sidebar
     assert "body:not(.sidebar-available) > .container" in css
     assert "max-width: none" in css

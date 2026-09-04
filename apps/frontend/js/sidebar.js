@@ -24,7 +24,7 @@ function _elements() {
 
 function _syncSidebarTop() {
   _sidebarTopFrame = null;
-  if (!_available || !_header) return;
+  if (!_header) return;
 
   const sidebarTop = Math.max(0, Math.round(_header.getBoundingClientRect().bottom));
   if (sidebarTop === _lastSidebarTop) return;
@@ -34,7 +34,7 @@ function _syncSidebarTop() {
 }
 
 function _scheduleSidebarTopSync() {
-  if (!_available || _sidebarTopFrame !== null) return;
+  if (_sidebarTopFrame !== null) return;
   _sidebarTopFrame = window.requestAnimationFrame(_syncSidebarTop);
 }
 
@@ -122,12 +122,6 @@ export function setSidebarAvailability(available) {
   _available = Boolean(available);
   if (!_available) {
     _mobileOpen = false;
-    if (_sidebarTopFrame !== null) {
-      window.cancelAnimationFrame(_sidebarTopFrame);
-      _sidebarTopFrame = null;
-    }
-    _lastSidebarTop = null;
-    document.documentElement.style.removeProperty('--staff-sidebar-top');
     if (navigationHadFocus && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }

@@ -16,6 +16,7 @@ const DEEPLINK_DENIED_MESSAGE =
     "Form not found or you don't have permission to view it.";
 const SELF_APPROVE_TOOLTIP = 'You cannot approve your own request';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const STATUS_STYLE_STATES = new Set(['draft', 'pending_review', 'published', 'archived']);
 const WORKFLOW_ACTION_SELECTOR = [
     '[data-action="delete-form"]',
     '[data-action="navigate"]',
@@ -153,6 +154,7 @@ async function _renderDrawer(form, drawerGeneration) {
     elements.number.textContent = getFormNumberDisplay(form) || 'Form number unavailable';
     elements.title.textContent = form.title || 'Untitled form';
     elements.status.textContent = _formatStatus(form.status);
+    elements.status.dataset.status = _getStatusStyle(form.status);
 
     const businessAreaName = typeof form.business_area?.name === 'string'
         ? form.business_area.name.trim()
@@ -181,6 +183,12 @@ function _formatStatus(value) {
     return value.trim().split('_')
         .map(word => word ? word[0].toUpperCase() + word.slice(1) : '')
         .join(' ');
+}
+
+function _getStatusStyle(value) {
+    if (typeof value !== 'string') return '';
+    const status = value.trim().toLowerCase();
+    return STATUS_STYLE_STATES.has(status) ? status : '';
 }
 
 function _renderRequestContext(elements) {
@@ -355,6 +363,7 @@ function _clearDrawerContent() {
     elements.requester.textContent = '';
     elements.submitted.textContent = '';
     elements.status.textContent = '';
+    delete elements.status.dataset.status;
     elements.businessAreaTerm.hidden = true;
     elements.businessArea.hidden = true;
     elements.businessArea.textContent = '';
