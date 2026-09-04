@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Build or retag ${{ matrix.package }}
-        uses: bcgov/actions/builder-ghcr@v0.5.0
+        uses: bcgov/action-builder-ghcr@cb2629351c87dd1c2130073e4ebb7233a9653a63 # v4.4.1
         with:
           package: ${{ matrix.package }}
           build_file: ${{ matrix.build_file }}
@@ -74,7 +74,7 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          ref: ${{ github.event_name == 'push' && github.event.before || 'HEAD^' }}
+          diff_branch: ${{ github.event_name == 'push' && github.event.before || 'HEAD^' }}
           triggers: ${{ steps.triggers.outputs.value }}
 
   deploy-dev:
