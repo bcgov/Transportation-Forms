@@ -189,6 +189,16 @@ def _raise_precondition(exc: BaseException, *, missing: bool) -> None:
     raise HTTPException(status_code=status_code, detail=str(exc))
 
 
+def _set_etag_headers(
+    response: Response,
+    etag: str,
+    *,
+    cache_control: str = "private, no-store, no-transform",
+) -> None:
+    response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = cache_control
+
+
 # ============================================================================
 # Router — /api/v1/admin/cms/pages
 # ============================================================================
@@ -225,12 +235,18 @@ async def admin_get_reserved_slugs(
     if if_none_match and if_none_match == etag:
         # 304 Not Modified — must still carry the ETag/Cache-Control.
         response.status_code = status.HTTP_304_NOT_MODIFIED
-        response.headers["ETag"] = etag
-        response.headers["Cache-Control"] = "public, max-age=300, must-revalidate"
+        _set_etag_headers(
+            response,
+            etag,
+            cache_control="public, max-age=300, must-revalidate, no-transform",
+        )
         return ReservedSlugsResponse(reserved=[])
 
-    response.headers["ETag"] = etag
-    response.headers["Cache-Control"] = "public, max-age=300, must-revalidate"
+    _set_etag_headers(
+        response,
+        etag,
+        cache_control="public, max-age=300, must-revalidate, no-transform",
+    )
     return ReservedSlugsResponse(reserved=reserved)
 
 
@@ -250,7 +266,7 @@ async def admin_list_cms_pages(
         db, include_deleted=include_deleted, search=search
     )
     list_etag = CmsPageService.list_etag(db)
-    response.headers["ETag"] = list_etag
+    _set_etag_headers(response, list_etag)
     return CmsPageListResponse(
         pages=[_to_response(p) for p in pages],
         list_etag=list_etag,
@@ -291,7 +307,7 @@ async def admin_create_cms_page(
             detail={"message": str(exc), "field": exc.field},
         )
 
-    response.headers["ETag"] = CmsPageService.page_etag(page)
+    _set_etag_headers(response, CmsPageService.page_etag(page))
     return _to_response(page)
 
 
@@ -326,7 +342,7 @@ async def admin_reorder_cms_pages(
             detail={"message": str(exc), "field": exc.field},
         )
     list_etag = CmsPageService.list_etag(db)
-    response.headers["ETag"] = list_etag
+    _set_etag_headers(response, list_etag)
     return CmsPageListResponse(
         pages=[_to_response(p) for p in ordered],
         list_etag=list_etag,
@@ -351,7 +367,7 @@ async def admin_get_cms_page(
         )
     except CmsNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    response.headers["ETag"] = CmsPageService.page_etag(page)
+    _set_etag_headers(response, CmsPageService.page_etag(page))
     return _to_response(page)
 
 
@@ -399,7 +415,7 @@ async def admin_update_cms_page(
             detail={"message": str(exc), "field": exc.field},
         )
 
-    response.headers["ETag"] = CmsPageService.page_etag(page)
+    _set_etag_headers(response, CmsPageService.page_etag(page))
     return _to_response(page)
 
 
@@ -431,7 +447,7 @@ async def admin_soft_delete_cms_page(
     except CmsConcurrencyError as exc:
         _raise_precondition(exc, missing=False)
 
-    response.headers["ETag"] = CmsPageService.page_etag(page)
+    _set_etag_headers(response, CmsPageService.page_etag(page))
     return _to_response(page)
 
 
@@ -479,7 +495,7 @@ async def admin_restore_cms_page(
         )
 
     if response is not None:
-        response.headers["ETag"] = CmsPageService.page_etag(page)
+        _set_etag_headers(response, CmsPageService.page_etag(page))
     return _to_response(page)
 
 
@@ -540,5 +556,5 @@ async def admin_restore_cms_revision(
             detail={"message": str(exc), "field": exc.field},
         )
 
-    response.headers["ETag"] = CmsPageService.page_etag(page)
+    _set_etag_headers(response, CmsPageService.page_etag(page))
     return _to_response(page)
