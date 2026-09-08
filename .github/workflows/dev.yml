@@ -74,7 +74,7 @@ jobs:
             latest
             ${{ github.sha }}
           tag_fallback: latest
-          diff_branch: ${{ github.event_name == 'push' && github.event.before || 'HEAD^' }}
+          diff_branch: 'HEAD^'
           triggers: ${{ steps.triggers.outputs.value }}
 
   deploy-dev:
