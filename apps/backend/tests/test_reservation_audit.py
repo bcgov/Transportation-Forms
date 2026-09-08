@@ -196,7 +196,7 @@ class TestAuditReleaseNumber:
     ):
         r = reservation_factory(prefix=active_prefix, reserved_by=staff_user)
         ReservationService.release_reservation(
-            db, r.id, staff_user.id, user_roles=["staff"],
+            db, r.id, staff_user.id,
         )
 
         audits = _get_audits(db, str(r.id), "RELEASE_NUMBER")

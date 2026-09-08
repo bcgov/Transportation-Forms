@@ -101,9 +101,44 @@ def api_users(api_db: Session):
     api_db.add_all([staff, approver, admin])
 
     # Roles
-    staff_role = Role(id=uuid.uuid4(), name="staff", permissions={}, is_active=True)
-    reviewer_role = Role(id=uuid.uuid4(), name="reviewer", permissions={}, is_active=True)
-    admin_role = Role(id=uuid.uuid4(), name="admin", permissions={}, is_active=True)
+    staff_role = Role(
+        id=uuid.uuid4(),
+        name="staff",
+        permissions=[
+            "reservation:create",
+            "reservation:read",
+            "reservation:submit",
+            "reservation:release",
+        ],
+        is_active=True,
+    )
+    reviewer_role = Role(
+        id=uuid.uuid4(),
+        name="reviewer",
+        permissions=[
+            "reservation:read",
+            "reservation:approve",
+            "reservation:reject",
+            "reservation:request_changes",
+            "reservation:release",
+        ],
+        is_active=True,
+    )
+    admin_role = Role(
+        id=uuid.uuid4(),
+        name="admin",
+        permissions=[
+            "reservation:create",
+            "reservation:read",
+            "reservation:submit",
+            "reservation:approve",
+            "reservation:reject",
+            "reservation:request_changes",
+            "reservation:release",
+            "reservation:admin",
+        ],
+        is_active=True,
+    )
     api_db.add_all([staff_role, reviewer_role, admin_role])
     api_db.flush()
 
@@ -144,6 +179,13 @@ def _make_client(api_db: Session, user: User, roles: list[str]) -> TestClient:
     app.dependency_overrides[get_current_user] = lambda: token
     client = TestClient(app)
     return client
+
+
+@pytest.fixture(autouse=True)
+def _clear_dependency_overrides():
+    yield
+    app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.fixture()
@@ -246,12 +288,25 @@ class TestCustomEndpoint:
 class TestApprovalWorkflowEndpoints:
 
     @pytest.mark.integration
-    def test_submit_approve_flow(self, staff_client, approver_client, api_prefix):
+    def test_submit_approve_flow(
+        self, staff_client, approver_client, api_users, api_prefix
+    ):
+        staff = api_users["staff"]
+        staff_token = TokenData(
+            sub=str(staff.id),
+            email=staff.email,
+            name=f"{staff.first_name} {staff.last_name}",
+            roles=["staff"],
+            token_type="access",
+        )
+        app.dependency_overrides[get_current_user] = lambda: staff_token
+
         # Generate
         resp = staff_client.post(
             "/api/v1/reservations/generate",
             json={"prefix_id": str(api_prefix.id)},
         )
+        assert resp.status_code == 201, resp.text
         res_id = resp.json()["id"]
 
         # Submit
@@ -260,6 +315,15 @@ class TestApprovalWorkflowEndpoints:
         assert resp.json()["status"] == "pending_approval"
 
         # Approve
+        approver = api_users["approver"]
+        approver_token = TokenData(
+            sub=str(approver.id),
+            email=approver.email,
+            name=f"{approver.first_name} {approver.last_name}",
+            roles=["reviewer"],
+            token_type="access",
+        )
+        app.dependency_overrides[get_current_user] = lambda: approver_token
         resp = approver_client.post(f"/api/v1/reservations/{res_id}/approve")
         assert resp.status_code == 200
         assert resp.json()["status"] == "approved"

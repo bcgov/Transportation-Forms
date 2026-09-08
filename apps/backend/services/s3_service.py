@@ -7,6 +7,7 @@ Uses boto3 (already in requirements.txt) with an endpoint_url override so the
 same code works with both MinIO and real AWS S3.
 """
 
+import base64
 import json
 import uuid
 import logging
@@ -142,22 +143,22 @@ def upload_file(
 
     client = _get_s3_client()
     
-    hasher = hashlib.sha256()
-    hasher.update(file_bytes)
-    local_sha256 = hasher.hexdigest()
+    checksum_sha256 = base64.b64encode(hashlib.sha256(file_bytes).digest()).decode(
+        "ascii"
+    )
 
     client.put_object(
         Bucket=settings.S3_BUCKET,
         Key=object_key,
         Body=file_bytes,
         ContentType=content_type,
-        ChecksumAlgorithm='SHA256',
-        ChecksumSHA256=local_sha256
+        ChecksumAlgorithm="SHA256",
+        ChecksumSHA256=checksum_sha256,
         # Public read is granted via bucket policy set in ensure_bucket_exists().
         # ACL="public-read" is not used: MinIO 2022+ disables S3 ACLs by default.
     )
 
-    logger.info("Uploaded '%s' as key '%s'", original_filename, object_key)
+    logger.info("S3 object upload completed")
     return object_key, object_key
 
 

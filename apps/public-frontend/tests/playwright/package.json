@@ -1,0 +1,16 @@
+{
+  "name": "public-frontend-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright E2E tests for the BC Gov public-frontend (FEAT-0028).",
+  "scripts": {
+    "test": "playwright test",
+    "test:us004": "playwright test tests/us-004-cms-nav-active.spec.ts tests/us-004-form-link.spec.ts",
+    "test:smoke": "playwright test tests/public-frontend-smoke.spec.ts",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "@playwright/test": "^1.47.0"
+  }
+}

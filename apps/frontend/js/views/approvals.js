@@ -13,12 +13,16 @@ import {
     getFormNumberDisplay,
 } from '../utils.js';
 import { getAuthToken, hasPermission } from '../auth.js';
-import { openFormViewPopup } from '../shared/form-view-popup.js';
+import {
+    getFormApprovalActionState,
+    openFormDetailsDrawer,
+} from '../shared/form-details-drawer.js';
 import { openReservationViewPopup } from '../shared/reservation-view-popup.js';
 
 // Module-private state
 let _actionReservationId = null;
 let _actionFormId = null;  // FEAT-0001: tracks which form is being acted on
+const _pendingFormDecisions = new Set();
 
 // ─── Bootstrap Modal helper ───────────────────────────────────────────────────
 
@@ -140,12 +144,12 @@ function _attachDelegatedListeners() {
                 return;
             }
 
-            // FEAT-0027 US-006 — open the shared View Details popup for a
+            // FEAT-0030 US-008 — open the shared form-details drawer for a
             // Form Approval Request row.
             const formViewBtn = e.target.closest('[data-action="form-view"]');
             if (formViewBtn) {
                 e.stopPropagation();
-                openFormViewPopup({
+                openFormDetailsDrawer({
                     formId: formViewBtn.dataset.formId,
                     mode: 'approvals',
                     requesterName: formViewBtn.dataset.requester || null,
@@ -159,11 +163,11 @@ function _attachDelegatedListeners() {
     // FEAT-0027 US-006 — the shared popup dispatches these events so this
     // module (owner of _actionFormId and the reject modal wiring) stays in
     // control of the transactional state.
-    document.addEventListener('form-view-popup:reject-request', (e) => {
+    document.addEventListener('form-details-drawer:reject-request', (e) => {
         const formId = e?.detail?.formId;
         if (formId) _actionFormId = formId;
     });
-    document.addEventListener('form-view-popup:action-complete', () => {
+    document.addEventListener('form-details-drawer:action-complete', () => {
         _refreshAfterAction();
     });
 
@@ -308,7 +312,12 @@ export async function loadPendingApprovals() {
         // ── Form approval requests section (FEAT-0001) ────────────────────
         if (formItems.length > 0) {
             html += `<h5 class="text-muted mt-3 mb-2"><i class="fas fa-file-alt"></i> Form Approval Requests</h5>`;
-            html += formItems.map(f => `
+            html += formItems.map(f => {
+                const actionState = getFormApprovalActionState(f.submitted_by_id);
+                const approveTitle = actionState.disabledForSelf
+                    ? 'You cannot approve your own request'
+                    : 'Approve &amp; Publish';
+                return `
                 <div class="card reservation-card pending-card">
                     <div class="card-body">
                         <div class="row align-items-center">
@@ -334,6 +343,7 @@ export async function loadPendingApprovals() {
                                             data-action="form-view"
                                             data-form-id="${escapeHtml(f.form_id)}"
                                             data-requester="${escapeHtml(f.submitted_by || '')}"
+                                            data-requester-id="${escapeHtml(f.submitted_by_id || '')}"
                                             data-submitted-at="${escapeHtml(f.submitted_at || '')}"
                                             title="View Details"
                                             aria-label="View form ${escapeHtml(f.form_number || '')}">
@@ -342,12 +352,15 @@ export async function loadPendingApprovals() {
                                     <button class="btn btn-success"
                                             data-action="form-approve"
                                             data-form-id="${escapeHtml(f.form_id)}"
-                                            title="Approve &amp; Publish">
+                                            title="${approveTitle}"
+                                            ${actionState.canApprove ? '' : 'disabled'}
+                                            aria-label="${actionState.disabledForSelf ? 'Approve - You cannot approve your own request' : 'Approve'}">
                                         <i class="fas fa-check"></i> Approve
                                     </button>
                                     <button class="btn btn-danger"
                                             data-action="form-reject"
                                             data-form-id="${escapeHtml(f.form_id)}"
+                                            ${actionState.canDecide ? '' : 'disabled'}
                                             title="Reject">
                                         <i class="fas fa-times"></i> Reject
                                     </button>
@@ -356,7 +369,8 @@ export async function loadPendingApprovals() {
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         container.innerHTML = html;
@@ -373,7 +387,8 @@ export async function loadPendingApprovals() {
 // ─── FEAT-0001: Form approval/rejection actions ───────────────────────────────
 
 async function _approveForm(formId) {
-    if (!formId) return;
+    if (!formId || _pendingFormDecisions.has(formId)) return;
+    _pendingFormDecisions.add(formId);
     try {
         const response = await fetch(`${API_BASE}/staff/forms/${formId}/approve`, {
             method: 'POST',
@@ -387,6 +402,8 @@ async function _approveForm(formId) {
         _refreshAfterAction();
     } catch (error) {
         showAlert(`Error approving form: ${error.message}`, 'danger');
+    } finally {
+        _pendingFormDecisions.delete(formId);
     }
 }
 

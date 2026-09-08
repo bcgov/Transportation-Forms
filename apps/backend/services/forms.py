@@ -236,7 +236,7 @@ class FormService:
     def list_forms(
         db: Session,
         skip: int = 0,
-        limit: int = 25,
+        limit: int = 24,
         q: Optional[str] = None,
         status: Optional[List[str]] = None,
         business_area_ids: Optional[List[UUID]] = None,
@@ -375,6 +375,7 @@ class FormService:
         db: Session,
         query_text: str,
         max_suggestions: int = 10,
+        published_only: bool = False,
     ) -> List[str]:
         """Get autocomplete suggestions from form titles, keywords, and form numbers."""
         normalized_query = (query_text or "").strip()
@@ -390,6 +391,7 @@ class FormService:
                 SELECT DISTINCT f.title AS suggestion
                 FROM forms f
                 WHERE f.deleted_at IS NULL
+                                    AND (:published_only = FALSE OR f.status = 'published')
                   AND f.title ILIKE :pattern ESCAPE '\\'
 
                 UNION
@@ -400,6 +402,7 @@ class FormService:
                     ) AS suggestion
                 FROM forms f
                 WHERE f.deleted_at IS NULL
+                                    AND (:published_only = FALSE OR f.status = 'published')
 
                 UNION
 
@@ -407,6 +410,7 @@ class FormService:
                 FROM form_number_reservations fnr
                 JOIN forms f ON f.form_number_reservation_id = fnr.id
                 WHERE f.deleted_at IS NULL
+                                    AND (:published_only = FALSE OR f.status = 'published')
                   AND fnr.full_form_number ILIKE :pattern ESCAPE '\\'
             ) s
             WHERE s.suggestion ILIKE :pattern ESCAPE '\\'
@@ -419,6 +423,7 @@ class FormService:
             {
                 "pattern": like_pattern,
                 "max_suggestions": min(max(max_suggestions, 1), 10),
+                "published_only": published_only,
             },
         ).fetchall()
 
@@ -1104,7 +1109,11 @@ class FormService:
             "current_version": form.current_version,
             "keywords": form.keywords,
             "business_area": (
-                {"id": str(form.business_area.id), "name": form.business_area.name}
+                {
+                    "id": str(form.business_area.id),
+                    "name": form.business_area.name,
+                    "mailbox": form.business_area.mailbox or None,
+                }
                 if form.business_area else None
             ),
             "created_by": {

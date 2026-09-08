@@ -27,6 +27,10 @@
 #   task -d infra/local build:public-backend   # rebuild public-backend image only
 #   task -d infra/local deploy:db                 # Deploy db only
 #   task -d infra/local deploy                 # redeploy app only
+#   task -d infra/local deploy:frontend        # redeploy frontend only
+#   task -d infra/local deploy:backend         # redeploy backend only
+#   task -d infra/local deploy:public-frontend  # redeploy public-frontend only
+#   task -d infra/local deploy:public-backend   # redeploy public-backend only
 #   task -d infra/local teardown    # Remove app only (keeps database)
 #   task -d infra/local teardown:all    # remove everything
 # Run rollout if it doesn't get deployed:
@@ -140,6 +144,52 @@ tasks:
     deps:
       - build
       - deploy:db
+
+  deploy:backend:
+    desc: Build and deploy only the backend application
+    deps:
+      - build:backend
+    cmds:
+      - task: _deploy-component
+        vars:
+          COMPONENT: backend
+
+  deploy:frontend:
+    desc: Build and deploy only the frontend application
+    deps:
+      - build:frontend
+    cmds:
+      - task: _deploy-component
+        vars:
+          COMPONENT: frontend
+
+  deploy:public-backend:
+    desc: Build and deploy only the public-backend application
+    deps:
+      - build:public-backend
+    cmds:
+      - task: _deploy-component
+        vars:
+          COMPONENT: public-backend
+
+  deploy:public-frontend:
+    desc: Build and deploy only the public-frontend application
+    deps:
+      - build:public-frontend
+    cmds:
+      - task: _deploy-component
+        vars:
+          COMPONENT: public-frontend
+
+  _deploy-component:
+    internal: true
+    dir: ../..
+    requires:
+      vars:
+        - COMPONENT
+    cmds:
+      - kubectl rollout restart deployment/{{.RELEASE_NAME}}-{{.COMPONENT}}
+      - kubectl rollout status deployment/{{.RELEASE_NAME}}-{{.COMPONENT}} --timeout=300s
 
   teardown:
     desc: Uninstall the application Helm release and keep the database

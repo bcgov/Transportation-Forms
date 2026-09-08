@@ -13,6 +13,8 @@ import { API_BASE, AUTH_STORAGE_ACCESS, AUTH_STORAGE_REFRESH, AUTH_STORAGE_USER,
 import { showAlert } from './utils.js';
 import { getCurrentUser, setCurrentUser, isAuthInitialized, setAuthInitialized } from './state.js';
 import { tryRefreshToken } from './token-refresh.js';
+import { setSidebarAvailability } from './sidebar.js';
+import { parseAuthorizationContext } from './authorization-context.js';
 
 export { tryRefreshToken };
 
@@ -79,7 +81,68 @@ function _clearAuthSession() {
   localStorage.removeItem(AUTH_STORAGE_REFRESH);
   localStorage.removeItem(AUTH_STORAGE_USER);
   setCurrentUser(null);
+  window.dispatchEvent(new CustomEvent('auth:session-cleared'));
   updateAuthUi();
+}
+
+function _removeStoredReturnUrl() {
+  try {
+    sessionStorage.removeItem('tf_return_url');
+  } catch (_error) {
+    // Storage can be unavailable in private browsing modes.
+  }
+}
+
+function _consumeStoredReturnUrl() {
+  let returnUrl = null;
+  try {
+    returnUrl = sessionStorage.getItem('tf_return_url');
+  } catch (_error) {
+    return null;
+  } finally {
+    _removeStoredReturnUrl();
+  }
+  return returnUrl;
+}
+
+function _getSafeInternalReturnUrl(value) {
+  if (!value || value !== value.trim() || !value.startsWith('/') || value.startsWith('//')) {
+    return null;
+  }
+  if (value.includes('\\') || /[\u0000-\u001f\u007f]/.test(value)) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value, window.location.origin);
+    if (url.origin !== window.location.origin) {
+      return null;
+    }
+
+    const exactPaths = new Set(
+      Object.values(ROUTES).filter(route =>
+        !route.includes(':') && route !== ROUTES.HOME && route !== ROUTES.CALLBACK
+      )
+    );
+    const supportedPrefixes = [
+      `${ROUTES.FORMS_LIST}/`,
+      '/edit/',
+      '/reservations/',
+      '/roles/',
+      '/users/',
+      '/access-requests/',
+      '/business-areas/',
+      '/prefixes/',
+      '/admin/cms/pages/',
+    ];
+    const supportedPath = exactPaths.has(url.pathname) || supportedPrefixes.some(prefix =>
+      url.pathname.startsWith(prefix) && url.pathname.length > prefix.length
+    );
+
+    return supportedPath ? `${url.pathname}${url.search}${url.hash}` : null;
+  } catch (_error) {
+    return null;
+  }
 }
 
 // ─── Exported auth API ────────────────────────────────────────────────────────
@@ -98,23 +161,36 @@ export function isAuthenticated() {
   return Boolean(getAuthToken());
 }
 
+function _getAuthorizationContext() {
+  return parseAuthorizationContext(getCurrentUser());
+}
+
+export function hasValidAuthorizationContext() {
+  return _getAuthorizationContext() !== null;
+}
+
 /**
  * Returns true when the current user has the "admin" role.
  */
 export function isAdminUser() {
-  const user = getCurrentUser();
-  const roles = Array.isArray(user?.roles) ? user.roles : [];
-  return roles.some(role => String(role || '').toLowerCase() === 'admin');
+  const context = _getAuthorizationContext();
+  return context?.roles.includes('admin') ?? false;
 }
 
 /**
  * Returns true when the current user has at least one portal role assigned.
- * Used to decide whether to show the staff-facing dashboard vs. the public list.
  */
 export function hasPortalRoles() {
-  const user = getCurrentUser();
-  const roles = Array.isArray(user?.roles) ? user.roles : [];
-  return roles.length > 0;
+  const context = _getAuthorizationContext();
+  return context !== null && context.roles.length > 0;
+}
+
+/**
+ * Returns true only when the current user has one Staff Viewer role.
+ */
+export function isStaffViewerOnly() {
+  const context = _getAuthorizationContext();
+  return context?.roles.length === 1 && context.roles[0] === 'staff_viewer';
 }
 
 /**
@@ -125,9 +201,25 @@ export function hasPortalRoles() {
  * @returns {boolean}
  */
 export function hasPermission(permission) {
-  const user = getCurrentUser();
-  const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
-  return permissions.includes(permission);
+  const context = _getAuthorizationContext();
+  return context?.permissions.includes(permission) ?? false;
+}
+
+/**
+ * Returns true when the current user can open the combined approvals queue.
+ */
+export function canReviewApprovals() {
+  return (
+    (hasPermission('form:approve') && hasPermission('form:review')) ||
+    (
+      hasPermission('reservation:read') &&
+      (
+        hasPermission('reservation:approve') ||
+        hasPermission('reservation:request_changes') ||
+        hasPermission('reservation:reject')
+      )
+    )
+  );
 }
 
 /**
@@ -220,7 +312,7 @@ export async function startLogin() {
 /**
  * Handles the OIDC authorization_code callback at /callback.
  * Reads `code` and `state` from the query string, exchanges them for tokens,
- * and persists the session. Navigates to dashboard or home depending on roles.
+ * and persists the session. Restores a safe explicit destination or uses Forms.
  *
  * Callers should invoke routeHandler() after this function completes (it
  * dispatches 'auth:callback-complete' so the router can react without a direct
@@ -232,6 +324,8 @@ export async function handleAuthCallback() {
   const state = params.get('state');
 
   if (!code || !state) {
+    _clearAuthSession();
+    _removeStoredReturnUrl();
     showAlert('Invalid authentication callback.', 'danger');
     window.history.replaceState({}, '', ROUTES.HOME);
     window.dispatchEvent(new CustomEvent('auth:navigate-home'));
@@ -257,20 +351,15 @@ export async function handleAuthCallback() {
     _saveAuthSession(payload.access_token, null, payload.user);
     showAlert('Signed in successfully.', 'success');
 
-    let dest = hasPortalRoles() ? ROUTES.DASHBOARD : ROUTES.HOME;
-    const returnUrl = sessionStorage.getItem('tf_return_url');
-    if (returnUrl) {
-      sessionStorage.removeItem('tf_return_url');
-      if (hasPortalRoles()) {
-        dest = returnUrl;
-      }
-    }
+    let dest = ROUTES.FORMS_LIST;
+    const returnUrl = _consumeStoredReturnUrl();
+    dest = _getSafeInternalReturnUrl(returnUrl) || dest;
 
     window.history.replaceState({}, '', dest);
     window.dispatchEvent(new CustomEvent('auth:callback-complete'));
-  } catch (error) {
-    console.error('Auth callback failed:', error);
+  } catch (_error) {
     _clearAuthSession();
+    _removeStoredReturnUrl();
     showAlert('Sign-in failed. Please try again.', 'danger');
     window.history.replaceState({}, '', ROUTES.HOME);
     window.dispatchEvent(new CustomEvent('auth:navigate-home'));
@@ -311,91 +400,131 @@ export async function signOut() {
  */
 export function updateAuthUi() {
   const signOutBtn = document.getElementById('signOutBtn');
+  const authDropdown = document.getElementById('authDropdown');
   const authUserDisplay = document.getElementById('authUserDisplay');
   const authUserInitials = document.getElementById('authUserInitials');
+  const authUserRole = document.getElementById('authUserRole');
   const authDropdownContainer = document.getElementById('authDropdownContainer');
-  const navDropdownContainer = document.getElementById('navMenuToggle')?.closest('.dropdown');
-  const navAccordion = document.getElementById('navAccordion');
-  const adminAccordionItem = document.querySelector('#accAdmin')?.closest('.accordion-item');
+  const sidebarToggleContainer = document.getElementById('sidebarToggleContainer');
+  const sidebarDestinationIds = [
+    'approvalsLink', 'manageFormsLink', 'createFormLink',
+    'reserveNumberLink', 'myReservationsLink', 'rolesLink', 'usersLink',
+    'accessRequestsLink', 'businessAreasLink', 'prefixesLink',
+    'cmsPagesLink', 'cmsRedirectsLink',
+  ];
+
+  const setVisible = (element, visible) => {
+    if (!element) return;
+    element.hidden = !visible;
+    element.style.display = visible ? '' : 'none';
+  };
+
+  const updateSidebarGroups = () => {
+    const groups = Array.from(document.querySelectorAll('[data-sidebar-group]'));
+    groups.forEach(group => {
+      const hasVisibleLink = Array.from(group.querySelectorAll('.staff-sidebar__link'))
+        .some(link => !link.hidden);
+      setVisible(group, hasVisibleLink);
+    });
+
+    document.querySelectorAll('[data-sidebar-separator]').forEach(separator => {
+      const groupIndex = groups.findIndex(
+        group => group.dataset.sidebarGroup === separator.dataset.afterGroup,
+      );
+      const hasVisibleGroupAfter = groups.slice(groupIndex + 1).some(group => !group.hidden);
+      setVisible(separator, groupIndex >= 0 && !groups[groupIndex].hidden && hasVisibleGroupAfter);
+    });
+
+    return groups.some(group => !group.hidden);
+  };
+
+  const hideSidebarDestinations = () => {
+    sidebarDestinationIds.forEach(linkId => setVisible(document.getElementById(linkId), false));
+    updateSidebarGroups();
+    setVisible(sidebarToggleContainer, false);
+    setSidebarAvailability(false);
+  };
 
   if (isAuthenticated()) {
-    if (signOutBtn) signOutBtn.style.display = 'block';
+    setVisible(signOutBtn, true);
 
     const user = getCurrentUser();
-    const displayName = user?.name || user?.email || 'Signed in';
+    const rawDisplayName = typeof user?.name === 'string' ? user.name.trim() : '';
+    const displayName = rawDisplayName.slice(0, 100) || 'Signed in';
     const initials = displayName
       .split(' ')
       .filter(Boolean)
-      .map(w => w[0])
+      .map(word => word[0])
       .join('')
       .slice(0, 2)
       .toUpperCase();
+    const isAdmin = isAdminUser();
 
     if (authUserInitials) authUserInitials.textContent = initials || '?';
     if (authUserDisplay) authUserDisplay.textContent = displayName;
-    if (authDropdownContainer) authDropdownContainer.style.display = '';
+    if (authUserRole) authUserRole.textContent = isAdmin ? 'Admin' : '';
+    setVisible(authUserRole, isAdmin);
+    if (authDropdown) authDropdown.setAttribute('aria-label', `Open user menu for ${displayName}`);
+    setVisible(authDropdownContainer, true);
 
-    if (hasPortalRoles()) {
-      if (navDropdownContainer) navDropdownContainer.style.display = '';
-      const mainNavLinks = document.getElementById('mainNavLinks');
-      if (mainNavLinks) mainNavLinks.style.display = '';
-      if (navAccordion) navAccordion.style.display = '';
+    if (hasPortalRoles() && hasPermission('portal:navigation')) {
+      const operationalLinkVisibility = {
+        approvalsLink: canReviewApprovals(),
+        manageFormsLink: hasPermission('form:read'),
+        createFormLink: hasPermission('form:create'),
+        reserveNumberLink: hasPermission('reservation:create'),
+        myReservationsLink: hasPermission('reservation:read'),
+      };
+
+      for (const [linkId, visible] of Object.entries(operationalLinkVisibility)) {
+        setVisible(document.getElementById(linkId), visible);
+      }
 
       // ── Admin link visibility ──────────────────────────────────────────
       // Each admin link is gated on the granular permission(s) that govern
       // the corresponding API surface. The accordion item itself is shown
       // when the user can access *any* admin link, otherwise it is hidden
       // so non-admin users don't see disabled/forbidden navigation entries.
-      const isAdmin = isAdminUser();
-
-      const canManageBA =
-        isAdmin ||
-        hasPermission('business_area:create') ||
-        hasPermission('business_area:edit') ||
-        hasPermission('business_area:delete') ||
-        hasPermission('business_area:manage');
+      const canManageBA = hasPermission('business_area:manage');
 
       // CMS admin surfaces are gated on ``cms:manage`` — the same
       // permission the backend requires. Users with only ``cms:manage``
       // (e.g. ``content_editor``) MUST see the CMS links even without
       // full admin role, and admin-only users without ``cms:manage``
       // still see them via ``isAdmin``.
-      const canManageCms = isAdmin || hasPermission('cms:manage');
+      const canManageCms = hasPermission('cms:manage');
 
       const adminLinkVisibility = {
-        rolesLink: isAdmin,
-        usersLink: isAdmin,
-        accessRequestsLink: isAdmin,
-        prefixesLink: isAdmin,
+        rolesLink: hasPermission('role:read'),
+        usersLink: hasPermission('user:manage_roles'),
+        accessRequestsLink: hasPermission('user:manage_roles'),
+        prefixesLink: hasPermission('form_number_prefix:read'),
         businessAreasLink: canManageBA,
         cmsPagesLink: canManageCms,
         cmsRedirectsLink: canManageCms,
       };
 
-      let anyAdminLinkVisible = false;
       for (const [linkId, visible] of Object.entries(adminLinkVisibility)) {
-        const el = document.getElementById(linkId);
-        if (el) el.style.display = visible ? '' : 'none';
-        if (visible) anyAdminLinkVisible = true;
+        const link = document.getElementById(linkId);
+        setVisible(link, visible);
       }
 
-      if (adminAccordionItem) {
-        adminAccordionItem.style.display = anyAdminLinkVisible ? '' : 'none';
-      }
+      const anyDestinationVisible = updateSidebarGroups();
+      setVisible(sidebarToggleContainer, anyDestinationVisible);
+      setSidebarAvailability(anyDestinationVisible);
     } else {
-      if (navDropdownContainer) navDropdownContainer.style.display = 'none';
-      const mainNavLinks = document.getElementById('mainNavLinks');
-      if (mainNavLinks) mainNavLinks.style.display = 'none';
-      if (navAccordion) navAccordion.style.display = 'none';
+      hideSidebarDestinations();
     }
   } else {
-    if (signOutBtn) signOutBtn.style.display = 'none';
-    if (authUserInitials) authUserInitials.textContent = '?';
+    setVisible(signOutBtn, false);
+    if (authUserInitials) authUserInitials.textContent = '';
     if (authUserDisplay) authUserDisplay.textContent = '';
-    if (authDropdownContainer) authDropdownContainer.style.display = 'none';
-    if (navDropdownContainer) navDropdownContainer.style.display = 'none';
-    const mainNavLinks = document.getElementById('mainNavLinks');
-    if (mainNavLinks) mainNavLinks.style.display = 'none';
-    if (navAccordion) navAccordion.style.display = 'none';
+    if (authUserRole) authUserRole.textContent = '';
+    if (authDropdown) authDropdown.setAttribute('aria-label', 'Open user menu');
+    setVisible(authUserRole, false);
+    setVisible(authDropdownContainer, false);
+    hideSidebarDestinations();
   }
 }
+
+window.addEventListener('auth:authorization-refreshed', updateAuthUi);

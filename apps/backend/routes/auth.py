@@ -231,8 +231,8 @@ async def login(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Login initiation failed: {str(e)}")
+    except Exception:
+        logger.error("Login initiation failed")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to initiate login flow",
@@ -266,7 +266,7 @@ async def auth_callback(
 
         state_data = validate_state(request.state)
         if state_data is None:
-            logger.warning(f"Invalid or expired state parameter: {request.state}")
+            logger.warning("Invalid or expired OIDC state parameter")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid state parameter. Please try logging in again.",
@@ -309,13 +309,13 @@ async def auth_callback(
             )
             db.add(user)
             db.flush()
-            logger.info(f"Created new user: {email}")
+            logger.info("Created new authenticated user")
         else:
             user.keycloak_id = keycloak_user_id  # type: ignore[assignment]
             user.first_name = first_name  # type: ignore[assignment]
             user.last_name = last_name  # type: ignore[assignment]
             user.last_login = datetime.now(timezone.utc)  # type: ignore[assignment]
-            logger.info(f"Updated existing user: {email}")
+            logger.info("Updated existing authenticated user")
 
         # New-user bootstrap only — never overwrite DB-assigned portal roles.
         existing_role_count = (
@@ -339,7 +339,7 @@ async def auth_callback(
             )
             if default_role:
                 db.add(UserRole(user_id=user.id, role_id=default_role.id))
-                logger.info(f"Assigned default staff_viewer role to new user: {email}")
+                logger.info("Assigned default staff_viewer role to authenticated user")
 
         ip_address, user_agent = _get_request_metadata(http_request)
         _create_auth_audit_log(
@@ -378,7 +378,7 @@ async def auth_callback(
             roles=role_names,
             permissions=all_permissions,
         )
-        logger.info(f"Successfully authenticated user: {email}")
+        logger.info("Successfully authenticated user")
 
         # FEAT-0020: Set the refresh token as an HttpOnly Secure SameSite
         # cookie and omit it from the JSON response body so the staff portal
@@ -408,8 +408,8 @@ async def auth_callback(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Keycloak authentication failed",
         )
-    except Exception as e:
-        logger.error(f"Callback processing failed: {str(e)}")
+    except Exception:
+        logger.error("Callback processing failed")
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Authentication failed"
@@ -448,7 +448,15 @@ async def refresh_token(
         user_id = (
             UUID(token_data.sub) if isinstance(token_data.sub, str) else token_data.sub
         )
-        user = db.query(User).filter(User.id == user_id).first()
+        user = (
+            db.query(User)
+            .filter(
+                User.id == user_id,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+            .first()
+        )
 
         if user is None or not bool(user.is_active):
             raise HTTPException(
@@ -481,7 +489,7 @@ async def refresh_token(
             permissions=all_permissions,
         )
 
-        logger.info(f"Refreshed access token for user: {user.email}")
+        logger.info("Refreshed access token for authenticated user")
 
         return {
             "access_token": new_access_token,
@@ -503,8 +511,8 @@ async def refresh_token(
         )
         _clear_refresh_cookie(unauthorized)
         return unauthorized
-    except Exception as e:
-        logger.error(f"Token refresh failed: {str(e)}")
+    except Exception:
+        logger.error("Token refresh failed")
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -543,8 +551,8 @@ async def logout(
         if token_value:
             try:
                 keycloak_service.logout(token_value)
-            except Exception as e:
-                logger.warning(f"KeyCloak logout failed (best-effort): {str(e)}")
+            except Exception:
+                logger.warning("KeyCloak logout failed (best-effort)")
 
         ip_address, user_agent = _get_request_metadata(http_request)
         _create_auth_audit_log(
@@ -565,8 +573,8 @@ async def logout(
             "detail": "Please discard your tokens",
         }
 
-    except Exception as e:
-        logger.error(f"Logout failed: {str(e)}")
+    except Exception:
+        logger.error("Logout failed")
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Logout failed"
@@ -587,7 +595,15 @@ async def get_current_user_info(
             if isinstance(current_user.sub, str)
             else current_user.sub
         )
-        user = db.query(User).filter(User.id == user_id).first()
+        user = (
+            db.query(User)
+            .filter(
+                User.id == user_id,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+            .first()
+        )
 
         if not user:
             raise HTTPException(
@@ -618,8 +634,8 @@ async def get_current_user_info(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to get user info: {str(e)}")
+    except Exception:
+        logger.error("Failed to get user info")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve user information",

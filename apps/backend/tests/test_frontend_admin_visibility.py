@@ -30,13 +30,15 @@ class TestFrontendAdminVisibilityAndGuards:
         # The guard itself enters the protection block whenever the path
         # is an admin route. Inside it, Business Areas are allowed for
         # users that hold the matching granular permission — admin role
-        # is no longer the only path through. We assert both the outer
-        # gate and the BA permission branches plus the redirect.
+        # is no longer an authorization path. We assert the outer gate and
+        # destination permission branches plus the Not Found outcome.
         assert "if (isAuthenticated() && isAdminRoute(path))" in js
         assert "hasPermission('business_area:create')" in js
         assert "hasPermission('business_area:manage')" in js
-        assert "isAdminUser()" in js
-        assert "window.history.replaceState({}, '', ROUTES.HOME);" in js
+        assert "isAdminUser()" not in js
+        assert "hasPermission('role:read')" in js
+        assert "hasPermission('user:manage_roles')" in js
+        assert "_currentRoute = 'not-found'" in js
 
     def test_route_handler_supports_admin_pages_and_detail_routes(self):
         js = (FRONTEND_INDEX.parent / "js" / "router.js").read_text(encoding="utf-8")

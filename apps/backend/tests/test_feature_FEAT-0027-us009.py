@@ -29,7 +29,7 @@ APPS_DIR = Path(__file__).resolve().parents[2]
 FRONTEND = APPS_DIR / "frontend"
 
 FORMS_LIST_VIEW = FRONTEND / "js" / "views" / "forms-list.js"
-SHARED_POPUP = FRONTEND / "js" / "shared" / "form-view-popup.js"
+SHARED_POPUP = FRONTEND / "js" / "shared" / "form-details-drawer.js"
 MAIN_CSS = FRONTEND / "css" / "main.css"
 
 
@@ -98,8 +98,8 @@ class TestUS009DownloadReusesSharedControl:
     def test_forms_list_imports_shared_download_helper(self):
         src = _read(FORMS_LIST_VIEW)
         assert (
-            "import { openFormViewPopup, downloadFormAttachment } "
-            "from '../shared/form-view-popup.js';" in src
+            "import { openFormDetailsDrawer, downloadFormAttachment } "
+            "from '../shared/form-details-drawer.js';" in src
         ), "US-009 AC2 — forms-list must import the shared downloadFormAttachment"
 
     def test_shared_popup_exports_download_helper(self):

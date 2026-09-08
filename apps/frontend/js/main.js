@@ -2,6 +2,7 @@
 import { installAuthFetchInterceptor } from './api.js';
 import { initializeAuth, updateAuthUi, signOut, startLogin } from './auth.js';
 import { initRouter, routeHandler } from './router.js';
+import { initSidebarNavigation } from './sidebar.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   // 1. Install fetch interceptor FIRST (before any API calls)
@@ -10,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 2. Wire up router event listeners (popstate, data-route clicks).
   //    The initial routeHandler() call inside initRouter() returns early because
   //    auth has not been initialised yet (isAuthInitialized() === false).
+  initSidebarNavigation();
   initRouter();
 
   // 3. Global delegated action handler for auth buttons (sign-out, start-login).

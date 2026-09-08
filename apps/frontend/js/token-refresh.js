@@ -8,7 +8,14 @@
 // to let the browser attach the cookie and let the backend recover it from the
 // request. No refresh-token value is read from or sent through JavaScript.
 
-import { API_BASE, AUTH_STORAGE_ACCESS, AUTH_STORAGE_REFRESH } from './constants.js';
+import {
+  API_BASE,
+  AUTH_STORAGE_ACCESS,
+  AUTH_STORAGE_REFRESH,
+  AUTH_STORAGE_USER,
+} from './constants.js';
+import { setCurrentUser } from './state.js';
+import { parseAuthorizationContext } from './authorization-context.js';
 
 // Shared refresh promise — concurrent callers await the same request rather than
 // each returning false and retrying with a stale token.
@@ -39,10 +46,35 @@ export async function tryRefreshToken() {
       }
 
       const payload = await response.json();
-      localStorage.setItem(AUTH_STORAGE_ACCESS, payload.access_token);
+      const accessToken = payload?.access_token;
+      if (typeof accessToken !== 'string' || !accessToken) {
+        return false;
+      }
+
+      const meResponse = await fetch(`${API_BASE}/auth/me`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!meResponse.ok) {
+        return false;
+      }
+
+      const user = await meResponse.json();
+      if (!parseAuthorizationContext(user)) {
+        localStorage.removeItem(AUTH_STORAGE_ACCESS);
+        localStorage.removeItem(AUTH_STORAGE_USER);
+        setCurrentUser(null);
+        window.dispatchEvent(new CustomEvent('auth:session-cleared'));
+        return false;
+      }
+
+      localStorage.setItem(AUTH_STORAGE_ACCESS, accessToken);
+      localStorage.setItem(AUTH_STORAGE_USER, JSON.stringify(user));
       // FEAT-0020 migration safeguard: ensure any legacy refresh token value
       // left in localStorage from a previous build is removed.
       localStorage.removeItem(AUTH_STORAGE_REFRESH);
+      setCurrentUser(user);
+      window.dispatchEvent(new CustomEvent('auth:authorization-refreshed'));
       return true;
     } catch {
       return false;

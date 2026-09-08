@@ -382,7 +382,7 @@ class TestReleasePermissions:
         """Staff user can release their own reservation."""
         r = reservation_factory(prefix=active_prefix, reserved_by=staff_user)
         released = ReservationService.release_reservation(
-            db, r.id, staff_user.id, user_roles=["staff"],
+            db, r.id, staff_user.id,
         )
         assert released.status == "released"
         assert released.released_by_id == staff_user.id
@@ -394,7 +394,7 @@ class TestReleasePermissions:
         """Admin can release any reservation."""
         r = reservation_factory(prefix=active_prefix, reserved_by=staff_user)
         released = ReservationService.release_reservation(
-            db, r.id, admin_user.id, user_roles=["admin"],
+            db, r.id, admin_user.id, can_release_any=True,
         )
         assert released.status == "released"
         assert released.released_by_id == admin_user.id
@@ -416,7 +416,7 @@ class TestReleasePermissions:
         db.flush()
 
         released = ReservationService.release_reservation(
-            db, r.id, approver_user.id, user_roles=["reviewer"],
+            db, r.id, approver_user.id,
         )
         assert released.status == "released"
 
@@ -429,7 +429,7 @@ class TestReleasePermissions:
         r = reservation_factory(prefix=active_prefix, reserved_by=staff_user)
         with pytest.raises(ValueError, match="permission"):
             ReservationService.release_reservation(
-                db, r.id, other.id, user_roles=["staff"],
+                db, r.id, other.id,
             )
 
     @pytest.mark.unit
@@ -442,7 +442,7 @@ class TestReleasePermissions:
         )
         with pytest.raises(ValueError, match="already-approved"):
             ReservationService.release_reservation(
-                db, r.id, staff_user.id, user_roles=["staff"],
+                db, r.id, staff_user.id,
             )
 
     @pytest.mark.unit
@@ -455,7 +455,7 @@ class TestReleasePermissions:
         )
         with pytest.raises(ValueError, match="already 'released'"):
             ReservationService.release_reservation(
-                db, r.id, staff_user.id, user_roles=["staff"],
+                db, r.id, staff_user.id,
             )
 
     @pytest.mark.unit
@@ -468,7 +468,7 @@ class TestReleasePermissions:
         )
         with pytest.raises(ValueError, match="already 'expired'"):
             ReservationService.release_reservation(
-                db, r.id, staff_user.id, user_roles=["staff"],
+                db, r.id, staff_user.id,
             )
 
 

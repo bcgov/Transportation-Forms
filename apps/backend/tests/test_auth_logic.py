@@ -15,10 +15,12 @@ from backend.auth.authorization import (
 from backend.auth.jwt_handler import TokenData
 from backend.auth.permissions import Permission
 
+_USER_ID = "123e4567-e89b-12d3-a456-426614174000"
+
 
 def _token(roles):
     return TokenData(
-        sub="123e4567-e89b-12d3-a456-426614174000",
+        sub=_USER_ID,
         email="test@example.com",
         name="Test User",
         roles=roles,
@@ -37,6 +39,7 @@ def _db_with_permission(perm: str):
     db = MagicMock()
     mock_user = MagicMock()
     mock_role = MagicMock()
+    mock_role.name = "test_role"
     mock_role.is_active = True
     mock_role.deleted_at = None
     mock_role.permissions = [perm]
@@ -89,7 +92,7 @@ class TestAuthLogic:
     @pytest.mark.asyncio
     async def test_get_user_permissions_list(self):
         db = _db_with_permission("form:read")
-        perms = await get_user_permissions("some-id", db)
+        perms = await get_user_permissions(_USER_ID, db)
         assert "form:read" in perms
 
     @pytest.mark.asyncio
@@ -97,6 +100,7 @@ class TestAuthLogic:
         db = MagicMock()
         mock_user = MagicMock()
         mock_role = MagicMock()
+        mock_role.name = "test_role"
         mock_role.is_active = True
         mock_role.deleted_at = None
         mock_role.permissions = {"form:read": True}
@@ -104,13 +108,13 @@ class TestAuthLogic:
         mock_ur.role = mock_role
         db.query.return_value.filter.return_value.first.return_value = mock_user
         db.query.return_value.filter.return_value.all.return_value = [mock_ur]
-        perms = await get_user_permissions("some-id", db)
+        perms = await get_user_permissions(_USER_ID, db)
         assert "form:read" in perms
 
     @pytest.mark.asyncio
     async def test_has_permission_true(self):
         db = _db_with_permission("form:read")
-        assert await has_permission("some-id", "form:read", db) is True
+        assert await has_permission(_USER_ID, "form:read", db) is True
 
     @pytest.mark.asyncio
     async def test_has_permission_false_no_user(self):
@@ -120,7 +124,7 @@ class TestAuthLogic:
     @pytest.mark.asyncio
     async def test_has_any_permission_true(self):
         db = _db_with_permission("form:read")
-        assert await has_any_permission("id", ["form:read", "form:create"], db) is True
+        assert await has_any_permission(_USER_ID, ["form:read", "form:create"], db) is True
 
     @pytest.mark.asyncio
     async def test_has_any_permission_false(self):
@@ -130,7 +134,7 @@ class TestAuthLogic:
     @pytest.mark.asyncio
     async def test_has_all_permissions_true(self):
         db = _db_with_permission("form:read")
-        assert await has_all_permissions("id", ["form:read"], db) is True
+        assert await has_all_permissions(_USER_ID, ["form:read"], db) is True
 
     @pytest.mark.asyncio
     async def test_has_all_permissions_false(self):
@@ -164,7 +168,7 @@ class TestAuthLogic:
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = MagicMock()
         await log_permission_check(
-            "user-id", "form:read", allowed=False,
+            _USER_ID, "form:read", allowed=False,
             resource="forms", action="read", db=db,
         )
         db.add.assert_called_once()
@@ -175,7 +179,7 @@ class TestAuthLogic:
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = MagicMock()
         await log_permission_check(
-            "user-id", Permission.ROLE_CREATE, allowed=True, db=db,
+            _USER_ID, Permission.ROLE_CREATE, allowed=True, db=db,
         )
         db.add.assert_called_once()
 
@@ -190,5 +194,5 @@ class TestAuthLogic:
     async def test_log_permission_check_db_exception_swallowed(self):
         db = MagicMock()
         db.query.side_effect = Exception("db error")
-        await log_permission_check("user-id", "form:read", allowed=False, db=db)
+        await log_permission_check(_USER_ID, "form:read", allowed=False, db=db)
 

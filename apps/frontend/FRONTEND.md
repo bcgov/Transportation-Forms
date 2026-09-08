@@ -363,7 +363,7 @@ The fetch interceptor in `api.js` automatically attaches `Authorization: Bearer 
 
 ```js
 // ✅ Just fetch — the interceptor handles auth
-const res = await fetch(`${API_BASE}/forms?skip=0&limit=25`);
+const res = await fetch(`${API_BASE}/forms?skip=0&limit=24`);
 if (!res.ok) {
   const msg = await getErrorDetail(res, 'Failed to load forms');
   showAlert(msg, 'danger');

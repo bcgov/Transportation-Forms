@@ -10,7 +10,8 @@ import { showAlert, showSpinner } from './utils.js';
 import { getCurrentUser, isAuthInitialized } from './state.js';
 import {
   isAuthenticated,
-  isAdminUser,
+  canReviewApprovals,
+  hasValidAuthorizationContext,
   hasPortalRoles,
   hasPermission,
   updateAuthUi,
@@ -59,6 +60,25 @@ function _isUuidLike(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
+function _isRegisteredRoute(path) {
+  const exactRoutes = new Set(
+    Object.values(ROUTES).filter(route => !route.includes(':') && route !== ROUTES.DASHBOARD)
+  );
+  const dynamicPrefixes = [
+    '/forms/',
+    '/edit/',
+    '/reservations/',
+    '/roles/',
+    '/users/',
+    '/access-requests/',
+    '/business-areas/',
+    '/prefixes/',
+    '/admin/cms/pages/',
+  ];
+
+  return exactRoutes.has(path) || dynamicPrefixes.some(prefix => path.startsWith(prefix));
+}
+
 /**
  * Hides every top-level view element by ID so that only the active view
  * needs to set itself visible.
@@ -66,7 +86,7 @@ function _isUuidLike(value) {
 export function hideAllViews() {
   const viewIds = [
     'welcomeView',
-    'dashboardView',
+    'notFoundView',
     'listView',
     'createView',
     'reserveView',
@@ -99,7 +119,6 @@ export function hideAllViews() {
 
 /** Map of route names → nav-link element IDs. */
 const _ROUTE_LINK_MAP = {
-  dashboard: 'dashboardLink',
   list: 'manageFormsLink',
   create: 'createFormLink',
   edit: 'createFormLink',
@@ -129,13 +148,19 @@ const _ROUTE_LINK_MAP = {
  */
 export function updateNavbar(user) {
   document
-    .querySelectorAll('#navbarColor01 .nav-link, #navbarColor01 .dropdown-item')
-    .forEach(link => link.classList.remove('active'));
+    .querySelectorAll('#staffSidebar .staff-sidebar__link')
+    .forEach(link => {
+      link.classList.remove('active');
+      link.removeAttribute('aria-current');
+    });
 
   const linkId = _ROUTE_LINK_MAP[_currentRoute];
   if (linkId) {
     const el = document.getElementById(linkId);
-    if (el) el.classList.add('active');
+    if (el) {
+      el.classList.add('active');
+      el.setAttribute('aria-current', 'page');
+    }
   }
 }
 
@@ -163,6 +188,37 @@ export function isAdminRoute(path) {
   );
 }
 
+function _canAccessOperationalRoute(path) {
+  if (!hasValidAuthorizationContext()) {
+    return false;
+  }
+  if (path === ROUTES.HOME || path === ROUTES.FORMS_LIST) {
+    return !hasPortalRoles() || hasPermission('form:read');
+  }
+  if (path.startsWith('/forms/')) {
+    return hasPermission('form:read');
+  }
+  if (path === ROUTES.FORM_CREATE) {
+    return hasPermission('form:create');
+  }
+  if (path.startsWith('/edit/')) {
+    return hasPermission('form:edit');
+  }
+  if (path === ROUTES.RESERVE) {
+    return hasPermission('reservation:create');
+  }
+  if (path === ROUTES.MY_RESERVATIONS) {
+    return hasPermission('reservation:read');
+  }
+  if (path.startsWith('/reservations/')) {
+    return hasPermission('reservation:read');
+  }
+  if (path === ROUTES.APPROVALS) {
+    return canReviewApprovals();
+  }
+  return true;
+}
+
 // ─── Core route handler ───────────────────────────────────────────────────────
 
 /**
@@ -177,14 +233,29 @@ export async function routeHandler(path, params = {}) {
     return;
   }
 
+  window.dispatchEvent(new CustomEvent('app:route-changing', { detail: { path } }));
   hideAllViews();
+
+  // Route existence is independent of authentication and authorization.
+  if (!_isRegisteredRoute(path)) {
+    _currentRoute = 'not-found';
+    _routeParams = {};
+    const { showNotFoundView } = await import('./views/not-found.js');
+    showNotFoundView();
+    updateNavbar();
+    return;
+  }
 
   // ── Unauthenticated guard ──────────────────────────────────────────────────
   if (!isAuthenticated() && path !== ROUTES.CALLBACK) {
-    // FEAT-0027 US-008 AC9 — remember the deep-link target so the app can
-    // resume there once the user completes the login flow. Uses the same
-    // sessionStorage key already consumed by auth.js on callback.
-    if (path && path !== ROUTES.HOME && path.startsWith('/forms/')) {
+    // Remember registered destinations so callback routing can resume at the
+    // requested path and apply the authenticated permission guards below.
+    if (
+      path &&
+      path !== ROUTES.HOME &&
+      path !== ROUTES.CALLBACK &&
+      _isRegisteredRoute(path)
+    ) {
       try {
         sessionStorage.setItem('tf_return_url', path);
       } catch (_e) { /* ignore quota / private-mode errors */ }
@@ -193,6 +264,23 @@ export async function routeHandler(path, params = {}) {
     _routeParams = {};
     const { showWelcomeView } = await import('./views/welcome.js');
     await showWelcomeView();
+    updateNavbar();
+    return;
+  }
+
+  if (isAuthenticated() && !_canAccessOperationalRoute(path)) {
+    window.dispatchEvent(new CustomEvent('app:route-changing', { detail: { path: 'denied' } }));
+    if (path.startsWith('/forms/')) {
+      const { DEEPLINK_DENIED_TOAST } = await import('./shared/form-details-drawer.js');
+      const { showNotification } = await import('./utils.js');
+      showNotification(DEEPLINK_DENIED_TOAST, 'warning');
+    } else {
+      showAlert('You do not have permission to access that page.', 'warning');
+    }
+    _currentRoute = 'not-found';
+    _routeParams = {};
+    const { showNotFoundView } = await import('./views/not-found.js');
+    showNotFoundView();
     updateNavbar();
     return;
   }
@@ -222,19 +310,32 @@ export async function routeHandler(path, params = {}) {
       path.startsWith('/admin/cms/');
     const canManageCms = hasPermission('cms:manage');
 
+    const isRolesRoute = path === ROUTES.ROLES || path.startsWith('/roles/');
+    const isUsersRoute = path === ROUTES.USERS || path.startsWith('/users/');
+    const isAccessRequestsRoute =
+      path === ROUTES.ACCESS_REQUESTS || path.startsWith('/access-requests/');
+    const isPrefixCreateRoute = path === ROUTES.PREFIX_CREATE;
+    const isPrefixRoute =
+      !isPrefixCreateRoute && (path === ROUTES.PREFIXES || path.startsWith('/prefixes/'));
+
     const isAllowed =
-      isAdminUser() ||
-      (isBusinessAreaCreateRoute && canCreateBA) ||
+      (isRolesRoute && hasPermission('role:read')) ||
+      (isUsersRoute && hasPermission('user:manage_roles')) ||
+      (isAccessRequestsRoute && hasPermission('user:manage_roles')) ||
       (isBusinessAreaListOrDetail && canManageBA) ||
+      (isBusinessAreaCreateRoute && canCreateBA) ||
+      (isPrefixCreateRoute && hasPermission('form_number_prefix:create')) ||
+      (isPrefixRoute && hasPermission('form_number_prefix:read')) ||
       (isCmsRoute && canManageCms);
 
     if (!isAllowed) {
       showAlert('You do not have permission to access that page.', 'warning');
-      window.history.replaceState({}, '', ROUTES.HOME);
-      _currentRoute = 'list';
+      window.dispatchEvent(new CustomEvent('app:route-changing', { detail: { path: 'denied' } }));
+      hideAllViews();
+      _currentRoute = 'not-found';
       _routeParams = {};
-      const { showListView } = await import('./views/list.js');
-      await showListView();
+      const { showNotFoundView } = await import('./views/not-found.js');
+      showNotFoundView();
       updateNavbar();
       return;
     }
@@ -243,28 +344,11 @@ export async function routeHandler(path, params = {}) {
   // ── Route dispatch ─────────────────────────────────────────────────────────
 
   if (path === ROUTES.HOME || path === '') {
-    // Portal users land on the dashboard; public users see the forms list.
-    if (hasPortalRoles()) {
-      window.history.replaceState({}, '', ROUTES.DASHBOARD);
-      await routeHandler(ROUTES.DASHBOARD);
-      return;
-    }
+    window.history.replaceState({}, '', ROUTES.FORMS_LIST);
     _currentRoute = 'list';
     _routeParams = {};
     const { showListView } = await import('./views/list.js');
     await showListView();
-
-  } else if (path === ROUTES.DASHBOARD) {
-    // Non-portal users cannot access the dashboard.
-    if (!hasPortalRoles()) {
-      window.history.replaceState({}, '', ROUTES.HOME);
-      await routeHandler(ROUTES.HOME);
-      return;
-    }
-    _currentRoute = 'dashboard';
-    _routeParams = {};
-    const { showDashboardView } = await import('./views/dashboard.js');
-    await showDashboardView();
 
   } else if (path === ROUTES.FORMS_LIST) {
     _currentRoute = 'list';
@@ -274,7 +358,7 @@ export async function routeHandler(path, params = {}) {
 
   } else if (path.startsWith('/forms/')) {
     // FEAT-0027 US-008 — deep-link `/forms/<form_uuid>` opens the Forms list
-    // and auto-opens the View Details popup for that form. All failure branches
+    // and auto-opens the form-details drawer for that form. All failure branches
     // (invalid UUID, form does not exist, caller lacks form:read) surface the
     // SAME generic toast to avoid the information leak in CC-BR-05 / AC7 / AC8.
     const formId = path.replace('/forms/', '').replace(/\/$/, '');
@@ -282,18 +366,18 @@ export async function routeHandler(path, params = {}) {
     _routeParams = { deepLinkFormId: formId };
     const { showListView } = await import('./views/list.js');
     await showListView();
-    const { openFormViewPopup, DEEPLINK_DENIED_TOAST } =
-      await import('./shared/form-view-popup.js');
+    const { openFormDetailsDrawer, DEEPLINK_DENIED_TOAST } =
+      await import('./shared/form-details-drawer.js');
     const { showNotification } = await import('./utils.js');
     if (!formId || !_isUuidLike(formId)) {
       showNotification(DEEPLINK_DENIED_TOAST, 'warning');
     } else {
-      await openFormViewPopup({ formId });
+      await openFormDetailsDrawer({ formId });
     }
 
   } else if (path === ROUTES.CALLBACK) {
     // OIDC authorization_code callback — auth.js dispatches 'auth:callback-complete'
-    // once tokens are exchanged; the listener below will then navigate to DASHBOARD.
+    // once tokens are exchanged; the listener below resumes the selected route.
     _currentRoute = 'callback';
     _routeParams = {};
     await handleAuthCallback();
@@ -445,11 +529,10 @@ export async function routeHandler(path, params = {}) {
     }
 
   } else {
-    // Unknown path — redirect to the appropriate root by role.
-    const fallback = hasPortalRoles() ? ROUTES.DASHBOARD : ROUTES.HOME;
-    window.history.replaceState({}, '', fallback);
-    await routeHandler(fallback);
-    return;
+    _currentRoute = 'not-found';
+    _routeParams = {};
+    const { showNotFoundView } = await import('./views/not-found.js');
+    showNotFoundView();
   }
 
   updateNavbar();
@@ -464,16 +547,18 @@ export async function routeHandler(path, params = {}) {
 export function initRouter() {
   // auth.js signals that the session has expired / user signed out → go home.
   window.addEventListener('auth:navigate-home', () => navigateTo(ROUTES.HOME));
+  window.addEventListener('auth:authorization-refreshed', () => {
+    routeHandler(window.location.pathname);
+  });
 
   // auth.js signals that the OIDC callback exchange completed → resume at
-  // the return URL (FEAT-0027 US-008 AC9) if auth.js has replaced the browser
-  // URL with a stored deep-link, otherwise fall back to the dashboard.
+  // the return URL if auth.js selected one, otherwise fall back to Forms.
   window.addEventListener('auth:callback-complete', () => {
     const currentPath = window.location.pathname;
     if (currentPath && currentPath !== ROUTES.HOME && currentPath !== ROUTES.CALLBACK) {
       routeHandler(currentPath);
     } else {
-      navigateTo(ROUTES.DASHBOARD);
+      navigateTo(ROUTES.FORMS_LIST);
     }
   });
 

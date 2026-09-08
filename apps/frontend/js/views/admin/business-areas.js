@@ -4,7 +4,7 @@
 
 import { API_BASE, ROUTES, STATUS_LABELS } from '../../constants.js';
 import { escapeHtml, formatDateTime, showAlert, getErrorDetail } from '../../utils.js';
-import { getAuthToken, hasPermission, isAdminUser } from '../../auth.js';
+import { getAuthToken, hasPermission } from '../../auth.js';
 
 // ── Module-private state ───────────────────────────────────────────────
 let _currentAreaDetail = null;
@@ -24,13 +24,13 @@ function _jsonHeaders() {
 // ``RESOURCE_ACTION_PERMISSIONS['business_areas']`` mapping in
 // ``apps/backend/auth/permissions.py``.
 function _canCreateBA() {
-  return isAdminUser() || hasPermission('business_area:create');
+  return hasPermission('business_area:create');
 }
 function _canEditBA() {
-  return isAdminUser() || hasPermission('business_area:edit');
+  return hasPermission('business_area:edit');
 }
 function _canDeleteBA() {
-  return isAdminUser() || hasPermission('business_area:delete');
+  return hasPermission('business_area:delete');
 }
 
 // ── List view ─────────────────────────────────────────────────────────────────
