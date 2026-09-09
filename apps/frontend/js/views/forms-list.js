@@ -13,11 +13,11 @@ import {
     resetBusinessAreas,
 } from './business-areas.js';
 import {
+    canPresentFormWorkflowMetadata,
     getAuthToken,
     hasPermission,
     hasPortalRoles,
     isAdminUser,
-    isStaffViewerOnly,
 } from '../auth.js';
 import { getCurrentUser } from '../state.js';
 import { openFormDetailsDrawer, downloadFormAttachment } from '../shared/form-details-drawer.js';
@@ -98,6 +98,29 @@ function _resetFormsListLifecycle() {
     _renderActiveFilters();
 }
 
+function _removeUnavailableWorkflowFilters() {
+    if (canPresentFormWorkflowMetadata()) return false;
+    const retainedFilters = _selectedFilterChips.filter(
+        chip => chip.category !== 'Workflow State'
+    );
+    if (retainedFilters.length === _selectedFilterChips.length) return false;
+    _selectedFilterChips = retainedFilters;
+    _currentSkip = 0;
+    _renderFiltersMenu();
+    _renderActiveFilters();
+    return true;
+}
+
+function _handleFormsAuthorizationRefreshed() {
+    _removeUnavailableWorkflowFilters();
+    _renderFiltersMenu();
+    if (!canPresentFormWorkflowMetadata()) {
+        document.querySelectorAll('#formsList .forms-result-card__status').forEach(
+            statusElement => statusElement.remove()
+        );
+    }
+}
+
 window.addEventListener('app:route-changing', event => {
     const path = event.detail?.path || '';
     if (path !== ROUTES.FORMS_LIST && !path.startsWith('/forms/')) {
@@ -107,7 +130,7 @@ window.addEventListener('app:route-changing', event => {
 window.addEventListener('auth:session-expired', _resetFormsListLifecycle);
 window.addEventListener('auth:session-started', _resetFormsListLifecycle);
 window.addEventListener('auth:session-cleared', _resetFormsListLifecycle);
-window.addEventListener('auth:authorization-refreshed', _resetFormsListLifecycle);
+window.addEventListener('auth:authorization-refreshed', _handleFormsAuthorizationRefreshed);
 
 /**
  * All available filter options, grouped by category.
@@ -210,6 +233,7 @@ export async function showFormsListView(navigateFn) {
     if (formsLibraryContent) formsLibraryContent.hidden = hasNoRoles;
     if (hasNoRoles) return;
 
+    _removeUnavailableWorkflowFilters();
     await _restoreResultsLayoutPreference();
     if (lifecycleGeneration !== _formsLifecycleGeneration) return;
     _renderFiltersMenu();
@@ -233,8 +257,10 @@ export async function loadForms(requestedSkip = _currentSkip) {
     const controller = new AbortController();
     _formsRequestController = controller;
     const { signal } = controller;
-    const candidateSkip = Number.isSafeInteger(requestedSkip) && requestedSkip >= 0
-        ? requestedSkip
+    const workflowSelectionRemoved = _removeUnavailableWorkflowFilters();
+    const requestedPage = workflowSelectionRemoved ? 0 : requestedSkip;
+    const candidateSkip = Number.isSafeInteger(requestedPage) && requestedPage >= 0
+        ? requestedPage
         : 0;
     _isFormsRequestPending = true;
     _setPaginationPending();
@@ -325,6 +351,7 @@ export function displayForms(forms) {
         return;
     }
 
+    const showWorkflowMetadata = canPresentFormWorkflowMetadata();
     container.innerHTML = forms.map(form => `
         <li class="forms-result-item">
             <article class="forms-result-card" aria-labelledby="form-title-${_escapeAttribute(form.id)}">
@@ -343,7 +370,7 @@ export function displayForms(forms) {
                     <p class="forms-result-card__description"${form.description ? ` title="${_escapeAttribute(form.description)}"` : ''}>${escapeHtml(form.description || 'No description')}</p>
                     <div class="forms-result-card__footer">
                         ${_renderFormSourceType(form)}
-                        <span class="forms-result-card__status" data-status="${_escapeAttribute(form.status)}">${escapeHtml(_formatStatus(form.status))}</span>
+                        ${showWorkflowMetadata ? `<span class="forms-result-card__status" data-status="${_escapeAttribute(form.status)}">${escapeHtml(_formatStatus(form.status))}</span>` : ''}
                         <button class="forms-result-card__view" type="button"
                             data-action="view-form" data-form-id="${_escapeAttribute(form.id)}"
                             aria-label="View details for form ${_escapeAttribute(getFormNumberDisplay(form))}">
@@ -753,6 +780,7 @@ function _initListSearchAutocomplete() {
         if (clearSearchButton) clearSearchButton.hidden = query.length === 0;
         if (query.length < 2) {
             _dismissSearchSuggestions();
+            if (query.length === 0) searchForms();
             return;
         }
         _autocompleteDebounceTimer = setTimeout(() => _fetchSearchSuggestions(query), 250);
@@ -986,21 +1014,11 @@ async function _restoreFormFromList(formId, formTitle) {
 
 // ── FEAT-0014 / FEAT-0030: Unified filters menu ───────────────────────────────
 
-/**
- * Returns the filter options visible to the current user.
- * Users who are staff-viewer-only OR have no roles assigned see only
- * "Published" under Workflow State (US-006); backend enforces access control.
- */
+/** Returns the filter options permitted by the current effective permissions. */
 function _getVisibleFilterOptions() {
-    const user = getCurrentUser();
-    if (!user) return [];
-
-    const roles = Array.isArray(user.roles) ? user.roles : [];
-    const hasNoRoles = roles.length === 0;
-
-    if (isStaffViewerOnly() || hasNoRoles) {
+    if (!canPresentFormWorkflowMetadata()) {
         return _FILTER_OPTIONS.filter(
-            o => o.category !== 'Workflow State' || o.key === 'ws:published'
+            option => option.category !== 'Workflow State'
         );
     }
     return _FILTER_OPTIONS;

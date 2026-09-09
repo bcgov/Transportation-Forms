@@ -12,6 +12,7 @@ from sqlalchemy import desc, asc, text, func as sa_func
 from sqlalchemy.exc import OperationalError
 
 from backend.models import (
+    BusinessArea,
     Form,
     FormWorkflow,
     AuditLog,
@@ -270,6 +271,11 @@ class FormService:
                 FormNumberReservation,
                 Form.form_number_reservation_id == FormNumberReservation.id,
             )
+            .outerjoin(
+                BusinessArea,
+                (Form.business_area_id == BusinessArea.id)
+                & (BusinessArea.deleted_at.is_(None)),
+            )
             .filter(Form.deleted_at.is_(None))
         )
 
@@ -298,6 +304,14 @@ class FormService:
                                 coalesce(forms.form_source_url, '')), 'D')
                         ) @@ plainto_tsquery('english', :search_query)
                     )
+                        OR
+                        (
+                            -- Keep Business Area matches at keyword weight; no promotion.
+                            setweight(
+                                to_tsvector('english',
+                                    coalesce(business_areas.name, '')), 'C'
+                            ) @@ plainto_tsquery('english', :search_query)
+                        )
                     OR
                     (
                         form_number_reservations.full_form_number

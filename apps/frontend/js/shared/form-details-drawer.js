@@ -9,7 +9,11 @@ import {
     showAlert,
     showNotification,
 } from '../utils.js';
-import { getAuthToken, hasPermission } from '../auth.js';
+import {
+    canPresentFormWorkflowMetadata,
+    getAuthToken,
+    hasPermission,
+} from '../auth.js';
 import { getCurrentUser } from '../state.js';
 
 const DEEPLINK_DENIED_MESSAGE =
@@ -56,6 +60,8 @@ function _elements() {
         requestContext: document.getElementById('formDetailsRequestContext'),
         requester: document.getElementById('formDetailsRequester'),
         submitted: document.getElementById('formDetailsSubmitted'),
+        statusTerm: document.getElementById('formDetailsStatusTerm'),
+        statusDefinition: document.getElementById('formDetailsStatusDefinition'),
         status: document.getElementById('formDetailsStatus'),
         businessAreaTerm: document.getElementById('formDetailsBusinessAreaTerm'),
         businessArea: document.getElementById('formDetailsBusinessArea'),
@@ -153,8 +159,15 @@ async function _renderDrawer(form, drawerGeneration) {
     const elements = _elements();
     elements.number.textContent = getFormNumberDisplay(form) || 'Form number unavailable';
     elements.title.textContent = form.title || 'Untitled form';
-    elements.status.textContent = _formatStatus(form.status);
-    elements.status.dataset.status = _getStatusStyle(form.status);
+    const showWorkflowMetadata = canPresentFormWorkflowMetadata();
+    elements.statusTerm.hidden = !showWorkflowMetadata;
+    elements.statusDefinition.hidden = !showWorkflowMetadata;
+    elements.status.textContent = showWorkflowMetadata ? _formatStatus(form.status) : '';
+    if (showWorkflowMetadata) {
+        elements.status.dataset.status = _getStatusStyle(form.status);
+    } else {
+        delete elements.status.dataset.status;
+    }
 
     const businessAreaName = typeof form.business_area?.name === 'string'
         ? form.business_area.name.trim()
@@ -362,6 +375,8 @@ function _clearDrawerContent() {
     elements.requestContext.hidden = true;
     elements.requester.textContent = '';
     elements.submitted.textContent = '';
+    elements.statusTerm.hidden = true;
+    elements.statusDefinition.hidden = true;
     elements.status.textContent = '';
     delete elements.status.dataset.status;
     elements.businessAreaTerm.hidden = true;
