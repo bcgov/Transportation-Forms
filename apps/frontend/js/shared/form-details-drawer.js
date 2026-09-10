@@ -261,7 +261,7 @@ function _renderContactNote(elements, mailboxValue) {
     if (!mailbox) return;
 
     const mailboxLink = document.createElement('a');
-    const encodedMailbox = encodeURIComponent(mailbox).replace('%40', '@');
+    const encodedMailbox = encodeURIComponent(mailbox).replace(/%40/g, '@');
     mailboxLink.href = `mailto:${encodedMailbox}`;
     mailboxLink.textContent = mailbox;
     elements.contactNoteText.append(
