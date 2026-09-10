@@ -42,21 +42,22 @@ def test_cards_preserve_existing_source_and_workflow_handlers():
     assert 'data-action="view-form"' in forms_js
     assert "openFormDetailsDrawer" in forms_js
     assert "downloadFormAttachment" in forms_js
-    assert "_isSafeHttpUrl" in forms_js
+    assert "isSafeHttpUrl" in forms_js
     assert "Open details for form ${_escapeAttribute(" in forms_js
     assert "from form number" in forms_js
 
 
 def test_details_drawer_rejects_unsafe_external_source_urls():
     drawer_js = _source("js/shared/form-details-drawer.js")
+    utils_js = _source("js/utils.js")
     guarded_url_branch = (
         "form.form_source === 'URL' && "
-        "_isSafeHttpUrl(form.form_source_url)"
+        "isSafeHttpUrl(form.form_source_url)"
     )
     assert guarded_url_branch in drawer_js
-    assert "function _isSafeHttpUrl(value)" in drawer_js
-    assert "url.protocol === 'http:'" in drawer_js
-    assert "url.protocol === 'https:'" in drawer_js
+    assert "export function isSafeHttpUrl(value)" in utils_js
+    assert "url.protocol === 'http:'" in utils_js
+    assert "url.protocol === 'https:'" in utils_js
     assert "link.href = form.form_source_url.trim()" in drawer_js
     assert "link.rel = 'noopener noreferrer'" in drawer_js
 

@@ -8,8 +8,10 @@ import {
 } from '../constants.js';
 import {
     escapeHtml,
+    getFormSourceTypeLabel,
     showAlert,
     getFormNumberDisplay,
+    isSafeHttpUrl,
     showNotification,
 } from '../utils.js';
 import {
@@ -493,25 +495,24 @@ export function _renderFormActionButtons(form) {
 
 function _renderFormSourceType(form) {
     if (form.form_source === 'Download' && form.form_attachment_url) {
-        const fileType = form.file_type || 'unknown';
-        return `<span class="forms-result-card__source-type" data-source="download">${escapeHtml(fileType.toUpperCase())}</span>`;
+        return `<span class="forms-result-card__source-type" data-source="download">${escapeHtml(getFormSourceTypeLabel(form))}</span>`;
     }
-    if (form.form_source === 'URL' && _isSafeHttpUrl(form.form_source_url)) {
-        return '<span class="forms-result-card__source-type" data-source="link">Online form</span>';
+    if (form.form_source === 'URL' && isSafeHttpUrl(form.form_source_url)) {
+        return `<span class="forms-result-card__source-type" data-source="link">${escapeHtml(getFormSourceTypeLabel(form))}</span>`;
     }
-    return '<span class="forms-result-card__source-type" data-source="none">No source</span>';
+    return `<span class="forms-result-card__source-type" data-source="none">${escapeHtml(getFormSourceTypeLabel(form))}</span>`;
 }
 
 /**
  * US-009: Render the single per-card source action button next to the form
  * title. Exactly one button is emitted per card, chosen by `form_source`:
  *   - `form_source === 'Download'` with a file  → "Download" button.
- *   - `form_source === 'URL'` with a valid http(s) link → "Form Link" anchor.
+ *   - `form_source === 'URL'` with a valid http(s) link → "Online Form" anchor.
  *   - anything else / missing target / unsafe scheme → disabled "No Attachment".
  *
  * The Download button reuses the shared `downloadFormAttachment` control so the
  * endpoint, headers, and file-selection logic never diverge from the View
- * Details popup (AC2 / BR-01). The Form Link opens in a new tab hardened with
+ * Details popup (AC2 / BR-01). The Online Form link opens in a new tab hardened with
  * `rel="noopener noreferrer"` and only follows http/https URLs (AC8 / BR-05).
  *
  * @param {object} form  Form object from the API.
@@ -534,13 +535,13 @@ function _renderFormSourceButton(form) {
     }
 
     if (form.form_source === 'URL') {
-        if (_isSafeHttpUrl(form.form_source_url)) {
+        if (isSafeHttpUrl(form.form_source_url)) {
             const href = _escapeAttribute(form.form_source_url.trim());
             return `<a class="btn btn-sm btn-outline-primary forms-list__source-btn"
                 href="${href}" target="_blank" rel="noopener noreferrer"
                 data-action="open-form-link"
                 aria-label="Open form link for ${_escapeAttribute(formLabel)}">
-                <i class="fas fa-external-link-alt" aria-hidden="true"></i> Form Link</a>`;
+                <i class="fas fa-external-link-alt" aria-hidden="true"></i> Online Form</a>`;
         }
         return _renderNoAttachmentButton(formLabel, 'No link available');
     }
@@ -556,23 +557,6 @@ function _renderNoAttachmentButton(formLabel, tooltip) {
         disabled title="${safeTooltip}"
         aria-label="No attachment for form ${safeFormLabel} — ${safeTooltip}">
         <i class="fas fa-ban" aria-hidden="true"></i> No Attachment</button>`;
-}
-
-/**
- * US-009 (AC8 / BR-05): return true only for absolute http/https URLs. Values
- * with any other scheme (javascript:, data:, file:, …) or relative/malformed
- * values are rejected and treated as "No link available".
- * @param {string} value  Candidate URL.
- * @returns {boolean}
- */
-function _isSafeHttpUrl(value) {
-    if (typeof value !== 'string' || !value.trim()) return false;
-    try {
-        const url = new URL(value.trim());
-        return url.protocol === 'http:' || url.protocol === 'https:';
-    } catch (_error) {
-        return false;
-    }
 }
 
 /** Reset to page 0 and reload — called by the search button and Enter key. */

@@ -72,14 +72,18 @@ def test_dynamic_text_uses_text_content_and_description_preserves_lines() -> Non
 
 def test_source_actions_are_download_form_link_or_absent() -> None:
     drawer = _source("js/shared/form-details-drawer.js")
+    utils = _source("js/utils.js")
+    guarded_url_branch = (
+        "form.form_source === 'URL' && isSafeHttpUrl(form.form_source_url)"
+    )
 
     assert "form.form_source === 'Download'" in drawer
     assert "form.form_attachment_url" in drawer
     assert "form.form_attachment_filename" in drawer
     assert "Download'" in drawer
-    assert "form.form_source === 'URL' && _isSafeHttpUrl(form.form_source_url)" in drawer
-    assert "Form link'" in drawer
-    assert "url.protocol === 'http:' || url.protocol === 'https:'" in drawer
+    assert guarded_url_branch in drawer
+    assert "Online Form'" in drawer
+    assert "url.protocol === 'http:' || url.protocol === 'https:'" in utils
     assert "link.target = '_blank'" in drawer
     assert "link.rel = 'noopener noreferrer'" in drawer
 

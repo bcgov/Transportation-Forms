@@ -6,6 +6,8 @@ import {
     formatDateTime,
     getErrorDetail,
     getFormNumberDisplay,
+    getFormSourceTypeLabel,
+    isSafeHttpUrl,
     showAlert,
     showNotification,
 } from '../utils.js';
@@ -175,9 +177,7 @@ async function _renderDrawer(form, drawerGeneration) {
     elements.businessAreaTerm.hidden = !businessAreaName;
     elements.businessArea.hidden = !businessAreaName;
     elements.businessArea.textContent = businessAreaName;
-    elements.fileType.textContent = typeof form.file_type === 'string' && form.file_type.trim()
-        ? form.file_type.trim().toUpperCase()
-        : 'Unavailable';
+    elements.fileType.textContent = getFormSourceTypeLabel(form);
     elements.isPublic.textContent = form.is_public === true ? 'Yes' : 'No';
     elements.personalInfo.textContent = form.collects_personal_info === 'Yes' ? 'Yes' : 'No';
     elements.updated.textContent = formatDateTime(form.updated_at);
@@ -229,13 +229,13 @@ function _renderSourceActions(container, form) {
         return;
     }
 
-    if (form.form_source === 'URL' && _isSafeHttpUrl(form.form_source_url)) {
+    if (form.form_source === 'URL' && isSafeHttpUrl(form.form_source_url)) {
         const link = document.createElement('a');
         link.className = 'btn btn-bc-primary';
         link.href = form.form_source_url.trim();
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        link.innerHTML = '<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> Form link';
+        link.innerHTML = '<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> Online Form';
         container.appendChild(link);
     }
 }
@@ -257,9 +257,18 @@ async function _renderWorkflowActions(container, form, drawerGeneration) {
 function _renderContactNote(elements, mailboxValue) {
     const mailbox = typeof mailboxValue === 'string' ? mailboxValue.trim() : '';
     elements.contactNote.hidden = !mailbox;
-    elements.contactNoteText.textContent = mailbox
-        ? `Contact ${mailbox} to request a correction or for more information.`
-        : '';
+    elements.contactNoteText.textContent = '';
+    if (!mailbox) return;
+
+    const mailboxLink = document.createElement('a');
+    const encodedMailbox = encodeURIComponent(mailbox).replace('%40', '@');
+    mailboxLink.href = `mailto:${encodedMailbox}`;
+    mailboxLink.textContent = mailbox;
+    elements.contactNoteText.append(
+        'Contact ',
+        mailboxLink,
+        ' to request a correction or for more information.'
+    );
 }
 
 function _renderApproveButtonHtml(form) {
@@ -307,16 +316,6 @@ export function getFormApprovalActionState(creatorId) {
         canDecide,
         disabledForSelf,
     };
-}
-
-function _isSafeHttpUrl(value) {
-    if (typeof value !== 'string' || !value.trim()) return false;
-    try {
-        const url = new URL(value.trim());
-        return url.protocol === 'http:' || url.protocol === 'https:';
-    } catch (_error) {
-        return false;
-    }
 }
 
 function _showDrawer() {
