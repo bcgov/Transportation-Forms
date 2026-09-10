@@ -143,10 +143,10 @@
             <!-- Welcome View (TASK-430) -->
             <div id="welcomeView" style="display:none;">
                 <div class="text-center py-5">
-                    <img src="/static/assets/bc-gov-transportation-logo.png" alt="BC Government Logo"
-                        style="height:80px; margin-bottom:1.5rem;">
+                    <!-- <img src="/static/assets/bc-gov-transportation-logo.png" alt="BC Government Logo"
+                        style="height:80px; margin-bottom:1.5rem;"> -->
                     <h2 class="mb-3">Transportation Forms Management</h2>
-                    <p class="text-muted mb-4">Manage, publish, and track transportation forms for BC Gov staff.</p>
+                    <p class="text-muted mb-4">Login to access transportation forms exclusively available to BC Government staff.</p>
                     <button class="btn btn-bc-primary btn-lg" type="button" data-action="start-login">
                         <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
@@ -181,7 +181,7 @@
 
                 <section class="forms-library__heading" aria-labelledby="formsLibraryTitle">
                     <h1 id="formsLibraryTitle">Forms library</h1>
-                    <p>Search for forms and view their current details.</p>
+                    <p>Search, view, and access forms.</p>
                 </section>
 
                 <section id="formsLibraryContent" aria-label="Forms search and results">
@@ -189,7 +189,7 @@
                         <div class="forms-search-wrap">
                             <i class="fas fa-search" aria-hidden="true"></i>
                             <label class="visually-hidden" for="searchInput">Search forms</label>
-                            <input class="forms-search-input" id="searchInput" type="search"
+                            <input class="forms-search-input" id="searchInput" type="text"
                                 placeholder="Search by form number, title, or keyword" autocomplete="off"
                                 maxlength="200"
                                 role="combobox" aria-autocomplete="list" aria-haspopup="listbox"
@@ -243,8 +243,9 @@
                             <label class="forms-select-control" for="sortOrder">
                                 <span>Sort by</span>
                                 <select id="sortOrder" aria-label="Sort by">
-                                    <option value="created_at:desc">Date Created (Newest)</option>
-                                    <option value="created_at:asc">Date Created (Oldest)</option>
+                                    <option value="suggested:desc" selected>Suggested</option>
+                                    <option value="title:asc">Form Title A-Z</option>
+                                    <option value="title:desc">Form Title Z-A</option>
                                     <option value="form_number:asc">Form Number A-Z</option>
                                     <option value="form_number:desc">Form Number Z-A</option>
                                 </select>
@@ -1494,7 +1495,10 @@
                 </section>
 
                 <dl class="form-details-drawer__definitions">
-                    <dt>Status</dt><dd><span class="forms-result-card__status" id="formDetailsStatus"></span></dd>
+                    <dt id="formDetailsStatusTerm" hidden>Status</dt>
+                    <dd id="formDetailsStatusDefinition" hidden>
+                        <span class="forms-result-card__status" id="formDetailsStatus"></span>
+                    </dd>
                     <dt id="formDetailsBusinessAreaTerm">Business Area</dt>
                     <dd id="formDetailsBusinessArea"></dd>
                     <dt>File Type</dt><dd id="formDetailsFileType"></dd>

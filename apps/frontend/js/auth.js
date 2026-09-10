@@ -206,6 +206,13 @@ export function hasPermission(permission) {
 }
 
 /**
+ * Returns true only when workflow metadata may be presented in the Forms UI.
+ */
+export function canPresentFormWorkflowMetadata() {
+  return hasPermission('form:edit');
+}
+
+/**
  * Returns true when the current user can open the combined approvals queue.
  */
 export function canReviewApprovals() {

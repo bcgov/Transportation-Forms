@@ -56,6 +56,27 @@ export function getFormNumberDisplay(form) {
     return 'N/A';
 }
 
+export function isSafeHttpUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) return false;
+    try {
+        const url = new URL(value.trim());
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch (_error) {
+        return false;
+    }
+}
+
+export function getFormSourceTypeLabel(form) {
+    if (form?.form_source === 'Download' && form.form_attachment_url) {
+        const fileType = form.file_type || 'unknown';
+        return fileType.toUpperCase();
+    }
+    if (form?.form_source === 'URL' && isSafeHttpUrl(form.form_source_url)) {
+        return 'Online form';
+    }
+    return 'No source';
+}
+
 export function showAlert(message, type = 'info') {
     showNotification(message, type);
     // const alertDiv = document.createElement('div');

@@ -1,10 +1,17 @@
 // frontend/js/views/forms-list.js
 // Manages the forms list/search/pagination view.
-import { API_BASE, ROUTES } from '../constants.js';
+import {
+    API_BASE,
+    DEFAULT_FORMS_SORT,
+    FORMS_SORT_OPTIONS,
+    ROUTES,
+} from '../constants.js';
 import {
     escapeHtml,
+    getFormSourceTypeLabel,
     showAlert,
     getFormNumberDisplay,
+    isSafeHttpUrl,
     showNotification,
 } from '../utils.js';
 import {
@@ -13,11 +20,11 @@ import {
     resetBusinessAreas,
 } from './business-areas.js';
 import {
+    canPresentFormWorkflowMetadata,
     getAuthToken,
     hasPermission,
     hasPortalRoles,
     isAdminUser,
-    isStaffViewerOnly,
 } from '../auth.js';
 import { getCurrentUser } from '../state.js';
 import { openFormDetailsDrawer, downloadFormAttachment } from '../shared/form-details-drawer.js';
@@ -92,10 +99,33 @@ function _resetFormsListLifecycle() {
     const pageSize = document.getElementById('pageSizeSelect');
     if (pageSize) pageSize.value = '24';
     const sort = document.getElementById('sortOrder');
-    if (sort) sort.value = 'created_at:desc';
+    if (sort) sort.value = DEFAULT_FORMS_SORT;
     _dismissSearchSuggestions();
     _renderFiltersMenu();
     _renderActiveFilters();
+}
+
+function _removeUnavailableWorkflowFilters() {
+    if (canPresentFormWorkflowMetadata()) return false;
+    const retainedFilters = _selectedFilterChips.filter(
+        chip => chip.category !== 'Workflow State'
+    );
+    if (retainedFilters.length === _selectedFilterChips.length) return false;
+    _selectedFilterChips = retainedFilters;
+    _currentSkip = 0;
+    _renderFiltersMenu();
+    _renderActiveFilters();
+    return true;
+}
+
+function _handleFormsAuthorizationRefreshed() {
+    _removeUnavailableWorkflowFilters();
+    _renderFiltersMenu();
+    if (!canPresentFormWorkflowMetadata()) {
+        document.querySelectorAll('#formsList .forms-result-card__status').forEach(
+            statusElement => statusElement.remove()
+        );
+    }
 }
 
 window.addEventListener('app:route-changing', event => {
@@ -107,7 +137,7 @@ window.addEventListener('app:route-changing', event => {
 window.addEventListener('auth:session-expired', _resetFormsListLifecycle);
 window.addEventListener('auth:session-started', _resetFormsListLifecycle);
 window.addEventListener('auth:session-cleared', _resetFormsListLifecycle);
-window.addEventListener('auth:authorization-refreshed', _resetFormsListLifecycle);
+window.addEventListener('auth:authorization-refreshed', _handleFormsAuthorizationRefreshed);
 
 /**
  * All available filter options, grouped by category.
@@ -182,6 +212,17 @@ function _defaultNavigate(path) {
     window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
+function _normalizeSortSelection(sortSelect) {
+    const candidate = sortSelect?.value;
+    const normalized = FORMS_SORT_OPTIONS.includes(candidate)
+        ? candidate
+        : DEFAULT_FORMS_SORT;
+    if (sortSelect && sortSelect.value !== normalized) {
+        sortSelect.value = normalized;
+    }
+    return normalized;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -210,6 +251,7 @@ export async function showFormsListView(navigateFn) {
     if (formsLibraryContent) formsLibraryContent.hidden = hasNoRoles;
     if (hasNoRoles) return;
 
+    _removeUnavailableWorkflowFilters();
     await _restoreResultsLayoutPreference();
     if (lifecycleGeneration !== _formsLifecycleGeneration) return;
     _renderFiltersMenu();
@@ -233,8 +275,10 @@ export async function loadForms(requestedSkip = _currentSkip) {
     const controller = new AbortController();
     _formsRequestController = controller;
     const { signal } = controller;
-    const candidateSkip = Number.isSafeInteger(requestedSkip) && requestedSkip >= 0
-        ? requestedSkip
+    const workflowSelectionRemoved = _removeUnavailableWorkflowFilters();
+    const requestedPage = workflowSelectionRemoved ? 0 : requestedSkip;
+    const candidateSkip = Number.isSafeInteger(requestedPage) && requestedPage >= 0
+        ? requestedPage
         : 0;
     _isFormsRequestPending = true;
     _setPaginationPending();
@@ -256,12 +300,10 @@ export async function loadForms(requestedSkip = _currentSkip) {
             if (opt) params.append(opt.apiParam, opt.apiValue);
         });
 
-        // Sort — value format is "field:order" (e.g. "created_at:desc")
+        // Sort value format is "field:order".
         const sortSelect = document.getElementById('sortOrder');
-        const sortValue = sortSelect?.value || 'created_at:desc';
-        const sortParts = sortValue.split(':');
-        const sortField = sortParts[0] || 'created_at';
-        const sortDir = sortParts[1] || 'desc';
+        const sortValue = _normalizeSortSelection(sortSelect);
+        const [sortField, sortDir] = sortValue.split(':');
         params.set('sort_field', sortField);
         params.set('sort_order', sortDir);
 
@@ -325,6 +367,7 @@ export function displayForms(forms) {
         return;
     }
 
+    const showWorkflowMetadata = canPresentFormWorkflowMetadata();
     container.innerHTML = forms.map(form => `
         <li class="forms-result-item">
             <article class="forms-result-card" aria-labelledby="form-title-${_escapeAttribute(form.id)}">
@@ -343,7 +386,7 @@ export function displayForms(forms) {
                     <p class="forms-result-card__description"${form.description ? ` title="${_escapeAttribute(form.description)}"` : ''}>${escapeHtml(form.description || 'No description')}</p>
                     <div class="forms-result-card__footer">
                         ${_renderFormSourceType(form)}
-                        <span class="forms-result-card__status" data-status="${_escapeAttribute(form.status)}">${escapeHtml(_formatStatus(form.status))}</span>
+                        ${showWorkflowMetadata ? `<span class="forms-result-card__status" data-status="${_escapeAttribute(form.status)}">${escapeHtml(_formatStatus(form.status))}</span>` : ''}
                         <button class="forms-result-card__view" type="button"
                             data-action="view-form" data-form-id="${_escapeAttribute(form.id)}"
                             aria-label="View details for form ${_escapeAttribute(getFormNumberDisplay(form))}">
@@ -452,25 +495,24 @@ export function _renderFormActionButtons(form) {
 
 function _renderFormSourceType(form) {
     if (form.form_source === 'Download' && form.form_attachment_url) {
-        const fileType = form.file_type || 'unknown';
-        return `<span class="forms-result-card__source-type" data-source="download">${escapeHtml(fileType.toUpperCase())}</span>`;
+        return `<span class="forms-result-card__source-type" data-source="download">${escapeHtml(getFormSourceTypeLabel(form))}</span>`;
     }
-    if (form.form_source === 'URL' && _isSafeHttpUrl(form.form_source_url)) {
-        return '<span class="forms-result-card__source-type" data-source="link">Online form</span>';
+    if (form.form_source === 'URL' && isSafeHttpUrl(form.form_source_url)) {
+        return `<span class="forms-result-card__source-type" data-source="link">${escapeHtml(getFormSourceTypeLabel(form))}</span>`;
     }
-    return '<span class="forms-result-card__source-type" data-source="none">No source</span>';
+    return `<span class="forms-result-card__source-type" data-source="none">${escapeHtml(getFormSourceTypeLabel(form))}</span>`;
 }
 
 /**
  * US-009: Render the single per-card source action button next to the form
  * title. Exactly one button is emitted per card, chosen by `form_source`:
  *   - `form_source === 'Download'` with a file  → "Download" button.
- *   - `form_source === 'URL'` with a valid http(s) link → "Form Link" anchor.
+ *   - `form_source === 'URL'` with a valid http(s) link → "Online Form" anchor.
  *   - anything else / missing target / unsafe scheme → disabled "No Attachment".
  *
  * The Download button reuses the shared `downloadFormAttachment` control so the
  * endpoint, headers, and file-selection logic never diverge from the View
- * Details popup (AC2 / BR-01). The Form Link opens in a new tab hardened with
+ * Details popup (AC2 / BR-01). The Online Form link opens in a new tab hardened with
  * `rel="noopener noreferrer"` and only follows http/https URLs (AC8 / BR-05).
  *
  * @param {object} form  Form object from the API.
@@ -493,13 +535,13 @@ function _renderFormSourceButton(form) {
     }
 
     if (form.form_source === 'URL') {
-        if (_isSafeHttpUrl(form.form_source_url)) {
+        if (isSafeHttpUrl(form.form_source_url)) {
             const href = _escapeAttribute(form.form_source_url.trim());
             return `<a class="btn btn-sm btn-outline-primary forms-list__source-btn"
                 href="${href}" target="_blank" rel="noopener noreferrer"
                 data-action="open-form-link"
                 aria-label="Open form link for ${_escapeAttribute(formLabel)}">
-                <i class="fas fa-external-link-alt" aria-hidden="true"></i> Form Link</a>`;
+                <i class="fas fa-external-link-alt" aria-hidden="true"></i> Online Form</a>`;
         }
         return _renderNoAttachmentButton(formLabel, 'No link available');
     }
@@ -515,23 +557,6 @@ function _renderNoAttachmentButton(formLabel, tooltip) {
         disabled title="${safeTooltip}"
         aria-label="No attachment for form ${safeFormLabel} — ${safeTooltip}">
         <i class="fas fa-ban" aria-hidden="true"></i> No Attachment</button>`;
-}
-
-/**
- * US-009 (AC8 / BR-05): return true only for absolute http/https URLs. Values
- * with any other scheme (javascript:, data:, file:, …) or relative/malformed
- * values are rejected and treated as "No link available".
- * @param {string} value  Candidate URL.
- * @returns {boolean}
- */
-function _isSafeHttpUrl(value) {
-    if (typeof value !== 'string' || !value.trim()) return false;
-    try {
-        const url = new URL(value.trim());
-        return url.protocol === 'http:' || url.protocol === 'https:';
-    } catch (_error) {
-        return false;
-    }
 }
 
 /** Reset to page 0 and reload — called by the search button and Enter key. */
@@ -753,6 +778,7 @@ function _initListSearchAutocomplete() {
         if (clearSearchButton) clearSearchButton.hidden = query.length === 0;
         if (query.length < 2) {
             _dismissSearchSuggestions();
+            if (query.length === 0) searchForms();
             return;
         }
         _autocompleteDebounceTimer = setTimeout(() => _fetchSearchSuggestions(query), 250);
@@ -986,21 +1012,11 @@ async function _restoreFormFromList(formId, formTitle) {
 
 // ── FEAT-0014 / FEAT-0030: Unified filters menu ───────────────────────────────
 
-/**
- * Returns the filter options visible to the current user.
- * Users who are staff-viewer-only OR have no roles assigned see only
- * "Published" under Workflow State (US-006); backend enforces access control.
- */
+/** Returns the filter options permitted by the current effective permissions. */
 function _getVisibleFilterOptions() {
-    const user = getCurrentUser();
-    if (!user) return [];
-
-    const roles = Array.isArray(user.roles) ? user.roles : [];
-    const hasNoRoles = roles.length === 0;
-
-    if (isStaffViewerOnly() || hasNoRoles) {
+    if (!canPresentFormWorkflowMetadata()) {
         return _FILTER_OPTIONS.filter(
-            o => o.category !== 'Workflow State' || o.key === 'ws:published'
+            option => option.category !== 'Workflow State'
         );
     }
     return _FILTER_OPTIONS;

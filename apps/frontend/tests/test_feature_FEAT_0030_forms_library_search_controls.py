@@ -16,7 +16,6 @@ def test_forms_library_uses_approved_control_composition():
     )[0]
 
     assert "Forms library" in list_view
-    assert "Search for forms and view their current details." in list_view
     assert 'class="forms-command-bar"' in list_view
     assert 'id="searchInput"' in list_view
     assert 'id="clearSearchButton"' in list_view
@@ -58,8 +57,9 @@ def test_existing_query_sort_and_page_size_contract_is_preserved():
     for value in ("24", "48", "96"):
         assert f'<option value="{value}"' in html
     for value in (
-        "created_at:desc",
-        "created_at:asc",
+        "suggested:desc",
+        "title:asc",
+        "title:desc",
         "form_number:asc",
         "form_number:desc",
     ):
@@ -81,15 +81,12 @@ def test_search_clear_and_latest_request_guards_are_wired():
     assert "_currentSkip = 0;" in forms_js
 
 
-def test_staff_viewer_filters_and_route_guard_remain_deny_by_default():
+def test_no_edit_filters_and_route_guard_remain_deny_by_default():
     forms_js = _source("js/views/forms-list.js")
     router_js = _source("js/router.js")
-    staff_viewer_filter = (
-        "o.category !== 'Workflow State' || "
-        "o.key === 'ws:published'"
-    )
 
-    assert staff_viewer_filter in forms_js
+    assert "if (!canPresentFormWorkflowMetadata())" in forms_js
+    assert "option => option.category !== 'Workflow State'" in forms_js
     assert "if (path === ROUTES.FORMS_LIST)" in router_js
     assert "path === ROUTES.HOME || path === ROUTES.FORMS_LIST" in router_js
     assert "return hasPermission('form:read');" in router_js

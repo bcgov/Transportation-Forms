@@ -806,9 +806,9 @@ async def list_forms(
     is_public: Optional[bool] = Query(None, description="Filter by public status"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
     sort_field: str = Query(
-        "created_at",
-        pattern="^(created_at|form_number)$",
-        description="Sort field (created_at or form_number)",
+        "suggested",
+        pattern="^(suggested|title|form_number)$",
+        description="Sort field (suggested, title, or form_number)",
     ),
     current_user: TokenData = Depends(require_permission("forms", "read")),
     db: Session = Depends(get_db),
@@ -825,7 +825,7 @@ async def list_forms(
     - **form_source**: Filter by source type (Link or Download). Multi-value with OR logic.
     - **is_public**: Filter by public/private status
     - **sort_order**: Sort ascending (asc) or descending (desc)
-    - **sort_field**: Sort by created_at (default) or form_number
+    - **sort_field**: Sort by suggested (default), title, or form_number
     """
     # FEAT-0018: Enforce form:read permission
     user_perms = set(current_user.permissions or [])
@@ -839,6 +839,12 @@ async def list_forms(
         raise HTTPException(
             status_code=422,
             detail="limit must be one of: 24, 25, 48, 50, 96, 100",
+        )
+
+    if sort_field == "suggested" and sort_order != "desc":
+        raise HTTPException(
+            status_code=422,
+            detail="suggested sort supports descending order only",
         )
 
     # Validate status values
