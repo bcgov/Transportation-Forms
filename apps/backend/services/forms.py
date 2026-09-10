@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, asc, text, func as sa_func
+from sqlalchemy import asc, case, desc, text, func as sa_func
 from sqlalchemy.exc import OperationalError
 
 from backend.models import (
@@ -244,7 +244,7 @@ class FormService:
         form_source: Optional[List[str]] = None,
         is_public: Optional[bool] = None,
         sort_order: str = "desc",
-        sort_field: str = "created_at",
+        sort_field: str = "suggested",
     ) -> tuple[List[Form], int]:
         """
         List forms with filters and pagination.
@@ -259,7 +259,7 @@ class FormService:
             form_source: Filter by source list (OR logic within)
             is_public: Filter by public status
             sort_order: asc or desc
-            sort_field: created_at or form_number
+            sort_field: suggested, title, or form_number
 
         Returns:
             Tuple of (list of Form objects, total count)
@@ -279,9 +279,7 @@ class FormService:
             .filter(Form.deleted_at.is_(None))
         )
 
-        search_active = False
         if q and q.strip():
-            search_active = True
             escaped_q = FormService._escape_like(q.strip())
             like_pattern = f"%{escaped_q}%"
 
@@ -339,45 +337,41 @@ class FormService:
         # Count total (no DISTINCT needed — LEFT JOIN is 1:1 via FK)
         total = query.count()
 
-        # Sorting
-        #
-        # When a search is active, form-number matches are ranked first
-        # (primary ORDER BY) regardless of the chosen sort_field, so that
-        # an exact/partial form-number hit always appears above title-only
-        # matches.  The user's sort_field is applied as secondary.
-        if search_active:
-            rank_expr = text("""
-                CASE WHEN form_number_reservations.full_form_number
-                          ILIKE :rank_pattern ESCAPE :esc
-                     THEN 0 ELSE 1 END
-            """).params(
-                rank_pattern=like_pattern,
-                esc="\\",
-            )
+        allowed_sort_orders = {
+            "suggested": {"desc"},
+            "title": {"asc", "desc"},
+            "form_number": {"asc", "desc"},
+        }
+        normalized_sort_order = sort_order.lower()
+        if normalized_sort_order not in allowed_sort_orders.get(sort_field, set()):
+            raise ValueError("Unsupported Forms sort field and order")
 
-            if sort_field == "form_number":
-                sort_col = FormNumberReservation.full_form_number
-                if sort_order.lower() == "asc":
-                    query = query.order_by(rank_expr, asc(sort_col).nullslast())
-                else:
-                    query = query.order_by(rank_expr, desc(sort_col).nullslast())
-            else:
-                if sort_order.lower() == "asc":
-                    query = query.order_by(rank_expr, asc(Form.created_at))
-                else:
-                    query = query.order_by(rank_expr, desc(Form.created_at))
+        if sort_field == "suggested":
+            query = query.order_by(desc(Form.created_at), asc(Form.id))
+        elif sort_field == "title":
+            title_whitespace = sa_func.concat(" \t\n\r\f\v", sa_func.chr(160))
+            title_sort_key = case(
+                (sa_func.btrim(Form.title, title_whitespace) == "", None),
+                else_=Form.title,
+            ).collate("forms_title_en_natural_ci")
+            title_order = (
+                asc(title_sort_key).nullslast()
+                if normalized_sort_order == "asc"
+                else desc(title_sort_key).nullslast()
+            )
+            query = query.order_by(
+                title_order,
+                desc(Form.created_at),
+                asc(Form.id),
+            )
         else:
-            if sort_field == "form_number":
-                sort_col = FormNumberReservation.full_form_number
-                if sort_order.lower() == "asc":
-                    query = query.order_by(asc(sort_col).nullslast())
-                else:
-                    query = query.order_by(desc(sort_col).nullslast())
-            else:
-                if sort_order.lower() == "asc":
-                    query = query.order_by(asc(Form.created_at))
-                else:
-                    query = query.order_by(desc(Form.created_at))
+            form_number_sort_key = FormNumberReservation.full_form_number
+            form_number_order = (
+                asc(form_number_sort_key).nullslast()
+                if normalized_sort_order == "asc"
+                else desc(form_number_sort_key).nullslast()
+            )
+            query = query.order_by(form_number_order, asc(Form.id))
 
         # Apply pagination
         forms = query.offset(skip).limit(limit).all()

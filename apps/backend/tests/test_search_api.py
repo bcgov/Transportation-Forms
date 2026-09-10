@@ -196,7 +196,9 @@ def test_filters_individual_and_combined(search_client: TestClient, db, seed_use
 
 
 @pytest.mark.integration
-def test_sort_order_created_at(search_client: TestClient, db, seed_user):
+def test_default_suggested_sort_and_invalid_ascending_order(
+    search_client: TestClient, db, seed_user
+):
     now = datetime.now(timezone.utc)
     _create_form(
         db,
@@ -214,13 +216,18 @@ def test_sort_order_created_at(search_client: TestClient, db, seed_user):
     )
     db.commit()
 
-    desc_response = search_client.get("/api/v1/forms", params={"sort_order": "desc", "limit": 25})
-    asc_response = search_client.get("/api/v1/forms", params={"sort_order": "asc", "limit": 25})
+    desc_response = search_client.get(
+        "/api/v1/forms",
+        params={"sort_field": "suggested", "sort_order": "desc", "limit": 25},
+    )
+    asc_response = search_client.get(
+        "/api/v1/forms",
+        params={"sort_field": "suggested", "sort_order": "asc", "limit": 25},
+    )
 
     assert desc_response.status_code == 200
-    assert asc_response.status_code == 200
     assert desc_response.json()["items"][0]["title"] == "Newer Form"
-    assert asc_response.json()["items"][0]["title"] == "Older Form"
+    assert asc_response.status_code == 422
 
 
 @pytest.mark.integration

@@ -275,22 +275,44 @@ class TestSearchByFormNumber:
         assert "H0021" not in full_nums
 
     @pytest.mark.integration
-    def test_tc1_6_form_number_matches_ranked_first(self, feat14_client, db, prefix_h):
-        """Form number matches appear before text-only matches."""
+    def test_tc1_6_selected_sort_controls_all_matches(
+        self, feat14_client, db, prefix_h
+    ):
+        """Search match source does not override the selected sort."""
         client, staff, _ = feat14_client
-        # Form A: has form number H0021
+        now = datetime.now(timezone.utc)
         res = _make_reservation(db, prefix_h, "0021", "H0021", staff)
-        _make_form(db, staff, "Bridge Form", reservation=res)
-        # Form B: title contains "H0021" but no form number reservation
-        _make_form(db, staff, "H0021 Policy Update", description="H0021 policy stuff")
+        _make_form(
+            db,
+            staff,
+            "Number Match",
+            reservation=res,
+            created_at=now - timedelta(days=1),
+        )
+        _make_form(
+            db,
+            staff,
+            "H0021 Policy Update",
+            description="H0021 policy stuff",
+            created_at=now,
+        )
         db.flush()
 
-        resp = client.get("/api/v1/forms", params={"q": "H0021", "limit": 25})
+        resp = client.get(
+            "/api/v1/forms",
+            params={
+                "q": "H0021",
+                "sort_field": "suggested",
+                "sort_order": "desc",
+                "limit": 25,
+            },
+        )
         assert resp.status_code == 200
         items = resp.json()["items"]
-        assert len(items) >= 1
-        # The form with actual form number H0021 should appear first
-        assert items[0]["full_form_number"] == "H0021"
+        assert [item["title"] for item in items] == [
+            "H0021 Policy Update",
+            "Number Match",
+        ]
 
     @pytest.mark.integration
     def test_tc1_7_case_insensitive_search(self, feat14_client, db, prefix_h):
@@ -616,7 +638,7 @@ class TestSortByFormNumber:
         assert resp.status_code == 200
 
     @pytest.mark.integration
-    def test_tc3_8_sort_field_created_at_accepted(self, feat14_client, db):
+    def test_tc3_8_sort_field_created_at_rejected(self, feat14_client, db):
         client, staff, _ = feat14_client
         now = datetime.now(timezone.utc)
         _make_form(db, staff, "Older", created_at=now - timedelta(days=2))
@@ -627,9 +649,7 @@ class TestSortByFormNumber:
             "/api/v1/forms",
             params={"sort_field": "created_at", "sort_order": "desc", "limit": 25},
         )
-        assert resp.status_code == 200
-        items = resp.json()["items"]
-        assert items[0]["title"] == "Newer"
+        assert resp.status_code == 422
 
     @pytest.mark.integration
     def test_tc3_9_invalid_sort_field_rejected(self, feat14_client, db):
@@ -642,7 +662,7 @@ class TestSortByFormNumber:
 
     @pytest.mark.integration
     def test_tc3_10_default_sort_field(self, feat14_client, db):
-        """Default sort is by created_at descending when sort_field omitted."""
+        """Default Suggested sort orders creation time descending."""
         client, staff, _ = feat14_client
         now = datetime.now(timezone.utc)
         _make_form(db, staff, "Older", created_at=now - timedelta(days=2))

@@ -7,6 +7,15 @@ export const AUTH_STORAGE_ACCESS = 'tf_access_token';
 export const AUTH_STORAGE_REFRESH = 'tf_refresh_token';
 export const AUTH_STORAGE_USER = 'tf_user';
 
+export const DEFAULT_FORMS_SORT = 'suggested:desc';
+export const FORMS_SORT_OPTIONS = Object.freeze([
+  DEFAULT_FORMS_SORT,
+  'title:asc',
+  'title:desc',
+  'form_number:asc',
+  'form_number:desc',
+]);
+
 export const ROUTES = {
   HOME: '/',
   CALLBACK: '/callback',

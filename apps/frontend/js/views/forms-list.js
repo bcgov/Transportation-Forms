@@ -1,6 +1,11 @@
 // frontend/js/views/forms-list.js
 // Manages the forms list/search/pagination view.
-import { API_BASE, ROUTES } from '../constants.js';
+import {
+    API_BASE,
+    DEFAULT_FORMS_SORT,
+    FORMS_SORT_OPTIONS,
+    ROUTES,
+} from '../constants.js';
 import {
     escapeHtml,
     showAlert,
@@ -92,7 +97,7 @@ function _resetFormsListLifecycle() {
     const pageSize = document.getElementById('pageSizeSelect');
     if (pageSize) pageSize.value = '24';
     const sort = document.getElementById('sortOrder');
-    if (sort) sort.value = 'created_at:desc';
+    if (sort) sort.value = DEFAULT_FORMS_SORT;
     _dismissSearchSuggestions();
     _renderFiltersMenu();
     _renderActiveFilters();
@@ -205,6 +210,17 @@ function _defaultNavigate(path) {
     window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
+function _normalizeSortSelection(sortSelect) {
+    const candidate = sortSelect?.value;
+    const normalized = FORMS_SORT_OPTIONS.includes(candidate)
+        ? candidate
+        : DEFAULT_FORMS_SORT;
+    if (sortSelect && sortSelect.value !== normalized) {
+        sortSelect.value = normalized;
+    }
+    return normalized;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -282,12 +298,10 @@ export async function loadForms(requestedSkip = _currentSkip) {
             if (opt) params.append(opt.apiParam, opt.apiValue);
         });
 
-        // Sort — value format is "field:order" (e.g. "created_at:desc")
+        // Sort value format is "field:order".
         const sortSelect = document.getElementById('sortOrder');
-        const sortValue = sortSelect?.value || 'created_at:desc';
-        const sortParts = sortValue.split(':');
-        const sortField = sortParts[0] || 'created_at';
-        const sortDir = sortParts[1] || 'desc';
+        const sortValue = _normalizeSortSelection(sortSelect);
+        const [sortField, sortDir] = sortValue.split(':');
         params.set('sort_field', sortField);
         params.set('sort_order', sortDir);
 

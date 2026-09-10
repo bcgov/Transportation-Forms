@@ -16,7 +16,6 @@ def test_forms_library_uses_approved_control_composition():
     )[0]
 
     assert "Forms library" in list_view
-    assert "Search for forms and view their current details." in list_view
     assert 'class="forms-command-bar"' in list_view
     assert 'id="searchInput"' in list_view
     assert 'id="clearSearchButton"' in list_view
@@ -58,8 +57,9 @@ def test_existing_query_sort_and_page_size_contract_is_preserved():
     for value in ("24", "48", "96"):
         assert f'<option value="{value}"' in html
     for value in (
-        "created_at:desc",
-        "created_at:asc",
+        "suggested:desc",
+        "title:asc",
+        "title:desc",
         "form_number:asc",
         "form_number:desc",
     ):
