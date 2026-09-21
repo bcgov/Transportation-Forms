@@ -78,12 +78,9 @@ class TestApproveSelfPermissionDefinition:
 
     @pytest.mark.unit
     def test_standard_roles_do_not_include_approve_self(self):
-        """TC1.3: staff_manager, reviewer, staff_viewer do not carry form:approve-self."""
-        for role_name in ("staff_manager", "reviewer", "staff_viewer"):
-            role_perms = _all_perms_for_role(role_name)
-            assert "form:approve-self" not in role_perms, (
-                f"Role '{role_name}' must not carry form:approve-self by default"
-            )
+        """TC1.3: the seeded Staff Viewer does not carry form:approve-self."""
+        role_perms = _all_perms_for_role("staff_viewer")
+        assert "form:approve-self" not in role_perms
 
 
 # ---------------------------------------------------------------------------

@@ -83,8 +83,7 @@ class Permission(str, Enum):
 
     # CMS Management Permissions (FEAT-0026 US-010)
     # Single permission gating the entire CMS admin surface (pages, media,
-    # redirects).  Held by the seeded ``content_editor`` role and may be
-    # granted to other roles (e.g., admin) via the existing role-management UI.
+    # redirects). May be granted through the existing role-management UI.
     CMS_MANAGE = "cms:manage"
 
     # Staff Portal Permissions
@@ -166,67 +165,6 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.SYSTEM_HEALTH,
         ],
     },
-    "staff_manager": {
-        "description": "Staff manager responsible for form workflow and staff coordination",
-        "is_system": True,
-        "permissions": [
-            # Form CRUD
-            Permission.FORM_CREATE,
-            Permission.FORM_READ,
-            Permission.FORM_EDIT,
-            Permission.FORM_DELETE,
-            Permission.FORM_ARCHIVE,
-            # Form workflow
-            Permission.FORM_SUBMIT_FOR_REVIEW,
-            Permission.FORM_REVIEW,
-            Permission.FORM_APPROVE,
-            # Business areas (read + manage)
-            Permission.BUSINESS_AREA_READ,
-            Permission.BUSINESS_AREA_MANAGE,
-            # Category read
-            Permission.CATEGORY_READ,
-            # User management (limited)
-            Permission.USER_READ,
-            # Reservation permissions (manager)
-            Permission.RESERVATION_CREATE,
-            Permission.RESERVATION_READ,
-            Permission.RESERVATION_SUBMIT,
-            Permission.RESERVATION_APPROVE,
-            Permission.RESERVATION_REJECT,
-            Permission.RESERVATION_REQUEST_CHANGES,
-            Permission.RESERVATION_RELEASE,
-            # Audit log viewing
-            Permission.AUDIT_LOG_VIEW,
-            Permission.REPORT_VIEW,
-            # Staff portal navigation
-            Permission.PORTAL_NAVIGATION,
-        ],
-    },
-    "reviewer": {
-        "description": "Form reviewer responsible for reviewing and approving forms",
-        "is_system": True,
-        "permissions": [
-            # Form read and review
-            Permission.FORM_READ,
-            Permission.FORM_REVIEW,
-            Permission.FORM_APPROVE,
-            Permission.FORM_ARCHIVE,  # FEAT-0013: reviewers can archive published forms
-            # Business areas (read only)
-            Permission.BUSINESS_AREA_READ,
-            # Categories (read only)
-            Permission.CATEGORY_READ,
-            # Reservation review permissions
-            Permission.RESERVATION_READ,
-            Permission.RESERVATION_APPROVE,
-            Permission.RESERVATION_REJECT,
-            Permission.RESERVATION_REQUEST_CHANGES,
-            Permission.RESERVATION_RELEASE,
-            # Audit log viewing
-            Permission.AUDIT_LOG_VIEW,
-            # Staff portal navigation
-            Permission.PORTAL_NAVIGATION,
-        ],
-    },
     "staff_viewer": {
         "description": "Staff member with read-only access to published forms",
         "is_system": True,
@@ -237,17 +175,6 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.BUSINESS_AREA_READ,
             # Categories (read only)
             Permission.CATEGORY_READ,
-        ],
-    },
-    # FEAT-0026 US-010 — Content Editor role: holds exactly CMS_MANAGE.
-    # Seeded by Alembic migration 017; updates here keep the in-memory
-    # default in sync with the DB seed for ``seed_default_roles``.
-    "content_editor": {
-        "description": "Content Editor for the public Forms Portal mini-CMS",
-        "is_system": True,
-        "permissions": [
-            Permission.CMS_MANAGE,
-            Permission.PORTAL_NAVIGATION,
         ],
     },
 }

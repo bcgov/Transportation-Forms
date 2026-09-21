@@ -12,7 +12,9 @@ def seed_all_defaults(db) -> None:
 
     This should be called after database migrations.
     """
-    seed_default_roles(db)
+    role_seed_result = seed_default_roles(db)
+    if role_seed_result["failed"]:
+        raise RuntimeError("Default role seeding failed")
     seed_default_business_areas(db)
     seed_demo_user(db)
     seed_default_prefixes(db)

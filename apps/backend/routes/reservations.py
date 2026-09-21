@@ -485,7 +485,7 @@ async def approve_reservation(
     """
     Approve a reservation (pending_approval → approved).
 
-    Requires an approver role (admin, reviewer, or staff_manager).
+    Requires reservation approval permission.
     """
     try:
         reservation = ReservationService.approve_reservation(

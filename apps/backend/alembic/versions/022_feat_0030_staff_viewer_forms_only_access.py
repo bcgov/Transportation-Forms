@@ -35,12 +35,7 @@ def upgrade() -> None:
                    is_active IS TRUE
                AND deleted_at IS NULL
                AND (
-                       lower(btrim(name)) IN (
-                           'admin',
-                           'staff_manager',
-                           'reviewer',
-                           'content_editor'
-                       )
+                       lower(btrim(name)) = 'admin'
                     OR is_system IS FALSE
                )
                AND lower(btrim(name)) != 'staff_viewer'
@@ -76,12 +71,7 @@ def upgrade() -> None:
          WHERE roles.id = normalized.id
            AND roles.is_active IS TRUE
            AND roles.deleted_at IS NULL
-           AND (lower(btrim(roles.name)) IN (
-                    'admin',
-                    'staff_manager',
-                    'reviewer',
-                    'content_editor'
-                )
+           AND (lower(btrim(roles.name)) = 'admin'
                 OR roles.is_system IS FALSE)
            AND lower(btrim(roles.name)) != 'staff_viewer'
         """

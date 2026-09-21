@@ -19,19 +19,15 @@ def seeded_db(_test_engine):
 class TestDatabaseSeeds:
     def test_seed_roles_creates_core_roles(self, seeded_db: Session):
         seed_roles(seeded_db)
-        roles = seeded_db.query(Role).all()
-        assert len(roles) >= 3
-        role_codes = [r.name for r in roles]
-        assert "admin" in role_codes
-        assert "reviewer" in role_codes
+        roles = seeded_db.query(Role).filter(Role.is_system.is_(True)).all()
+        assert {role.name for role in roles} == {"admin", "staff_viewer"}
 
     def test_seed_roles_idempotent(self, seeded_db: Session):
         # Running it twice shouldn't crash or duplicate system roles
         seed_roles(seeded_db)
         seed_roles(seeded_db)
         roles = seeded_db.query(Role).filter(Role.is_system == True).all()
-        # admin, reviewer, staff_manager, staff_viewer, content_editor (FEAT-0026)
-        assert len(roles) == 5
+        assert {role.name for role in roles} == {"admin", "staff_viewer"}
 
     def test_seed_prefixes_successful(self, seeded_db: Session):
         seed_prefixes(seeded_db)

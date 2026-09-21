@@ -1,10 +1,8 @@
 """
 Seed default roles and permissions to the database.
 
-This script creates the 4 system roles with their associated permissions:
+This script creates the two system roles with their associated permissions:
 - admin: Full system access
-- staff_manager: Form workflow and staff management
-- reviewer: Form review and approval
 - staff_viewer: Read-only access to published forms
 """
 
@@ -102,16 +100,19 @@ def seed_default_roles(db: Session) -> dict:
                     "error": "Integrity constraint violation",
                 }
             )
-        except Exception as e:
+        except Exception:
             db.rollback()
             results["failed"] += 1
             results["roles"].append(
                 {
                     "name": role_name,
                     "status": "failed",
-                    "error": str(e),
+                    "error": "Database operation failed",
                 }
             )
+
+    if results["failed"]:
+        raise RuntimeError("Default role seeding failed")
 
     return results
 
@@ -134,7 +135,9 @@ def get_role_by_name(db: Session, role_name: str) -> Role:
     return (
         db.query(Role)
         .filter(
-            Role.name == role_name, Role.is_active.is_(True), Role.deleted_at.is_(None)
+            Role.name == role_name,
+            Role.is_active.is_(True),
+            Role.deleted_at.is_(None),
         )
         .first()
     )

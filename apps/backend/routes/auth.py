@@ -644,7 +644,10 @@ async def get_current_user_info(
 
 def map_keycloak_roles_to_local(keycloak_roles: list) -> list:
     """
-    Map KeyCloak roles to local application roles.
+    Map KeyCloak roles for dormant compatibility callers.
+
+    The live OIDC callback does not consume external role claims. It derives
+    roles from current database assignments and bootstraps only staff_viewer.
 
     Args:
         keycloak_roles: List of role names from KeyCloak
@@ -656,13 +659,9 @@ def map_keycloak_roles_to_local(keycloak_roles: list) -> list:
     # In production, this could be more sophisticated
     role_mapping = {
         "admin": "admin",
-        "staff_manager": "staff_manager",
-        "reviewer": "reviewer",
         "staff_viewer": "staff_viewer",
         # Add aliases if needed
         "administrator": "admin",
-        "manager": "staff_manager",
-        "approver": "reviewer",
         "viewer": "staff_viewer",
     }
 

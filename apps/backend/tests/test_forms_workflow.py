@@ -16,6 +16,21 @@ from backend.services.forms import (
 )
 
 
+_EXPLICIT_TEST_ROLE_PERMISSIONS = {
+    "staff_manager": {
+        "form:create",
+        "form:read",
+        "form:edit",
+        "form:delete",
+        "form:archive",
+        "form:submit_for_review",
+        "form:review",
+        "form:approve",
+    },
+    "reviewer": {"form:read", "form:review", "form:approve", "form:archive"},
+}
+
+
 def _create_user(user_factory, email: str):
     return user_factory(email=email, first_name="Workflow", last_name="Tester")
 
@@ -44,6 +59,7 @@ def _perms_for_roles(*role_names: str) -> list:
         role_cfg = DEFAULT_ROLES.get(name, {})
         for p in role_cfg.get("permissions", []):
             perms.add(p.value if hasattr(p, "value") else str(p))
+        perms.update(_EXPLICIT_TEST_ROLE_PERMISSIONS.get(name, set()))
     return list(perms)
 
 
