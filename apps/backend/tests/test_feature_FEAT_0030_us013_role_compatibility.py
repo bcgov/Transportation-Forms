@@ -5,16 +5,15 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-
 from backend.auth.authorization import get_user_permissions, has_permission
 from backend.auth.permissions import DEFAULT_ROLES, Permission
-from backend import main as backend_main
+from backend.routes.auth import map_keycloak_roles_to_local
 from backend.seeds import seed_all_defaults
 from backend.seeds.default_roles import seed_default_roles
-from backend.routes.auth import map_keycloak_roles_to_local
-from backend.services.roles import RoleService
 from backend.services.forms import FormService, FormWorkflowValidationError
+from backend.services.roles import RoleService
 
+from backend import main as backend_main
 
 RETIRED_ROLE_NAMES = {"content_editor", "reviewer", "staff_manager"}
 
@@ -39,14 +38,10 @@ def test_default_role_catalogue_contains_only_retained_roles():
 
 
 def test_retained_role_permissions_match_pre_us013_contract():
-    admin_permissions = {
-        permission.value
-        for permission in DEFAULT_ROLES["admin"]["permissions"]
-    }
-    viewer_permissions = {
-        permission.value
-        for permission in DEFAULT_ROLES["staff_viewer"]["permissions"]
-    }
+    admin = DEFAULT_ROLES["admin"]["permissions"]
+    viewer = DEFAULT_ROLES["staff_viewer"]["permissions"]
+    admin_permissions = {permission.value for permission in admin}
+    viewer_permissions = {permission.value for permission in viewer}
 
     assert admin_permissions == {permission.value for permission in Permission}
     assert viewer_permissions == {
@@ -146,7 +141,7 @@ def test_role_seeder_raises_sanitized_error_after_database_failure():
 
     assert str(exc_info.value) == "Default role seeding failed"
     assert "private-database-detail" not in str(exc_info.value)
-    assert db.rollback.call_count == len(DEFAULT_ROLES)
+    db.rollback.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
@@ -177,7 +172,11 @@ async def test_neutral_custom_role_allows_only_explicit_permission(permission):
 
     assert await has_permission(str(uuid4()), permission, db) is True
     assert (
-        await has_permission(str(uuid4()), Permission.ROLE_CREATE.value, db)
+        await has_permission(
+            str(uuid4()),
+            Permission.ROLE_CREATE.value,
+            db,
+        )
         is False
     )
 
@@ -189,7 +188,11 @@ async def test_missing_role_assignment_denies_all_permissions():
 
     assert await get_user_permissions(str(uuid4()), db) == set()
     assert (
-        await has_permission(str(uuid4()), Permission.FORM_APPROVE.value, db)
+        await has_permission(
+            str(uuid4()),
+            Permission.FORM_APPROVE.value,
+            db,
+        )
         is False
     )
 
@@ -263,9 +266,7 @@ def test_runtime_modules_do_not_depend_on_retired_role_names():
 
 
 def test_alembic_revisions_do_not_seed_retired_roles():
-    versions_dir = (
-        Path(__file__).resolve().parents[1] / "alembic" / "versions"
-    )
+    versions_dir = Path(__file__).resolve().parents[1] / "alembic" / "versions"
     matches = {}
 
     for path in versions_dir.glob("*.py"):
@@ -273,8 +274,7 @@ def test_alembic_revisions_do_not_seed_retired_roles():
         executable_strings = {
             node.value
             for node in ast.walk(tree)
-            if isinstance(node, ast.Constant)
-            and isinstance(node.value, str)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
         }
         retired_matches = sorted(
             retired_name

@@ -6,22 +6,37 @@ This script creates the two system roles with their associated permissions:
 - staff_viewer: Read-only access to published forms
 """
 
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-
-from backend.models import Role
 from backend.auth.permissions import DEFAULT_ROLES
+from backend.models import Role
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+
+class _InvalidDefaultRoleState(Exception):
+    pass
+
+
+def _is_valid_default_role(role: Role) -> bool:
+    return bool(role.is_system) and bool(role.is_active)
+
+
+def _rollback(db: Session) -> bool:
+    try:
+        db.rollback()
+    except Exception:
+        return False
+    return True
 
 
 def seed_default_roles(db: Session) -> dict:
     """
-    Create default roles with their permissions.
+    Create missing default roles without changing existing role configuration.
 
     Args:
         db: Database session
 
     Returns:
-        Dictionary with counts of roles created/updated
+        Dictionary with counts of roles created, found, or failed
 
     Example:
         from backend.database import SessionLocal
@@ -29,45 +44,36 @@ def seed_default_roles(db: Session) -> dict:
 
         db = SessionLocal()
         results = seed_default_roles(db)
-        print(f"Created: {results['created']}, Updated: {results['updated']}")
+        print(
+            f"Created: {results['created']}, "
+            f"Existing: {results['existing']}"
+        )
     """
 
-    results = {
-        "created": 0,
-        "updated": 0,
-        "failed": 0,
-        "roles": [],
-    }
-
-    for role_name, role_config in DEFAULT_ROLES.items():
+    for attempt in range(2):
         try:
-            # Check if role already exists
-            existing_role = (
-                db.query(Role)
-                .filter(Role.name == role_name, Role.deleted_at.is_(None))
-                .first()
-            )
+            existing_roles = {}
+            missing_roles = []
 
-            if existing_role:
-                # Update existing role
-                existing_role.description = role_config["description"]
-                existing_role.permissions = [
-                    p.value if hasattr(p, "value") else str(p)
-                    for p in role_config["permissions"]
-                ]
-                existing_role.is_system = role_config["is_system"]
-                existing_role.is_active = True
-                db.commit()
-                results["updated"] += 1
-                results["roles"].append(
-                    {
-                        "name": role_name,
-                        "status": "updated",
-                        "id": str(existing_role.id),
-                    }
+            for role_name, role_config in DEFAULT_ROLES.items():
+                existing_role = (
+                    db.query(Role)
+                    .filter(
+                        Role.name == role_name,
+                        Role.deleted_at.is_(None),
+                    )
+                    .first()
                 )
-            else:
-                # Create new role
+
+                if existing_role:
+                    if not _is_valid_default_role(existing_role):
+                        raise _InvalidDefaultRoleState
+                    existing_roles[role_name] = existing_role
+                else:
+                    missing_roles.append((role_name, role_config))
+
+            created_roles = []
+            for role_name, role_config in missing_roles:
                 new_role = Role(
                     name=role_name,
                     description=role_config["description"],
@@ -79,42 +85,49 @@ def seed_default_roles(db: Session) -> dict:
                     is_active=True,
                 )
                 db.add(new_role)
+
+                created_roles.append((role_name, role_config, new_role))
+
+            if created_roles:
                 db.commit()
-                results["created"] += 1
-                results["roles"].append(
+
+            results = {
+                "created": len(created_roles),
+                "updated": 0,
+                "existing": len(existing_roles),
+                "failed": 0,
+                "roles": [
+                    {
+                        "name": role_name,
+                        "status": "existing",
+                        "id": str(role.id),
+                    }
+                    for role_name, role in existing_roles.items()
+                ]
+                + [
                     {
                         "name": role_name,
                         "status": "created",
                         "id": str(new_role.id),
                         "permissions_count": len(role_config["permissions"]),
                     }
-                )
+                    for role_name, role_config, new_role in created_roles
+                ],
+            }
+            return results
 
         except IntegrityError:
-            db.rollback()
-            results["failed"] += 1
-            results["roles"].append(
-                {
-                    "name": role_name,
-                    "status": "failed",
-                    "error": "Integrity constraint violation",
-                }
-            )
+            rollback_succeeded = _rollback(db)
+            if rollback_succeeded and attempt == 0:
+                continue
+            raise RuntimeError("Default role seeding failed") from None
+        except _InvalidDefaultRoleState:
+            raise RuntimeError("Default role seeding failed") from None
         except Exception:
-            db.rollback()
-            results["failed"] += 1
-            results["roles"].append(
-                {
-                    "name": role_name,
-                    "status": "failed",
-                    "error": "Database operation failed",
-                }
-            )
+            _rollback(db)
+            raise RuntimeError("Default role seeding failed") from None
 
-    if results["failed"]:
-        raise RuntimeError("Default role seeding failed")
-
-    return results
+    raise RuntimeError("Default role seeding failed")
 
 
 # Alias for backward compatibility

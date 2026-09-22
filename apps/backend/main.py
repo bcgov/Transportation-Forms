@@ -35,12 +35,12 @@ logger = structlog.get_logger()
 
 
 # Validate default role seeding and initialise object storage on startup.
-# The migrations job remains the primary seed owner; startup seeding keeps
-# retained role permissions current and fails the pod when those writes fail.
+# The migrations job remains the primary seed owner; startup creates only
+# missing retained roles and fails the pod when those writes fail.
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # Seed default roles so that any new permissions added to DEFAULT_ROLES are
-    # reflected in the database without requiring a manual migration step.
+    # Preserve existing role configuration; permission changes require a
+    # versioned migration rather than an application restart.
     try:
         from backend.database import SessionLocal
         from backend.seeds.default_roles import seed_default_roles
