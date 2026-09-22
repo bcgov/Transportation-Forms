@@ -16,7 +16,7 @@ from backend.auth.jwt_handler import TokenData
 from backend.auth.permissions import DEFAULT_ROLES
 from backend.database import get_db
 from backend.main import app
-from backend.models import AuditLog, Form
+from backend.models import AuditLog, Form, Role, UserRole
 
 
 _EXPLICIT_TEST_ROLE_PERMISSIONS = {
@@ -68,6 +68,20 @@ def _create_form(
     return form
 
 
+def _grant_permissions(db, user, roles: list[str], permissions: list[str]) -> None:
+    is_admin = "admin" in roles
+    role = Role(
+        id=uuid.uuid4(),
+        name="admin" if is_admin else f"state_action_{uuid.uuid4().hex}",
+        permissions=permissions,
+        is_system=is_admin,
+        is_active=True,
+    )
+    db.add(role)
+    db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
+    db.flush()
+
+
 # ---------------------------------------------------------------------------
 # US-003: DELETE endpoint enforcement
 # ---------------------------------------------------------------------------
@@ -81,6 +95,7 @@ class TestDeleteEndpointEnforcement:
             effective_permissions = (
                 permissions if permissions is not None else _perms_for_roles(*roles)
             )
+            _grant_permissions(db, user, roles, effective_permissions)
             token = TokenData(
                 sub=str(user.id),
                 email=str(user.email),
@@ -286,6 +301,7 @@ class TestSubmitOwnershipEnforcement:
             effective_permissions = (
                 permissions if permissions is not None else _perms_for_roles(*roles)
             )
+            _grant_permissions(db, user, roles, effective_permissions)
             token = TokenData(
                 sub=str(user.id),
                 email=str(user.email),
@@ -405,6 +421,7 @@ class TestReviewerArchivePermission:
             effective_permissions = (
                 permissions if permissions is not None else _perms_for_roles(*roles)
             )
+            _grant_permissions(db, user, roles, effective_permissions)
             token = TokenData(
                 sub=str(user.id),
                 email=str(user.email),
@@ -469,6 +486,7 @@ class TestDeleteErrorPrecedence:
             effective_permissions = (
                 permissions if permissions is not None else _perms_for_roles(*roles)
             )
+            _grant_permissions(db, user, roles, effective_permissions)
             token = TokenData(
                 sub=str(user.id),
                 email=str(user.email),

@@ -69,7 +69,12 @@ def admin_users_context(db):
     non_admin_user = _create_user(db, "staff.users@example.com", first_name="Staff", keycloak_id="kc-staff")
     target_user = _create_user(db, "target.users@example.com", first_name="Target", last_name="Person", keycloak_id="kc-target")
 
-    admin_role = _create_role(db, "admin", is_system=True, permissions=["admin:all"])
+    admin_role = _create_role(
+        db,
+        "admin",
+        is_system=True,
+        permissions=["user:manage_roles"],
+    )
     viewer_role = _create_role(db, "staff_viewer", is_system=True, permissions=["form:read"])
     reviewer_role = _create_role(db, "reviewer", is_system=True, permissions=["form:review"])
 
@@ -97,7 +102,9 @@ class TestAdminUsersApi:
         response = client.get("/api/v1/admin/users")
 
         assert response.status_code == 403
-        assert "Admin role required" in response.json()["detail"]
+        assert response.json() == {
+            "detail": "Insufficient permissions for this action"
+        }
 
     @pytest.mark.integration
     def test_admin_can_list_users_with_keycloak_and_roles(self, db, admin_users_context):

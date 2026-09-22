@@ -73,7 +73,12 @@ def admin_role_api_context(db):
     admin_user = _create_user(db, "admin.roles@example.com", "Admin", "User")
     non_admin_user = _create_user(db, "staff.roles@example.com", "Staff", "User")
 
-    admin_role = _create_role(db, name="admin", permissions=["role:create", "role:edit", "role:delete"], is_system=True)
+    admin_role = _create_role(
+        db,
+        name="admin",
+        permissions=["role:create", "role:read", "role:edit", "role:delete"],
+        is_system=True,
+    )
     staff_role = _create_role(db, name="staff_viewer", permissions=["form:read"], is_system=True)
 
     _assign_role(db, user=admin_user, role=admin_role)
@@ -99,7 +104,9 @@ class TestAdminRoleManagementApi:
         response = client.get("/api/v1/admin/roles")
 
         assert response.status_code == 403
-        assert "Admin role required" in response.json()["detail"]
+        assert response.json() == {
+            "detail": "Insufficient permissions for this action"
+        }
 
     @pytest.mark.integration
     def test_admin_can_create_custom_role_and_audit_is_written(self, db, admin_role_api_context):

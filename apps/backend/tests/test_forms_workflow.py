@@ -222,6 +222,7 @@ class TestFormWorkflowApi:
             effective_permissions = (
                 permissions if permissions is not None else _perms_for_roles(*roles)
             )
+            _grant_permissions(db, user, effective_permissions)
             token = TokenData(
                 sub=str(user.id),
                 email=user.email,

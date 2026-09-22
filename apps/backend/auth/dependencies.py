@@ -92,12 +92,3 @@ async def get_current_user_optional(
         return token_data
     except ValueError:
         return None
-
-
-async def require_admin(user: TokenData = Depends(get_current_user)) -> TokenData:
-    """Dependency to require admin role."""
-    if "admin" not in user.roles:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required"
-        )
-    return user

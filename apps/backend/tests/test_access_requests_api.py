@@ -23,11 +23,17 @@ def _create_user(db, email: str, *, first_name: str = "Test", last_name: str = "
     return user
 
 
-def _create_role(db, name: str, *, is_system: bool = True) -> Role:
+def _create_role(
+    db,
+    name: str,
+    *,
+    permissions: list[str] | None = None,
+    is_system: bool = True,
+) -> Role:
     role = Role(
         id=uuid.uuid4(),
         name=name,
-        permissions=["form:read"],
+        permissions=permissions or ["form:read"],
         is_system=is_system,
         is_active=True,
     )
@@ -62,7 +68,7 @@ def context(db):
     staff_user = _create_user(db, "staff.access@example.com", first_name="Staff")
     norole_user = _create_user(db, "norole.access@example.com", first_name="NoRole")
 
-    admin_role = _create_role(db, "admin")
+    admin_role = _create_role(db, "admin", permissions=["user:manage_roles"])
     staff_role = _create_role(db, "staff_viewer")
     _assign_role(db, user=admin_user, role=admin_role)
     _assign_role(db, user=staff_user, role=staff_role)

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from backend.auth.dependencies import require_admin
+from backend.auth.authorization import require_permission
 from backend.auth.jwt_handler import TokenData
 from backend.database import get_db
 from backend.models import AuditLog, Role, User, UserRole
@@ -116,7 +116,7 @@ router = APIRouter(
     responses={
         400: {"description": "Bad request"},
         401: {"description": "Not authenticated"},
-        403: {"description": "Admin role required"},
+        403: {"description": "Insufficient permissions"},
         404: {"description": "User not found"},
     },
 )
@@ -132,7 +132,7 @@ async def list_users(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    _admin: TokenData = Depends(require_admin),
+    _admin: TokenData = Depends(require_permission("users", "manage_roles")),
 ) -> AdminUserListResponse:
     query = (
         db.query(User)
@@ -165,7 +165,7 @@ async def list_users(
 async def get_user_detail(
     user_id: UUID,
     db: Session = Depends(get_db),
-    _admin: TokenData = Depends(require_admin),
+    _admin: TokenData = Depends(require_permission("users", "manage_roles")),
 ) -> AdminUserDetailResponse:
     user = (
         db.query(User)
@@ -185,7 +185,7 @@ async def update_user_roles(
     user_id: UUID,
     body: UserRoleUpdateRequest,
     db: Session = Depends(get_db),
-    admin_user: TokenData = Depends(require_admin),
+    admin_user: TokenData = Depends(require_permission("users", "manage_roles")),
 ) -> AdminUserDetailResponse:
     user = (
         db.query(User)

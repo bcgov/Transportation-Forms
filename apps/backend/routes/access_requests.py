@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.auth.dependencies import get_current_user, require_admin
+from backend.auth.authorization import require_permission
+from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
 from backend.database import get_db
 from backend.services.access_requests import (
@@ -128,7 +129,7 @@ async def admin_list_access_requests(
     status_filter: Optional[str] = Query(default=None, alias="status"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
-    _admin: TokenData = Depends(require_admin),
+    _admin: TokenData = Depends(require_permission("users", "manage_roles")),
     db: Session = Depends(get_db),
 ) -> AccessRequestListResponse:
     """Admin list/filter endpoint for access requests."""
@@ -155,7 +156,7 @@ async def admin_list_access_requests(
 async def admin_approve_access_request(
     request_id: str,
     body: AccessRequestDecisionRequest,
-    admin_user: TokenData = Depends(require_admin),
+    admin_user: TokenData = Depends(require_permission("users", "manage_roles")),
     db: Session = Depends(get_db),
 ) -> AccessRequestResponse:
     """Approve a pending access request (admin only)."""
@@ -177,7 +178,7 @@ async def admin_approve_access_request(
 async def admin_reject_access_request(
     request_id: str,
     body: AccessRequestDecisionRequest,
-    admin_user: TokenData = Depends(require_admin),
+    admin_user: TokenData = Depends(require_permission("users", "manage_roles")),
     db: Session = Depends(get_db),
 ) -> AccessRequestResponse:
     """Reject a pending access request (admin only)."""
