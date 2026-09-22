@@ -120,21 +120,21 @@ async def test_startup_rejects_reported_role_seed_failure(monkeypatch):
 
 
 def test_aggregate_seeding_rejects_reported_role_failure(monkeypatch):
-    seed_business_areas = MagicMock()
+    seed_demo_user = MagicMock()
 
     monkeypatch.setattr(
         "backend.seeds.seed_default_roles",
         MagicMock(return_value={"failed": 1}),
     )
     monkeypatch.setattr(
-        "backend.seeds.seed_default_business_areas",
-        seed_business_areas,
+        "backend.seeds.seed_demo_user",
+        seed_demo_user,
     )
 
     with pytest.raises(RuntimeError, match="Default role seeding failed"):
         seed_all_defaults(MagicMock())
 
-    seed_business_areas.assert_not_called()
+    seed_demo_user.assert_not_called()
 
 
 def test_role_seeder_raises_sanitized_error_after_database_failure():
