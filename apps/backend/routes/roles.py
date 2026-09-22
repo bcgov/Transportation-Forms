@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.auth.dependencies import require_admin
+from backend.auth.authorization import require_permission
 from backend.auth.jwt_handler import TokenData
 from backend.database import get_db
 from backend.services.roles import RoleConflictError, RoleNotFoundError, RoleService
@@ -139,7 +139,7 @@ router = APIRouter(
     responses={
         400: {"description": "Bad request"},
         401: {"description": "Not authenticated"},
-        403: {"description": "Admin role required"},
+        403: {"description": "Insufficient permissions"},
         404: {"description": "Role not found"},
         409: {"description": "Conflict"},
     },
@@ -154,7 +154,7 @@ async def list_roles(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    _user: TokenData = Depends(require_admin),
+    _user: TokenData = Depends(require_permission("roles", "read")),
 ) -> RoleListResponse:
     roles, total = RoleService.list_roles(db, search=q, skip=skip, limit=limit)
     return RoleListResponse(
@@ -169,7 +169,7 @@ async def list_roles(
 async def create_role(
     body: RoleCreateRequest,
     db: Session = Depends(get_db),
-    user: TokenData = Depends(require_admin),
+    user: TokenData = Depends(require_permission("roles", "create")),
 ) -> RoleDetailResponse:
     try:
         role = RoleService.create_role(
@@ -196,7 +196,7 @@ async def create_role(
 async def get_role(
     role_id: UUID,
     db: Session = Depends(get_db),
-    _user: TokenData = Depends(require_admin),
+    _user: TokenData = Depends(require_permission("roles", "read")),
 ) -> RoleDetailResponse:
     role = RoleService.get_role_by_id(db, role_id)
     if role is None:
@@ -211,7 +211,7 @@ async def update_role(
     role_id: UUID,
     body: RoleUpdateRequest,
     db: Session = Depends(get_db),
-    user: TokenData = Depends(require_admin),
+    user: TokenData = Depends(require_permission("roles", "update")),
 ) -> RoleDetailResponse:
     try:
         RoleService.update_role(
@@ -240,7 +240,7 @@ async def update_role(
 async def delete_role(
     role_id: UUID,
     db: Session = Depends(get_db),
-    user: TokenData = Depends(require_admin),
+    user: TokenData = Depends(require_permission("roles", "delete")),
 ):
     try:
         deleted = RoleService.delete_role(

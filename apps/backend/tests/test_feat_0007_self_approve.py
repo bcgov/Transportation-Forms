@@ -18,7 +18,7 @@ from backend.auth.jwt_handler import TokenData
 from backend.auth.permissions import DEFAULT_ROLES, Permission
 from backend.database import get_db
 from backend.main import app
-from backend.models import Form
+from backend.models import Form, Role, UserRole
 from backend.services.forms import FormService, FormWorkflowValidationError
 
 
@@ -78,12 +78,9 @@ class TestApproveSelfPermissionDefinition:
 
     @pytest.mark.unit
     def test_standard_roles_do_not_include_approve_self(self):
-        """TC1.3: staff_manager, reviewer, staff_viewer do not carry form:approve-self."""
-        for role_name in ("staff_manager", "reviewer", "staff_viewer"):
-            role_perms = _all_perms_for_role(role_name)
-            assert "form:approve-self" not in role_perms, (
-                f"Role '{role_name}' must not carry form:approve-self by default"
-            )
+        """TC1.3: the seeded Staff Viewer does not carry form:approve-self."""
+        role_perms = _all_perms_for_role("staff_viewer")
+        assert "form:approve-self" not in role_perms
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +145,15 @@ class TestSelfApprovalApi:
     @pytest.fixture()
     def client_factory(self, db):
         def _build(user, permissions: list[str]):
+            role = Role(
+                id=uuid.uuid4(),
+                name=f"self_approve_{uuid.uuid4().hex}",
+                permissions=permissions,
+                is_active=True,
+            )
+            db.add(role)
+            db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=role.id))
+            db.flush()
             token = TokenData(
                 sub=str(user.id),
                 email=user.email,

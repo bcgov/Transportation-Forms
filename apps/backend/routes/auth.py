@@ -613,13 +613,11 @@ async def get_current_user_info(
         user_full_name = (
             f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
         )
+        from backend.auth.authorization import get_user_permissions
         from backend.routes.admin_users import _active_user_roles
 
         active_roles = _active_user_roles(user)
-        all_permissions = list({
-            p for ur in active_roles
-            for p in (ur.role.permissions or [])
-        })
+        all_permissions = sorted(await get_user_permissions(str(user.id), db))
         return {
             "id": str(user.id),
             "email": user.email,
@@ -644,7 +642,10 @@ async def get_current_user_info(
 
 def map_keycloak_roles_to_local(keycloak_roles: list) -> list:
     """
-    Map KeyCloak roles to local application roles.
+    Map KeyCloak roles for dormant compatibility callers.
+
+    The live OIDC callback does not consume external role claims. It derives
+    roles from current database assignments and bootstraps only staff_viewer.
 
     Args:
         keycloak_roles: List of role names from KeyCloak
@@ -656,13 +657,9 @@ def map_keycloak_roles_to_local(keycloak_roles: list) -> list:
     # In production, this could be more sophisticated
     role_mapping = {
         "admin": "admin",
-        "staff_manager": "staff_manager",
-        "reviewer": "reviewer",
         "staff_viewer": "staff_viewer",
         # Add aliases if needed
         "administrator": "admin",
-        "manager": "staff_manager",
-        "approver": "reviewer",
         "viewer": "staff_viewer",
     }
 

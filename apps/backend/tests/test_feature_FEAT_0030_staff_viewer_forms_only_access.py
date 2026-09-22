@@ -21,12 +21,10 @@ def _permission_values(role_name: str) -> set[str]:
 
 
 def test_seeded_portal_navigation_assignments() -> None:
-    """AC2: all seeded portal roles except Staff Viewer receive navigation."""
+    """AC2: Admin receives navigation while Staff Viewer does not."""
     permission = Permission.PORTAL_NAVIGATION.value
 
-    for role_name in ("admin", "staff_manager", "reviewer", "content_editor"):
-        assert permission in _permission_values(role_name)
-
+    assert permission in _permission_values("admin")
     assert permission not in _permission_values("staff_viewer")
 
 
@@ -44,9 +42,6 @@ def test_permission_migration_backfills_only_existing_active_custom_roles(
     """AC2 and AC13: rollout updates persisted roles once and is reversible."""
     original_permissions = {
         "admin": [],
-        "staff_manager": [],
-        "reviewer": [],
-        "content_editor": [],
         "staff_viewer": [
             "form:read",
             "reservation:create",
@@ -57,6 +52,7 @@ def test_permission_migration_backfills_only_existing_active_custom_roles(
             "portal:navigation": True,
             "reservation:approve": True,
         },
+        "reviewer": ["form:read"],
         "existing_custom": {"form:read": True},
         "inactive_custom": ["form:read"],
     }
@@ -70,11 +66,9 @@ def test_permission_migration_backfills_only_existing_active_custom_roles(
         )
         for name, permissions, is_system, is_active in (
             ("admin", original_permissions["admin"], True, True),
-            ("staff_manager", original_permissions["staff_manager"], True, True),
-            ("reviewer", original_permissions["reviewer"], True, True),
-            ("content_editor", original_permissions["content_editor"], True, True),
             ("staff_viewer", original_permissions["staff_viewer"], True, True),
             (" Staff_Viewer ", original_permissions[" Staff_Viewer "], False, True),
+            ("reviewer", original_permissions["reviewer"], False, True),
             ("existing_custom", original_permissions["existing_custom"], False, True),
             ("inactive_custom", original_permissions["inactive_custom"], False, False),
         )
@@ -82,11 +76,10 @@ def test_permission_migration_backfills_only_existing_active_custom_roles(
     db.add_all(roles.values())
     db.flush()
 
-    migration_path = (
-        Path(__file__).resolve().parents[1]
-        / "alembic"
-        / "versions"
-        / "022_feat_0030_staff_viewer_forms_only_access.py"
+    migration_path = Path(__file__).resolve().parents[1].joinpath(
+        "alembic",
+        "versions",
+        "022_feat_0030_staff_viewer_forms_only_access.py",
     )
     spec = importlib.util.spec_from_file_location("feat_0030_us_007_migration", migration_path)
     assert spec and spec.loader
@@ -100,8 +93,11 @@ def test_permission_migration_backfills_only_existing_active_custom_roles(
     for role in roles.values():
         db.refresh(role)
 
-    for role_name in ("admin", "staff_manager", "reviewer", "content_editor"):
-        assert roles[role_name].permissions == ["portal:navigation"]
+    assert roles["admin"].permissions == ["portal:navigation"]
+    assert roles["reviewer"].permissions == [
+        "form:read",
+        "portal:navigation",
+    ]
     assert roles["existing_custom"].permissions == ["form:read", "portal:navigation"]
     assert roles["inactive_custom"].permissions == ["form:read"]
     assert roles["staff_viewer"].permissions == ["form:read"]

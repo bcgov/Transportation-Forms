@@ -38,8 +38,6 @@ PREFIX_PERMISSIONS = [
 
 PREFIX_PERMISSION_VALUES = {p.value for p in PREFIX_PERMISSIONS}
 
-NON_ADMIN_ROLES = ["staff_manager", "reviewer", "staff_viewer"]
-
 ADMIN_PREFIX_BASE = "/api/v1/admin/prefixes"
 
 # A fake UUID used as a path parameter for single-resource endpoints.
@@ -139,26 +137,15 @@ class TestFeat0012PrefixPermissions:
     # -- TC1.3 ---------------------------------------------------------------
 
     def test_tc1_3_non_admin_roles_lack_prefix_permissions(self):
-        """TC1.3: staff_manager, reviewer, and staff_viewer roles do NOT
-        have any prefix permission.
-        """
-        for role_name in NON_ADMIN_ROLES:
-            # Arrange
-            assert role_name in DEFAULT_ROLES, (
-                f"Expected role '{role_name}' in DEFAULT_ROLES"
-            )
-            role_perms = DEFAULT_ROLES[role_name]["permissions"]
-            role_perm_values = {
-                p.value if hasattr(p, "value") else str(p)
-                for p in role_perms
-            }
+        """TC1.3: the seeded Staff Viewer has no prefix permission."""
+        role_perms = DEFAULT_ROLES["staff_viewer"]["permissions"]
+        role_perm_values = {
+            p.value if hasattr(p, "value") else str(p)
+            for p in role_perms
+        }
 
-            # Act & Assert
-            overlap = PREFIX_PERMISSION_VALUES & role_perm_values
-            assert not overlap, (
-                f"Role '{role_name}' unexpectedly has prefix permissions: "
-                f"{overlap}"
-            )
+        overlap = PREFIX_PERMISSION_VALUES & role_perm_values
+        assert not overlap
 
     # -- TC1.4 ---------------------------------------------------------------
 

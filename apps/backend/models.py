@@ -89,7 +89,7 @@ class Role(Base):
     )  # JSON array of permission strings
     is_system = Column(
         Boolean, default=False, nullable=False
-    )  # System roles (admin, staff_manager, etc)
+    )  # Roles managed by the application rather than administrators
     is_active = Column(Boolean, default=True, nullable=False, index=True)
     deleted_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)

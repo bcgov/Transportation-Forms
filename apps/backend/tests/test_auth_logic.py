@@ -1,7 +1,6 @@
 ﻿import pytest
 from unittest.mock import MagicMock
 from backend.auth.authorization import (
-    is_admin,
     require_permission,
     require_any_permission,
     require_all_permissions,
@@ -51,26 +50,6 @@ def _db_with_permission(perm: str):
 
 
 class TestAuthLogic:
-    @pytest.mark.asyncio
-    async def test_is_admin_fast_path(self):
-        db = _empty_db()
-        assert await is_admin(_token(["admin"]), db) is True
-
-    @pytest.mark.asyncio
-    async def test_is_admin_no_admin_role(self):
-        db = _empty_db()
-        assert await is_admin(_token(["staff"]), db) is False
-
-    @pytest.mark.asyncio
-    async def test_is_admin_db_fallback_finds_admin_role(self):
-        db = MagicMock()
-        mock_ur = MagicMock()
-        mock_ur.role = MagicMock()
-        mock_ur.role.name = "admin"
-        mock_ur.role.is_active = True
-        db.query.return_value.filter.return_value.all.return_value = [mock_ur]
-        assert await is_admin(_token(["reviewer"]), db) is True
-
     def test_require_permission_returns_callable(self):
         assert callable(require_permission("forms", "read"))
 

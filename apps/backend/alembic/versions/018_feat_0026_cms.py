@@ -10,9 +10,7 @@ Adds three tables for the public Forms Portal mini-CMS:
 * ``cms_page_revisions``  — append-only revision history per page.
 * ``cms_page_redirects``  — retired-slug → surviving-page mappings.
 
-Also seeds the new ``cms:manage`` permission onto the ``admin`` role and
-inserts a dedicated ``content_editor`` system role.  Both operations are
-idempotent so the migration may be re-applied safely.
+Also seeds the new ``cms:manage`` permission onto the ``admin`` role.
 """
 
 from alembic import op
@@ -27,7 +25,6 @@ depends_on = None
 
 
 _CMS_PERM = "cms:manage"
-_CONTENT_EDITOR_ROLE = "content_editor"
 
 
 def upgrade() -> None:
@@ -178,40 +175,8 @@ def upgrade() -> None:
         """
     )
 
-    # ------------------------------------------------------------------
-    # 5) Seed the content_editor system role (idempotent on name).
-    # ------------------------------------------------------------------
-    op.execute(
-        f"""
-        INSERT INTO roles (id, name, description, permissions, is_system, is_active, created_at, updated_at)
-        SELECT gen_random_uuid(),
-               '{_CONTENT_EDITOR_ROLE}',
-               'Content Editor for the public Forms Portal mini-CMS',
-               '["{_CMS_PERM}"]'::jsonb,
-               TRUE,
-               TRUE,
-               NOW(),
-               NOW()
-         WHERE NOT EXISTS (
-               SELECT 1 FROM roles WHERE name = '{_CONTENT_EDITOR_ROLE}'
-         )
-        """
-    )
-
-
 def downgrade() -> None:
-    # 1) Remove content_editor role only if no user is assigned to it.
-    op.execute(
-        f"""
-        DELETE FROM roles
-         WHERE name = '{_CONTENT_EDITOR_ROLE}'
-           AND NOT EXISTS (
-               SELECT 1 FROM user_roles ur WHERE ur.role_id = roles.id
-           )
-        """
-    )
-
-    # 2) Remove cms:manage from admin role.
+    # 1) Remove cms:manage from admin role.
     op.execute(
         f"""
         UPDATE roles
@@ -225,7 +190,7 @@ def downgrade() -> None:
         """
     )
 
-    # 3) Drop tables in reverse FK order.
+    # 2) Drop tables in reverse FK order.
     op.drop_index(
         "ix_cms_page_redirects_to_page_id", table_name="cms_page_redirects"
     )

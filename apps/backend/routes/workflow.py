@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.auth.dependencies import get_current_user
+from backend.auth.authorization import has_permission, require_all_permissions
 from backend.auth.jwt_handler import TokenData
 from backend.database import get_db
 from backend.models import AuditLog, Form, FormWorkflow, User
@@ -95,19 +95,6 @@ class PendingApprovalsResponse(BaseModel):
     items: List[PendingFormItem]
 
 
-# ─── Auth helpers ─────────────────────────────────────────────────────────────
-
-
-def _require_permissions(current_user: TokenData, *required: str) -> None:
-    """Raise HTTP 403 if the token is missing any of the required permissions."""
-    user_perms = set(current_user.permissions or [])
-    if not all(p in user_perms for p in required):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
-        )
-
-
 def _to_status_response(form) -> WorkflowStatusResponse:
     reservation = form.form_number_reservation
     form_number = None
@@ -145,12 +132,12 @@ def _handle_workflow_error(exc: Exception) -> NoReturn:
 
 @router.get("/pending-approvals", response_model=PendingApprovalsResponse)
 async def list_pending_approvals(
-    current_user: TokenData = Depends(get_current_user),
+    _current_user: TokenData = Depends(
+        require_all_permissions(_PERM_APPROVE, _PERM_REVIEW)
+    ),
     db: Session = Depends(get_db),
 ) -> PendingApprovalsResponse:
     """List all forms currently in the Pending Review state for reviewer action."""
-    _require_permissions(current_user, _PERM_APPROVE, _PERM_REVIEW)
-
     forms = (
         db.query(Form)
         .filter(Form.status == "pending_review", Form.deleted_at.is_(None))
@@ -205,11 +192,9 @@ async def list_pending_approvals(
 @router.post("/{form_id}/submit", response_model=WorkflowStatusResponse)
 async def submit_form_for_review(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_all_permissions(_PERM_SUBMIT)),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
-    _require_permissions(current_user, _PERM_SUBMIT)
-
     # FEAT-0013 / US-004: Only the form creator may submit for review (no admin bypass).
     try:
         form_uuid = UUID(form_id)
@@ -241,12 +226,14 @@ async def submit_form_for_review(
 @router.post("/{form_id}/approve", response_model=WorkflowStatusResponse)
 async def approve_form(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(
+        require_all_permissions(_PERM_APPROVE, _PERM_REVIEW)
+    ),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
-    _require_permissions(current_user, _PERM_APPROVE, _PERM_REVIEW)
-    # FEAT-0007: permit self-approval only when the token carries form:approve-self
-    allow_self_approve = _PERM_APPROVE_SELF in set(current_user.permissions or [])
+    allow_self_approve = await has_permission(
+        current_user.sub, _PERM_APPROVE_SELF, db
+    )
 
     try:
         form = FormService.approve_form(
@@ -264,11 +251,11 @@ async def approve_form(
 async def reject_form(
     form_id: str,
     request: RejectRequest,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(
+        require_all_permissions(_PERM_APPROVE, _PERM_REVIEW)
+    ),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
-    _require_permissions(current_user, _PERM_APPROVE, _PERM_REVIEW)
-
     if not request.reason_notes or not request.reason_notes.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -287,12 +274,12 @@ async def reject_form(
 @router.post("/{form_id}/publish", response_model=WorkflowStatusResponse)
 async def publish_form(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(
+        require_all_permissions(_PERM_APPROVE, _PERM_REVIEW)
+    ),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
     """Legacy endpoint retained for backward compatibility. Use /approve instead."""
-    _require_permissions(current_user, _PERM_APPROVE, _PERM_REVIEW)
-
     try:
         form = FormService.publish_form(db, UUID(form_id), UUID(current_user.sub))
         return _to_status_response(form)
@@ -303,11 +290,9 @@ async def publish_form(
 @router.post("/{form_id}/unpublish", response_model=WorkflowStatusResponse)
 async def unpublish_form(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_all_permissions(_PERM_APPROVE)),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
-    _require_permissions(current_user, _PERM_APPROVE)
-
     try:
         form = FormService.unpublish_form(db, UUID(form_id), UUID(current_user.sub))
         return _to_status_response(form)
@@ -319,7 +304,9 @@ async def unpublish_form(
 async def revert_form_to_draft(
     form_id: str,
     request: RevertRequest,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(
+        require_all_permissions(_PERM_CREATE, _PERM_EDIT)
+    ),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
     """Revert a Published form back to Draft (FEAT-0016).
@@ -329,8 +316,6 @@ async def revert_form_to_draft(
     user becomes the form owner and the change is recorded in both
     workflow history and the audit log.
     """
-    _require_permissions(current_user, _PERM_CREATE, _PERM_EDIT)
-
     try:
         form = FormService.revert_form_to_draft(
             db,
@@ -346,11 +331,9 @@ async def revert_form_to_draft(
 @router.post("/{form_id}/archive", response_model=WorkflowStatusResponse)
 async def archive_form(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_all_permissions(_PERM_ARCHIVE)),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
-    _require_permissions(current_user, _PERM_ARCHIVE)
-
     try:
         form = FormService.archive_form(
             db, UUID(form_id), user_id=UUID(current_user.sub)
@@ -363,11 +346,9 @@ async def archive_form(
 @router.post("/{form_id}/restore", response_model=WorkflowStatusResponse)
 async def restore_form(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_all_permissions(_PERM_APPROVE)),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
-    _require_permissions(current_user, _PERM_APPROVE)
-
     try:
         form = FormService.restore_form(db, UUID(form_id), UUID(current_user.sub))
         return _to_status_response(form)
@@ -378,11 +359,9 @@ async def restore_form(
 @router.get("/{form_id}/workflow-history", response_model=WorkflowHistoryResponse)
 async def get_workflow_history(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_all_permissions(_PERM_REVIEW)),
     db: Session = Depends(get_db),
 ) -> WorkflowHistoryResponse:
-    _require_permissions(current_user, _PERM_REVIEW)
-
     try:
         entries = FormService.get_workflow_history(db, UUID(form_id))
         items = [

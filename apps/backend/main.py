@@ -34,30 +34,31 @@ from backend.routes.cms_redirects import admin_router as cms_redirects_admin_rou
 logger = structlog.get_logger()
 
 
-# Initialise S3 object storage bucket on startup (idempotent — safe to run every boot).
-#
-# Note: default role/permission seeding is intentionally NOT performed here.
-# Seeding writes are owned by the migrations job (see
-# ``apps/backend/migrations/entrypoint.sh``) so that:
-#   * failures fail the deployment fast instead of being silently logged
-#   * request-serving pods don't compete for write access on boot
-#   * startup latency is bounded and unrelated to schema/role drift
+# Validate default role seeding and initialise object storage on startup.
+# The migrations job remains the primary seed owner; startup creates only
+# missing retained roles and fails the pod when those writes fail.
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # Seed default roles so that any new permissions added to DEFAULT_ROLES are
-    # reflected in the database without requiring a manual migration step.
+    # Preserve existing role configuration; permission changes require a
+    # versioned migration rather than an application restart.
     try:
         from backend.database import SessionLocal
         from backend.seeds.default_roles import seed_default_roles
 
         db = SessionLocal()
         try:
-            seed_default_roles(db)
+            role_seed_result = seed_default_roles(db)
+            if role_seed_result["failed"]:
+                raise RuntimeError("Default role seeding failed")
             logger.info("default_roles_seeded")
         finally:
             db.close()
     except Exception as exc:
-        logger.warning("default_roles_seed_failed", error=str(exc))
+        logger.warning(
+            "default_roles_seed_failed",
+            error_type=type(exc).__name__,
+        )
+        raise
 
     try:
         import anyio

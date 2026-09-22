@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-from backend.auth.permissions import DEFAULT_ROLES, Permission
+from backend.auth.permissions import Permission
 from backend.database import get_db
 from backend.main import app
 from backend.models import AuditLog, Form, FormWorkflow, Role, UserRole
@@ -47,12 +47,10 @@ _REVERT_URL = "/api/v1/staff/forms/{form_id}/revert"
 _SUBMIT_URL = "/api/v1/staff/forms/{form_id}/submit"
 _VALID_REASON = "Correcting published content"
 _REVIEWER_PERMS = [
-    p.value if hasattr(p, "value") else str(p)
-    for p in DEFAULT_ROLES["reviewer"]["permissions"]
-]
-_STAFF_MANAGER_PERMS = [
-    p.value if hasattr(p, "value") else str(p)
-    for p in DEFAULT_ROLES["staff_manager"]["permissions"]
+    Permission.FORM_READ.value,
+    Permission.FORM_REVIEW.value,
+    Permission.FORM_APPROVE.value,
+    Permission.FORM_ARCHIVE.value,
 ]
 
 

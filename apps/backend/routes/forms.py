@@ -256,7 +256,7 @@ router = APIRouter(
 )
 
 
-def _is_staff_viewer_only(user: TokenData, db: Session) -> bool:
+def _active_roles(user: TokenData, db: Session) -> list[Role]:
     try:
         user_id = UUID(str(user.sub))
     except (AttributeError, TypeError, ValueError) as exc:
@@ -289,7 +289,13 @@ def _is_staff_viewer_only(user: TokenData, db: Session) -> bool:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions for this action",
         )
-    return normalized_names == ["staff_viewer"]
+    return roles
+
+
+def _is_staff_viewer_only(user: TokenData, db: Session) -> bool:
+    return [role.name.strip().lower() for role in _active_roles(user, db)] == [
+        "staff_viewer"
+    ]
 
 
 # ============================================================================
@@ -454,13 +460,6 @@ async def autocomplete_forms(    q: str = Query(
     db: Session = Depends(get_db),
 ) -> FormAutocompleteResponse:
     """Return autocomplete suggestions for form titles/keywords."""
-    # FEAT-0018: Enforce form:read permission
-    user_perms = set(current_user.permissions or [])
-    if "form:read" not in user_perms:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
-        )
     suggestions = FormService.get_autocomplete_suggestions(
         db=db,
         query_text=q,
@@ -493,12 +492,6 @@ async def download_form_attachment(
     Authorization: requires ``form:read``.  Forms with
     ``form_source != 'Download'`` or no ``form_attachment_url`` return 404.
     """
-    user_perms = set(current_user.permissions or [])
-    if "form:read" not in user_perms:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
-        )
     try:
         form_uuid = UUID(form_id)
     except ValueError:
@@ -619,13 +612,6 @@ async def get_form(
     db: Session = Depends(get_db),
 ) -> FormDetailResponse:
     """Get a form by ID."""
-    # FEAT-0018: Enforce form:read permission
-    user_perms = set(current_user.permissions or [])
-    if "form:read" not in user_perms:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
-        )
     try:
         form_uuid = UUID(form_id)
         form_data = FormService.get_form_with_details(db, form_uuid)
@@ -727,7 +713,7 @@ async def update_form(
 @router.delete("/{form_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_form(
     form_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_permission("forms", "delete")),
     db: Session = Depends(get_db),
 ) -> None:
     """
@@ -736,14 +722,6 @@ async def delete_form(
     FEAT-0013: Enforces form:delete permission, draft-only state restriction,
     and ownership rules (admin can delete any draft; non-admin own drafts only).
     """
-    # ── Permission gate ──────────────────────────────────────────────────
-    user_perms = set(current_user.permissions or [])
-    if "form:delete" not in user_perms:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
-        )
-
     try:
         form_uuid = UUID(form_id)
     except ValueError:
@@ -766,7 +744,10 @@ async def delete_form(
         )
 
     # ── Ownership enforcement ────────────────────────────────────────────
-    is_admin = "admin" in (current_user.roles or [])
+    is_admin = any(
+        role.is_system and role.name.strip().lower() == "admin"
+        for role in _active_roles(current_user, db)
+    )
     if not is_admin and str(form.created_by_id) != current_user.sub:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -827,14 +808,6 @@ async def list_forms(
     - **sort_order**: Sort ascending (asc) or descending (desc)
     - **sort_field**: Sort by suggested (default), title, or form_number
     """
-    # FEAT-0018: Enforce form:read permission
-    user_perms = set(current_user.permissions or [])
-    if "form:read" not in user_perms:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
-        )
-
     if limit not in {24, 25, 48, 50, 96, 100}:
         raise HTTPException(
             status_code=422,

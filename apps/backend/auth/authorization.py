@@ -12,6 +12,7 @@ from typing import Optional, List, Set
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -54,63 +55,62 @@ async def get_user_permissions(user_id: str, db: Session) -> Set[str]:
     except (AttributeError, TypeError, ValueError):
         return set()
 
-    # Get user with roles
-    user = (
-        db.query(User)
-        .filter(
-            User.id == normalized_user_id,
-            User.is_active.is_(True),
-            User.deleted_at.is_(None),
+    try:
+        user = (
+            db.query(User)
+            .filter(
+                User.id == normalized_user_id,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+            .first()
         )
-        .first()
-    )
-    if not user:
+        if not user:
+            return set()
+
+        all_permissions = set()
+        user_roles = (
+            db.query(UserRole)
+            .filter(
+                UserRole.user_id == normalized_user_id,
+                UserRole.deleted_at.is_(None),
+            )
+            .all()
+        )
+
+        normalized_role_names: set[str] = set()
+        for user_role in user_roles:
+            role = user_role.role
+            if role and role.is_active and not role.deleted_at:
+                if not isinstance(role.name, str) or not role.name.strip():
+                    return set()
+                normalized_role_name = role.name.strip().lower()
+                if normalized_role_name in normalized_role_names:
+                    return set()
+                normalized_role_names.add(normalized_role_name)
+
+                if isinstance(role.permissions, list):
+                    permissions = role.permissions
+                elif isinstance(role.permissions, dict):
+                    permissions = list(role.permissions.keys())
+                else:
+                    return set()
+
+                if any(
+                    not isinstance(permission, str)
+                    or not permission
+                    or permission != permission.strip()
+                    for permission in permissions
+                ):
+                    return set()
+                if len(permissions) != len(set(permissions)):
+                    return set()
+                all_permissions.update(permissions)
+
+        return get_inherited_permissions(list(all_permissions))
+    except SQLAlchemyError:
+        db.rollback()
         return set()
-
-    # Collect all permissions from all roles
-    all_permissions = set()
-    user_roles = (
-        db.query(UserRole)
-        .filter(
-            UserRole.user_id == normalized_user_id,
-            UserRole.deleted_at.is_(None),
-        )
-        .all()
-    )
-
-    normalized_role_names: set[str] = set()
-    for user_role in user_roles:
-        role = user_role.role
-        if role and role.is_active and not role.deleted_at:
-            if not isinstance(role.name, str) or not role.name.strip():
-                return set()
-            normalized_role_name = role.name.strip().lower()
-            if normalized_role_name in normalized_role_names:
-                return set()
-            normalized_role_names.add(normalized_role_name)
-
-            if isinstance(role.permissions, list):
-                permissions = role.permissions
-            elif isinstance(role.permissions, dict):
-                permissions = list(role.permissions.keys())
-            else:
-                return set()
-
-            if any(
-                not isinstance(permission, str)
-                or not permission
-                or permission != permission.strip()
-                for permission in permissions
-            ):
-                return set()
-            if len(permissions) != len(set(permissions)):
-                return set()
-            all_permissions.update(permissions)
-
-    # Apply inheritance rules
-    inherited = get_inherited_permissions(list(all_permissions))
-
-    return inherited
 
 
 async def has_permission(user_id: str, permission: str, db: Session) -> bool:
@@ -427,35 +427,3 @@ def require_all_permissions(*permissions: str):
         return user
 
     return check_permissions
-
-
-# ============================================================================
-# HELPER FUNCTION: Check if user has admin role
-# ============================================================================
-
-
-async def is_admin(user: TokenData, db: Session) -> bool:
-    """
-    Check if user has admin role.
-
-    Args:
-        user: TokenData object
-        db: Database session
-
-    Returns:
-        True if user is admin
-    """
-    # Check if user has admin role in roles list
-    if "admin" in (user.roles or []):
-        return True
-
-    # Fallback: check in database
-    user_roles = (
-        db.query(UserRole)
-        .filter(UserRole.user_id == user.sub, UserRole.deleted_at.is_(None))
-        .all()
-    )
-
-    return any(
-        ur.role.name == "admin" for ur in user_roles if ur.role and ur.role.is_active
-    )
