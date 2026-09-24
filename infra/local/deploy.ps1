@@ -61,7 +61,8 @@ if ($missingEnvNames.Count -gt 0) {
 }
 
 Write-Host "==> Extracting DATABASE_URL from Crunchy secret..."
-$crunchySecret = "$CrunchyRelease-crunchy-pguser-app"
+$crunchyCluster = "$CrunchyRelease-crunchy"
+$crunchySecret = "$crunchyCluster-pguser-app"
 $dbUri = Get-KubernetesSecretValue $crunchySecret "uri"
 
 $dbUriMatch = [regex]::Match($dbUri, "^(?<scheme>[^:]+://)(?<auth>.+@)(?<hosts>[^/]+)(?<path>/.*)$")
@@ -154,6 +155,7 @@ try {
         "--set-file", "public-frontend.s3.internalUpstream=$s3InternalUpstreamFile",
         "--set-file", "public-frontend.publicBaseUrl=$publicBaseUrlFile",
         "--set-file", "public-backend.publicBaseUrl=$publicBaseUrlFile",
+        "--set-string", "global.crunchyCluster=$crunchyCluster",
         "--set-string", "public-backend.resources.app.limits.memory=512Mi",
         "--set-string", "public-frontend.resources.limits.memory=512Mi",
         "--timeout", "10m"
