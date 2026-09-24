@@ -71,6 +71,17 @@ livenessProbe:
 # Reuses the same shared secret as the main backend
 secretName: transportation-forms-secrets
 
+crunchy:
+  cluster: ""
+  user: app
+
+deployment:
+  vault:
+    enabled: false
+    role: ""
+    path: public
+    serviceAccountName: ""
+
 # ── Environment ──────────────────────────────────────────────────────────────
 env:
   environment: development

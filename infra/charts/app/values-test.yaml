@@ -6,9 +6,20 @@ global:
     persist: true
 
 backend:
+  deployment:
+    vault:
+      enabled: true
   env:
     environment: test
 
 public-backend:
+  deployment:
+    vault:
+      enabled: true
   env:
     environment: test
+
+public-frontend:
+  deployment:
+    vault:
+      enabled: true

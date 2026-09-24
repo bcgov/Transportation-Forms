@@ -8,6 +8,9 @@ global:
 domain: apps.silver.devops.gov.bc.ca
 
 backend:
+  deployment:
+    vault:
+      enabled: true
   image:
     tag: prod
     migrationsTag: prod
@@ -59,3 +62,13 @@ frontend:
   pdb:
     enabled: true
     minAvailable: 1
+
+public-backend:
+  deployment:
+    vault:
+      enabled: true
+
+public-frontend:
+  deployment:
+    vault:
+      enabled: true

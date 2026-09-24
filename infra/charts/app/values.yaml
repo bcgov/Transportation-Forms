@@ -2,6 +2,7 @@
 global:
   registry: ghcr.io
   repository: bcgov/transportation-forms
+  crunchyCluster: ""
   secrets:
     # false  → Helm will delete secrets when the release is removed (safe for PR envs)
     # true   → Helm will not delete secrets on release removal (safe for long-lived envs)

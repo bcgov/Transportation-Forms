@@ -8,6 +8,10 @@
 
 set -e
 
+if [ -f /vault/secrets/secrets.env ]; then
+	. /vault/secrets/secrets.env
+fi
+
 echo "Starting BC Transportation Forms backend..."
 
 # Start FastAPI server (production: no --reload)

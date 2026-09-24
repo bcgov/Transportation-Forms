@@ -8,6 +8,18 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -eu
 
+if [ -f /vault/secrets/secrets.env ]; then
+    . /vault/secrets/secrets.env
+fi
+
+if [ -z "${S3_INTERNAL_UPSTREAM:-}" ] && [ -n "${S3_ENDPOINT_URL:-}" ] && [ -n "${S3_BUCKET:-}" ]; then
+    s3_endpoint="${S3_ENDPOINT_URL%/}"
+    s3_bucket="${S3_BUCKET#/}"
+    s3_bucket="${s3_bucket%/}"
+    S3_INTERNAL_UPSTREAM="${s3_endpoint}/${s3_bucket}"
+    export S3_INTERNAL_UPSTREAM
+fi
+
 : "${BACKEND_UPSTREAM_HOST:?BACKEND_UPSTREAM_HOST must be set}"
 : "${BACKEND_UPSTREAM_PORT:=8000}"
 : "${INTERNAL_AUTH_SECRET:?INTERNAL_AUTH_SECRET must be set}"

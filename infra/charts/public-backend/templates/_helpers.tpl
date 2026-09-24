@@ -65,3 +65,12 @@ public-frontend subchart: "<release>-public-frontend-internal-auth".
 {{- define "public-backend.internalAuthSecretName" -}}
 {{- default (printf "%s-public-frontend-internal-auth" .Release.Name) .Values.internalAuth.existingSecret }}
 {{- end }}
+
+{{- define "public-backend.crunchySecretName" -}}
+{{- $cluster := default (default (printf "%s-crunchy" .Release.Name) .Values.global.crunchyCluster) .Values.crunchy.cluster -}}
+{{- $user := .Values.crunchy.user -}}
+{{- if .Values.deployment.vault.enabled -}}
+{{- $user = "publicreadonly" -}}
+{{- end -}}
+{{- printf "%s-pguser-%s" $cluster $user | trunc 63 | trimSuffix "-" }}
+{{- end }}

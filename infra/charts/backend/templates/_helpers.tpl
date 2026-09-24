@@ -69,3 +69,13 @@ Migrations image reference.
 {{- printf "%s/%s/migrations:%s" .Values.global.registry .Values.global.repository .Values.image.migrationsTag }}
 {{- end }}
 {{- end }}
+
+{{/*
+Crunchy creates one pguser Secret per cluster user. The cluster name is
+normally the Helm release plus "-crunchy"; deployments may override it with
+the non-secret cluster identifier returned by the Crunchy action.
+*/}}
+{{- define "backend.crunchySecretName" -}}
+{{- $cluster := default (default (printf "%s-crunchy" .Release.Name) .Values.global.crunchyCluster) .Values.crunchy.cluster -}}
+{{- printf "%s-pguser-%s" $cluster .Values.crunchy.user | trunc 63 | trimSuffix "-" }}
+{{- end }}

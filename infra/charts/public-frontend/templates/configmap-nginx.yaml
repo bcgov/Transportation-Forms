@@ -267,16 +267,14 @@ data:
             proxy_pass http://upstream_public_backend;
         }
 
-    {{- if .Values.s3.internalUpstream }}
+    {{- if or .Values.s3.internalUpstream .Values.deployment.vault.enabled }}
         # ── Internal-only S3 X-Accel-Redirect target ─────────────────────────
         # Marked `internal;` so external clients cannot hit it directly; only
         # public-backend's X-Accel-Redirect responses can pivot here.
         #
-        # FEAT-0005 Gap A: this block is gated on a non-empty
-        # `s3.internalUpstream` value so an unset chart value omits the block
-        # entirely instead of rendering `proxy_pass ;` which would fail NGINX
-        # boot. Path-style addressing is expected — set `internalUpstream`
-        # to `<endpoint>/<bucket>` (e.g. `https://s3.example.com/my-bucket`).
+        # FEAT-0005 Gap A: local mode supplies `s3.internalUpstream`; Vault
+        # mode derives the same value from S3_ENDPOINT_URL and S3_BUCKET at
+        # container start. Path-style addressing is expected.
         location /internal-s3/ {
             internal;
 

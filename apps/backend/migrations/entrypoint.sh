@@ -13,6 +13,10 @@
 
 set -e
 
+if [ -f /vault/secrets/secrets.env ]; then
+  . /vault/secrets/secrets.env
+fi
+
 # Wait for PostgreSQL to become available (handles k8s startup race conditions
 # where the Crunchy primary service endpoint may not be ready yet).
 MAX_RETRIES=30
