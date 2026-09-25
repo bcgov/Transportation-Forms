@@ -24,6 +24,7 @@ spec:
       {{- $vaultPath := printf "%s/%s" .Values.deployment.vault.role .Values.deployment.vault.path }}
       annotations:
         vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-init-first: "true"
         vault.hashicorp.com/agent-inject-token: "false"
         vault.hashicorp.com/agent-pre-populate-only: "true"
         vault.hashicorp.com/auth-path: "auth/k8s-silver"
