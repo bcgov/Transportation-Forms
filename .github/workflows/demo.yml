@@ -22,24 +22,25 @@ jobs:
       - name: Update demo route in OpenShift
         uses: bcgov/action-oc-runner@v1
         with:
-          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-dev
           oc_token: ${{ secrets.OC_TOKEN }}
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
             set -euo pipefail
             DOMAIN="${{ vars.TARGET_ENV_DOMAIN || 'apps.silver.devops.gov.bc.ca' }}"
+            NAMESPACE="${{ vars.LICENSE_PLATE }}-dev"
             RELEASE="transportation-forms-${{ github.event.number }}"
 
             if [[ "${{ github.event.action }}" == "labeled" && "${{ github.event.label.name }}" == "demo" ]]; then
               echo "Patching demo route to point to PR-${{ github.event.number }} frontend..."
               oc patch route transportation-forms-demo \
-                --namespace "${{ vars.OC_NAMESPACE }}" \
+                 --namespace "${NAMESPACE}" \
                 --type merge \
                 -p "{\"spec\":{\"to\":{\"name\":\"${RELEASE}-frontend\"}}}" \
                 || oc expose svc "${RELEASE}-frontend" \
                    --name=transportation-forms-demo \
                    --hostname="demo-transportation-forms.${DOMAIN}" \
-                   --namespace "${{ vars.OC_NAMESPACE }}"
+                   --namespace "${NAMESPACE}"
               echo "Demo route now pointing to PR-${{ github.event.number }}"
             else
               echo "Label removed or PR closed — demo route left unchanged."

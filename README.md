@@ -32,10 +32,8 @@ BC Transportation Forms — FastAPI backend, Caddy + Coraza WAF frontend, Crunch
 | Type | Name | Description |
 |---|---|---|
 | Variable | `OC_SERVER` | OpenShift API URL |
-| Variable | `OC_NAMESPACE` | DEV namespace |
 | Variable | `TARGET_ENV_DOMAIN` | Route domain (e.g. `apps.silver.devops.gov.bc.ca`) |
-| Variable | `LICENSE_PLATE` | Project license plate; the Vault KSA is `${LICENSE_PLATE}-vault` |
-| Variable | `VAULT_ROLE` | Vault role configured by the OpenShift platform |
+| Variable | `LICENSE_PLATE` | Project license plate; namespaces and Vault identities are derived from it |
 | Secret | `OC_TOKEN` | DEV service account token |
 | Secret | `S3_ENDPOINT_URL` | Crunchy pgBackRest endpoint; operator-only until its Vault/PGO integration is available |
 | Secret | `S3_ACCESS_KEY` | Crunchy pgBackRest access key; operator-only until its Vault/PGO integration is available |
@@ -54,14 +52,20 @@ The public-frontend path contains the same `INTERNAL_AUTH_SECRET` plus
 `S3_ENDPOINT_URL` and `S3_BUCKET`. The shared internal-auth value must match in
 both public workload paths.
 
+Deployment identity values are derived from `LICENSE_PLATE` and the workflow
+environment. The OpenShift namespace is `${LICENSE_PLATE}-${environment}`;
+the Vault role is `${LICENSE_PLATE}-nonprod` for DEV/TEST and
+`${LICENSE_PLATE}-prod` for PROD; and the Kubernetes ServiceAccount is
+`${LICENSE_PLATE}-vault`.
+
 ### GitHub Environments
 
-- **`dev`** — `OC_NAMESPACE`, `OC_SERVER`, `LICENSE_PLATE`, `VAULT_ROLE`, and the operator-only Crunchy backup inputs
-- **`test`** — `OC_NAMESPACE`, `OC_SERVER`, `LICENSE_PLATE`, `VAULT_ROLE`, and the operator-only Crunchy backup inputs, scoped to TST values
+- **`dev`** — `OC_SERVER`, `LICENSE_PLATE`, and the operator-only Crunchy backup inputs
+- **`test`** — `OC_SERVER`, `LICENSE_PLATE`, and the operator-only Crunchy backup inputs, scoped to TST values
 - **`prod`** — same platform variables and operator inputs, with required reviewers for manual approval
 
-`VAULT_ROLE` should be the platform role for the environment, normally
-`${LICENSE_PLATE}-nonprod` for DEV/TEST and `${LICENSE_PLATE}-prod` for PROD.
+The workflow derives the Vault role as `${LICENSE_PLATE}-nonprod` for DEV/TEST
+and `${LICENSE_PLATE}-prod` for PROD.
 The Helm charts append `internal` for the backend path and `public` for both
 public workloads, producing `${VAULT_ROLE}/internal` and `${VAULT_ROLE}/public`.
 

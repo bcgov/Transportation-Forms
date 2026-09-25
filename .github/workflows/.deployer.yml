@@ -127,7 +127,7 @@ jobs:
         id: crunchy
         uses: bcgov/action-crunchy@v2.1.0
         with:
-          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-${{ inputs.environment }}
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           environment: ${{ inputs.environment }}
@@ -140,7 +140,7 @@ jobs:
       - name: Configure application database schema
         uses: bcgov/action-oc-runner@v1.4.1
         with:
-          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-${{ inputs.environment }}
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
@@ -217,7 +217,7 @@ jobs:
       - name: Update Helm dependencies
         uses: bcgov/action-oc-runner@v1.4.1
         with:
-          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-${{ inputs.environment }}
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
@@ -226,7 +226,7 @@ jobs:
       - name: Helm upgrade / install
         uses: bcgov/action-oc-runner@v1.4.1
         with:
-          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-${{ inputs.environment }}
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
@@ -253,10 +253,15 @@ jobs:
 
             CLUSTER="${{ steps.crunchy.outputs.cluster }}"
             LICENSE_PLATE="${{ vars.LICENSE_PLATE }}"
-            VAULT_ROLE="${{ vars.VAULT_ROLE }}"
+            OC_NAMESPACE="${LICENSE_PLATE}-${ENV}"
+            if [[ "${ENV}" == "prod" ]]; then
+              VAULT_ROLE="${LICENSE_PLATE}-prod"
+            else
+              VAULT_ROLE="${LICENSE_PLATE}-nonprod"
+            fi
             VAULT_KSA="${LICENSE_PLATE}-vault"
-            if [[ -z "${CLUSTER}" || -z "${LICENSE_PLATE}" || -z "${VAULT_ROLE}" ]]; then
-              echo "Crunchy cluster, LICENSE_PLATE, and Vault role are required." >&2
+            if [[ -z "${CLUSTER}" || -z "${LICENSE_PLATE}" ]]; then
+              echo "Crunchy cluster and LICENSE_PLATE are required." >&2
               exit 1
             fi
 
@@ -269,7 +274,7 @@ jobs:
             fi
 
             helm upgrade --install "${RELEASE_NAME}" "${CHART}" \
-              --namespace "${{ vars.OC_NAMESPACE }}" \
+              --namespace "${OC_NAMESPACE}" \
               -f "${CHART}/values.yaml" \
               ${VALUES_OVERRIDE} \
               --set-string backend.image.tag="${BACKEND_TAG}" \

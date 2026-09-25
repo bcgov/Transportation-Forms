@@ -15,7 +15,7 @@ jobs:
     name: Remove PR-${{ github.event.number }} deployment
     uses: bcgov/quickstart-openshift-helpers/.github/workflows/.pr-close.yml@v0
     with:
-      oc_namespace: ${{ vars.OC_NAMESPACE }}
+      oc_namespace: ${{ vars.LICENSE_PLATE }}-dev
       oc_server: ${{ vars.OC_SERVER }}
       release_name: transportation-forms-${{ github.event.number }}
     secrets:
@@ -34,7 +34,7 @@ jobs:
       - name: Remove Crunchy PR user
         uses: bcgov/action-crunchy@v2.1.0
         with:
-          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-dev
           oc_token: ${{ secrets.OC_TOKEN }}
           oc_server: ${{ vars.OC_SERVER }}
           command: delete-user
