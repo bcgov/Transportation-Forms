@@ -92,14 +92,6 @@ on:
     secrets:
       oc_token:
         required: true
-      database_url:
-        required: true
-      secret_key:
-        required: true
-      jwt_private_key_pem:
-        required: true
-      jwt_public_key_pem:
-        required: true
       s3_endpoint_url:
         required: true
       s3_access_key:
@@ -107,18 +99,6 @@ on:
       s3_secret_key:
         required: true
       s3_bucket:
-        required: true
-      keycloak_server_url:
-        required: true
-      keycloak_realm:
-        required: true
-      keycloak_client_id:
-        required: true
-      keycloak_client_secret:
-        required: true
-      keycloak_redirect_uri:
-        required: true
-      initial_admin_email:
         required: true
 
 jobs:
@@ -147,7 +127,7 @@ jobs:
         id: crunchy
         uses: bcgov/action-crunchy@v2.1.0
         with:
-          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-${{ inputs.environment }}
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           environment: ${{ inputs.environment }}
@@ -160,7 +140,7 @@ jobs:
       - name: Configure application database schema
         uses: bcgov/action-oc-runner@v1.4.1
         with:
-          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-${{ inputs.environment }}
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
@@ -168,6 +148,7 @@ jobs:
             CLUSTER="${{ steps.crunchy.outputs.cluster }}"
             DATABASE="transportation_forms"
             DATABASE_USER="${{ inputs.db_user }}"
+            READONLY_USER="publicreadonly"
             PRIMARY_POD="$(oc get pods \
               -l "postgres-operator.crunchydata.com/cluster=${CLUSTER},postgres-operator.crunchydata.com/role=master" \
               -o jsonpath='{.items[0].metadata.name}')"
@@ -176,42 +157,45 @@ jobs:
               psql -U postgres -d "${DATABASE}" -Atqc \
               "SELECT to_regclass('public.alembic_version') IS NOT NULL" | grep -qx t; then
               echo "Existing public-schema database detected; preserving its search path."
-              oc exec "${PRIMARY_POD}" -c database -- \
-                psql -U postgres -d "${DATABASE}" -v ON_ERROR_STOP=1 \
-                -c "GRANT USAGE, CREATE ON SCHEMA public TO \"${DATABASE_USER}\""
             else
-              oc annotate postgrescluster "${CLUSTER}" \
-                postgres-operator.crunchydata.com/autoCreateUserSchema=true \
-                --overwrite
-
-              for ATTEMPT in $(seq 1 30); do
-                if oc exec "${PRIMARY_POD}" -c database -- \
-                  psql -U postgres -d "${DATABASE}" -Atqc \
-                  "SELECT EXISTS (
-                     SELECT 1
-                     FROM pg_namespace n
-                     JOIN pg_roles r ON r.oid = n.nspowner
-                     WHERE n.nspname = '${DATABASE_USER}'
-                       AND r.rolname = '${DATABASE_USER}'
-                   )" | grep -qx t; then
-                  echo "Application schema ${DATABASE_USER} is ready."
-                  break
-                fi
-
-                if [[ "${ATTEMPT}" -eq 30 ]]; then
-                  echo "Crunchy did not create schema ${DATABASE_USER}." >&2
-                  exit 1
-                fi
-                echo "Waiting for application schema (${ATTEMPT}/30)..."
-                sleep 2
-              done
+              echo "New database detected; using the public schema."
             fi
+
+            oc exec "${PRIMARY_POD}" -c database -- \
+              psql -U postgres -d "${DATABASE}" -v ON_ERROR_STOP=1 \
+              -c "ALTER ROLE \"${DATABASE_USER}\" IN DATABASE \"${DATABASE}\" SET search_path TO public; \
+                  GRANT USAGE, CREATE ON SCHEMA public TO \"${DATABASE_USER}\""
+
+            for ATTEMPT in $(seq 1 30); do
+              if oc exec "${PRIMARY_POD}" -c database -- \
+                psql -U postgres -d "${DATABASE}" -Atqc \
+                "SELECT 1 FROM pg_roles WHERE rolname = '${READONLY_USER}'" | grep -qx 1; then
+                break
+              fi
+
+              if [[ "${ATTEMPT}" -eq 30 ]]; then
+                echo "Crunchy did not create role ${READONLY_USER}." >&2
+                exit 1
+              fi
+              echo "Waiting for read-only database role (${ATTEMPT}/30)..."
+              sleep 2
+            done
+
+            oc exec "${PRIMARY_POD}" -c database -- \
+              psql -U postgres -d "${DATABASE}" -v ON_ERROR_STOP=1 \
+              -c "ALTER ROLE \"${READONLY_USER}\" IN DATABASE \"${DATABASE}\" SET search_path TO public; \
+                  GRANT CONNECT ON DATABASE \"${DATABASE}\" TO \"${READONLY_USER}\"; \
+                  GRANT USAGE ON SCHEMA public TO \"${READONLY_USER}\"; \
+                  REVOKE CREATE ON SCHEMA public FROM \"${READONLY_USER}\"; \
+                  GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"${READONLY_USER}\"; \
+                  REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM \"${READONLY_USER}\"; \
+                  ALTER DEFAULT PRIVILEGES FOR ROLE \"${DATABASE_USER}\" IN SCHEMA public GRANT SELECT ON TABLES TO \"${READONLY_USER}\";"
 
       # ── Deploy application via Helm ───────────────────────────────────────
       - name: Update Helm dependencies
         uses: bcgov/action-oc-runner@v1.4.1
         with:
-          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-${{ inputs.environment }}
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
@@ -220,7 +204,7 @@ jobs:
       - name: Helm upgrade / install
         uses: bcgov/action-oc-runner@v1.4.1
         with:
-          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-${{ inputs.environment }}
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.OC_SERVER }}
           commands: |
@@ -244,15 +228,20 @@ jobs:
             if [[ -z "${PUBLIC_FORMS_BASE_URL}" ]]; then
               PUBLIC_FORMS_BASE_URL="https://forms-public-${RELEASE_NAME}.${TARGET_DOMAIN}"
             fi
-            JWT_PRIVATE_KEY_FILE="$(mktemp)"
-            JWT_PUBLIC_KEY_FILE="$(mktemp)"
-            trap 'rm -f "${JWT_PRIVATE_KEY_FILE}" "${JWT_PUBLIC_KEY_FILE}"' EXIT
-            cat > "${JWT_PRIVATE_KEY_FILE}" <<'JWT_PRIVATE_KEY_EOF'
-            ${{ secrets.jwt_private_key_pem }}
-            JWT_PRIVATE_KEY_EOF
-            cat > "${JWT_PUBLIC_KEY_FILE}" <<'JWT_PUBLIC_KEY_EOF'
-            ${{ secrets.jwt_public_key_pem }}
-            JWT_PUBLIC_KEY_EOF
+
+            CLUSTER="${{ steps.crunchy.outputs.cluster }}"
+            LICENSE_PLATE="${{ vars.LICENSE_PLATE }}"
+            OC_NAMESPACE="${LICENSE_PLATE}-${ENV}"
+            if [[ "${ENV}" == "prod" ]]; then
+              VAULT_ROLE="${LICENSE_PLATE}-prod"
+            else
+              VAULT_ROLE="${LICENSE_PLATE}-nonprod"
+            fi
+            VAULT_KSA="${LICENSE_PLATE}-vault"
+            if [[ -z "${CLUSTER}" || -z "${LICENSE_PLATE}" ]]; then
+              echo "Crunchy cluster and LICENSE_PLATE are required." >&2
+              exit 1
+            fi
 
             # Determine values file override (test/prod have specific files)
             VALUES_OVERRIDE=""
@@ -262,16 +251,8 @@ jobs:
               VALUES_OVERRIDE="-f ${CHART}/values-prod.yaml"
             fi
 
-            # Clean slashes from S3 parameters to prevent signing/routing errors on OpenShift
-            S3_ENDPOINT="${{ secrets.s3_endpoint_url }}"
-            S3_BUCKET="${{ secrets.s3_bucket }}"
-            S3_ENDPOINT_CLEAN="${S3_ENDPOINT%/}"
-            S3_BUCKET_CLEAN="${S3_BUCKET#/}"
-            S3_BUCKET_CLEAN="${S3_BUCKET_CLEAN%/}"
-            S3_UPSTREAM="${S3_ENDPOINT_CLEAN}/${S3_BUCKET_CLEAN}"
-
             helm upgrade --install "${RELEASE_NAME}" "${CHART}" \
-              --namespace "${{ vars.OC_NAMESPACE }}" \
+              --namespace "${OC_NAMESPACE}" \
               -f "${CHART}/values.yaml" \
               ${VALUES_OVERRIDE} \
               --set-string backend.image.tag="${BACKEND_TAG}" \
@@ -287,23 +268,21 @@ jobs:
               --set-string public-frontend.image.digest="${{ inputs.public_frontend_digest }}" \
               --set-string global.registry=ghcr.io \
               --set-string global.repository=bcgov/transportation-forms \
-              --set-string backend.secrets.databaseUrl="${{ secrets.database_url }}" \
-              --set-string backend.secrets.secretKey="${{ secrets.secret_key }}" \
-              --set-file backend.secrets.jwtPrivateKeyPem="${JWT_PRIVATE_KEY_FILE}" \
-              --set-file backend.secrets.jwtPublicKeyPem="${JWT_PUBLIC_KEY_FILE}" \
-              --set-string backend.secrets.s3EndpointUrl="${S3_ENDPOINT_CLEAN}" \
-              --set-string backend.secrets.s3AccessKey="${{ secrets.s3_access_key }}" \
-              --set-string backend.secrets.s3SecretKey="${{ secrets.s3_secret_key }}" \
-              --set-string backend.secrets.s3Bucket="${S3_BUCKET_CLEAN}" \
-              --set-string backend.secrets.keycloakServerUrl="${{ secrets.keycloak_server_url }}" \
-              --set-string backend.secrets.keycloakRealm="${{ secrets.keycloak_realm }}" \
-              --set-string backend.secrets.keycloakClientId="${{ secrets.keycloak_client_id }}" \
-              --set-string backend.secrets.keycloakClientSecret="${{ secrets.keycloak_client_secret }}" \
-              --set-string backend.secrets.keycloakRedirectUri="${{ secrets.keycloak_redirect_uri }}" \
-              --set-string backend.secrets.initialAdminEmail="${{ secrets.initial_admin_email }}" \
               --set-string backend.env.corsOrigins="${FRONTEND_BASE_URL}" \
               --set-string public-backend.env.publicCorsOrigins="${PUBLIC_FORMS_BASE_URL}" \
-              --set-string "public-frontend.s3.internalUpstream=${S3_UPSTREAM}" \
+              --set-string global.crunchyCluster="${CLUSTER}" \
+              --set-string backend.deployment.vault.enabled=true \
+              --set-string backend.deployment.vault.role="${VAULT_ROLE}" \
+              --set-string backend.deployment.vault.path="${ENV}/internal" \
+              --set-string backend.deployment.vault.serviceAccountName="${VAULT_KSA}" \
+              --set-string public-backend.deployment.vault.enabled=true \
+              --set-string public-backend.deployment.vault.role="${VAULT_ROLE}" \
+              --set-string public-backend.deployment.vault.path="${ENV}/public" \
+              --set-string public-backend.deployment.vault.serviceAccountName="${VAULT_KSA}" \
+              --set-string public-frontend.deployment.vault.enabled=true \
+              --set-string public-frontend.deployment.vault.role="${VAULT_ROLE}" \
+              --set-string public-frontend.deployment.vault.path="${ENV}/public" \
+              --set-string public-frontend.deployment.vault.serviceAccountName="${VAULT_KSA}" \
               --set-string "public-frontend.publicBaseUrl=${PUBLIC_FORMS_BASE_URL}" \
               --set-string "public-backend.publicBaseUrl=${PUBLIC_FORMS_BASE_URL}" \
               ${{ inputs.params }} \

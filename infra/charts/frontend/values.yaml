@@ -36,6 +36,18 @@ resources:
     cpu: "100m"
     memory: "256Mi"
 
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
 autoscaling:
   enabled: false
   minReplicas: 1

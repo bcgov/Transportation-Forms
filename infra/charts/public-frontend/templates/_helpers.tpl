@@ -47,17 +47,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-ServiceAccount name.
-*/}}
-{{- define "public-frontend.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "public-frontend.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
-{{- end }}
-{{- end }}
-
-{{/*
 Image reference. Honours .Values.image.repository if set, else falls back to
 {registry}/{repository}/public-frontend.
 */}}

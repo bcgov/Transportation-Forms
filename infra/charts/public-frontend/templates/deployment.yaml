@@ -26,8 +26,28 @@ spec:
         checksum/nginx-config: {{ include (print $.Template.BasePath "/configmap-nginx.yaml") . | sha256sum }}
         checksum/bot-ua-config: {{ include (print $.Template.BasePath "/configmap-bot-ua.yaml") . | sha256sum }}
         checksum/robots: {{ include (print $.Template.BasePath "/configmap-robots.yaml") . | sha256sum }}
+        {{- if .Values.deployment.vault.enabled }}
+        {{- $vaultPath := printf "%s/%s" .Values.deployment.vault.role .Values.deployment.vault.path }}
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-inject-token: "false"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/auth-path: "auth/k8s-silver"
+        vault.hashicorp.com/namespace: "platform-services"
+        vault.hashicorp.com/role: {{ .Values.deployment.vault.role | quote }}
+        vault.hashicorp.com/agent-inject-secret-secrets.env: {{ $vaultPath | quote }}
+        vault.hashicorp.com/agent-inject-template-secrets.env: |
+          {{`{{- with secret "`}}{{ $vaultPath }}{{`" }}`}}
+          {{`export INTERNAL_AUTH_SECRET="{{ .Data.data.INTERNAL_AUTH_SECRET }}"`}}
+          {{`export S3_ENDPOINT_URL="{{ .Data.data.S3_ENDPOINT_URL }}"`}}
+          {{`export S3_BUCKET="{{ .Data.data.S3_BUCKET }}"`}}
+          {{`{{- end }}`}}
+        {{- end }}
     spec:
-      serviceAccountName: {{ include "public-frontend.serviceAccountName" . }}
+      {{- if .Values.deployment.vault.enabled }}
+      serviceAccountName: {{ required "public-frontend.deployment.vault.serviceAccountName is required when Vault is enabled" .Values.deployment.vault.serviceAccountName | quote }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       volumes:
         # ── ConfigMap-supplied templates (read-only) ────────────────────────
         - name: nginx-templates
@@ -62,11 +82,13 @@ spec:
               protocol: TCP
           env:
             # ── Shared internal-auth secret (matches public-backend) ─────────
+            {{- if not .Values.deployment.vault.enabled }}
             - name: INTERNAL_AUTH_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "public-frontend.internalAuthSecretName" . }}
                   key: {{ .Values.internalAuth.secretKey }}
+            {{- end }}
             # ── Externally visible base URL (used for robots.txt sub_filter) ─
             - name: PUBLIC_BASE_URL
               value: {{ .Values.publicBaseUrl | quote }}
@@ -76,8 +98,10 @@ spec:
             - name: BACKEND_UPSTREAM_PORT
               value: {{ .Values.backendPort | quote }}
             # ── S3 endpoint for X-Accel-Redirect /internal-s3/ proxying ─────
+            {{- if not .Values.deployment.vault.enabled }}
             - name: S3_INTERNAL_UPSTREAM
               value: {{ .Values.s3.internalUpstream | quote }}
+            {{- end }}
           volumeMounts:
             # ConfigMap-supplied templates (entrypoint.sh reads from here)
             - name: nginx-templates
@@ -126,10 +150,7 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

@@ -136,4 +136,9 @@ jobs:
       public_frontend_digest: ${{ needs.resolve-images.outputs.public_frontend_digest }}
       params: >-
         --set global.secrets.persist=true
-    secrets: inherit
+    secrets:
+      oc_token: ${{ secrets.OC_TOKEN }}
+      s3_endpoint_url: ${{ secrets.S3_ENDPOINT_URL }}
+      s3_access_key: ${{ secrets.S3_ACCESS_KEY }}
+      s3_secret_key: ${{ secrets.S3_SECRET_KEY }}
+      s3_bucket: ${{ secrets.S3_BUCKET }}

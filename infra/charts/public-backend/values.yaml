@@ -38,6 +38,18 @@ resources:
       cpu: "250m"
       memory: "384Mi"
 
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
 autoscaling:
   enabled: false
   minReplicas: 1
@@ -70,6 +82,17 @@ livenessProbe:
 # ── Secret ────────────────────────────────────────────────────────────────────
 # Reuses the same shared secret as the main backend
 secretName: transportation-forms-secrets
+
+crunchy:
+  cluster: ""
+  user: app
+
+deployment:
+  vault:
+    enabled: false
+    role: ""
+    path: public
+    serviceAccountName: ""
 
 # ── Environment ──────────────────────────────────────────────────────────────
 env:

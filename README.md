@@ -32,27 +32,50 @@ BC Transportation Forms — FastAPI backend, Caddy + Coraza WAF frontend, Crunch
 | Type | Name | Description |
 |---|---|---|
 | Variable | `OC_SERVER` | OpenShift API URL |
-| Variable | `OC_NAMESPACE` | DEV namespace |
 | Variable | `TARGET_ENV_DOMAIN` | Route domain (e.g. `apps.silver.devops.gov.bc.ca`) |
+| Variable | `LICENSE_PLATE` | Project license plate; namespaces and Vault identities are derived from it |
 | Secret | `OC_TOKEN` | DEV service account token |
-| Secret | `DATABASE_URL` | DEV PostgreSQL connection string |
-| Secret | `SECRET_KEY` | Application secret key |
-| Secret | `JWT_PRIVATE_KEY_PEM` | Application JWT RS256 private key PEM |
-| Secret | `JWT_PUBLIC_KEY_PEM` | Matching application JWT RS256 public key PEM |
-| Secret | `S3_ENDPOINT_URL` | S3-compatible endpoint URL |
-| Secret | `S3_ACCESS_KEY` | S3-compatible access key |
-| Secret | `S3_SECRET_KEY` | S3-compatible secret key |
-| Secret | `S3_BUCKET` | S3-compatible bucket name |
-| Secret | `KEYCLOAK_SERVER_URL` | Keycloak base URL |
-| Secret | `KEYCLOAK_REALM` | Keycloak realm |
-| Secret | `KEYCLOAK_CLIENT_ID` | Keycloak client ID |
-| Secret | `KEYCLOAK_CLIENT_SECRET` | Keycloak client secret |
-| Secret | `KEYCLOAK_REDIRECT_URI` | OAuth2 redirect URI |
+| Secret | `S3_ENDPOINT_URL` | Crunchy pgBackRest endpoint; operator-only until its Vault/PGO integration is available |
+| Secret | `S3_ACCESS_KEY` | Crunchy pgBackRest access key; operator-only until its Vault/PGO integration is available |
+| Secret | `S3_SECRET_KEY` | Crunchy pgBackRest secret key; operator-only until its Vault/PGO integration is available |
+| Secret | `S3_BUCKET` | Crunchy pgBackRest bucket; operator-only until its Vault/PGO integration is available |
+
+Application secrets are not stored in GitHub configuration. OpenShift pods receive
+them through workload-specific Vault Agent annotations in the Helm deployments.
+`DATABASE_URL` is not stored in Vault: the backend and migrations reference the
+Crunchy-generated `${CLUSTER}-pguser-app` Secret, key `uri`. The public backend
+uses the `${CLUSTER}-pguser-publicreadonly` Secret when Vault mode is enabled.
+
+The backend Vault path contains the application signing, JWT, Keycloak, S3, and
+initial-admin values. The public-backend path contains `INTERNAL_AUTH_SECRET`.
+The public-frontend path contains the same `INTERNAL_AUTH_SECRET` plus
+`S3_ENDPOINT_URL` and `S3_BUCKET`. The shared internal-auth value must match in
+both public workload paths.
+
+Deployment identity values are derived from `LICENSE_PLATE` and the workflow
+environment. The OpenShift namespace is `${LICENSE_PLATE}-${environment}`;
+the Vault role is `${LICENSE_PLATE}-nonprod` for DEV/TEST and
+`${LICENSE_PLATE}-prod` for PROD; and the Kubernetes ServiceAccount is
+`${LICENSE_PLATE}-vault`.
 
 ### GitHub Environments
 
-- **`test`** — `OC_NAMESPACE`, `OC_SERVER`, and the application secrets listed above using the same names, scoped to TST values
-- **`prod`** — same as test but suffixed `_PROD`, with required reviewers for manual approval
+- **`dev`** — `OC_SERVER`, `LICENSE_PLATE`, and the operator-only Crunchy backup inputs
+- **`test`** — `OC_SERVER`, `LICENSE_PLATE`, and the operator-only Crunchy backup inputs, scoped to TST values
+- **`prod`** — same platform variables and operator inputs, with required reviewers for manual approval
+
+The workflow derives the Vault role as `${LICENSE_PLATE}-nonprod` for DEV/TEST
+and `${LICENSE_PLATE}-prod` for PROD.
+The Helm charts append `${environment}/internal` for the backend path and
+`${environment}/public` for both public workloads, producing
+`${VAULT_ROLE}/${environment}/internal` and `${VAULT_ROLE}/${environment}/public`.
+
+### Local Rancher Development
+
+Rancher Desktop does not use Vault. `values-local.yaml` explicitly disables
+Vault for all workloads, and `infra/local/deploy.ps1` continues to load local
+`.env` values through Helm `--set-file`. Local development does not require
+`LICENSE_PLATE` or any `VAULT_*` variable.
 
 ## DEV-to-TST Promotion
 
@@ -68,8 +91,7 @@ that commit with `force_build_all=true`. This establishes the OCI revision
 labels required by `bcgov/actions/image-tracker@v0.5.0`; images produced only by
 the previous `v4.2.1` builder may not contain those labels.
 
-The GitHub `test` environment must contain `OC_NAMESPACE`, `OC_SERVER`, and all
-application secrets listed under Repository-Level. Set the repository variable
+The GitHub `test` environment must contain `OC_SERVER` and `LICENSE_PLATE`. Set the repository variable
 `TARGET_ENV_DOMAIN` when the Silver default
 `apps.silver.devops.gov.bc.ca` is not appropriate.
 

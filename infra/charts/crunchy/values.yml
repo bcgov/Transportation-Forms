@@ -36,6 +36,9 @@ crunchy:
     - name: app
       databases:
         - transportation_forms
+    - name: publicreadonly
+      databases:
+        - transportation_forms
     - name: pgbouncer
 
   # ── Monitoring — disabled for DEV ─────────────────────────────────────────────

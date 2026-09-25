@@ -20,7 +20,27 @@ spec:
       labels:
         {{- include "public-backend.labels" . | nindent 8 }}
         app.kubernetes.io/component: public-backend
+      {{- if .Values.deployment.vault.enabled }}
+      {{- $vaultPath := printf "%s/%s" .Values.deployment.vault.role .Values.deployment.vault.path }}
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-inject-token: "false"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/auth-path: "auth/k8s-silver"
+        vault.hashicorp.com/namespace: "platform-services"
+        vault.hashicorp.com/role: {{ .Values.deployment.vault.role | quote }}
+        vault.hashicorp.com/agent-inject-secret-secrets.env: {{ $vaultPath | quote }}
+        vault.hashicorp.com/agent-inject-template-secrets.env: |
+          {{`{{- with secret "`}}{{ $vaultPath }}{{`" }}`}}
+          {{`export INTERNAL_AUTH_SECRET="{{ .Data.data.INTERNAL_AUTH_SECRET }}"`}}
+          {{`{{- end }}`}}
+      {{- end }}
     spec:
+      {{- if .Values.deployment.vault.enabled }}
+      serviceAccountName: {{ required "public-backend.deployment.vault.serviceAccountName is required when Vault is enabled" .Values.deployment.vault.serviceAccountName | quote }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       volumes:
         # ── DPR-2: NGINX sidecar removed; only FastAPI scratch tmp remains ──
         - name: app-tmp
@@ -40,8 +60,8 @@ spec:
             - name: DATABASE_URL_READONLY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.secretName }}
-                  key: database-url
+                  name: {{ include "public-backend.crunchySecretName" . }}
+                  key: uri
             - name: LOG_LEVEL
               value: {{ .Values.env.logLevel | quote }}
             - name: PUBLIC_CORS_ORIGINS
@@ -49,11 +69,13 @@ spec:
             - name: CACHE_MAX_AGE
               value: {{ .Values.env.cacheMaxAge | quote }}
             # ── Shared internal-auth token (FE injects, BE validates) ──────
+            {{- if not .Values.deployment.vault.enabled }}
             - name: INTERNAL_AUTH_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "public-backend.internalAuthSecretName" . }}
                   key: {{ .Values.internalAuth.secretKey }}
+            {{- end }}
             # ── Externally visible base URL (used for OG / sitemap) ────────
             - name: PUBLIC_BASE_URL
               value: {{ .Values.publicBaseUrl | quote }}
@@ -86,10 +108,7 @@ spec:
           resources:
             {{- toYaml .Values.resources.app | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

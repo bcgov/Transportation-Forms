@@ -21,6 +21,15 @@ spec:
         {{- include "frontend.labels" . | nindent 8 }}
         app.kubernetes.io/component: frontend
     spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: caddy-data
+          emptyDir: {}
+        - name: caddy-config
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: frontend
           image: {{ include "frontend.image" . }}
@@ -35,6 +44,13 @@ spec:
           env:
             - name: BACKEND_URL
               value: "http://{{ .Release.Name }}-backend:{{ .Values.backendPort }}"
+          volumeMounts:
+            - name: caddy-data
+              mountPath: /data
+            - name: caddy-config
+              mountPath: /config
+            - name: tmp
+              mountPath: /tmp
           # ── Probes (use the isolated health port — no WAF overhead) ─────────
           startupProbe:
             httpGet:
@@ -61,10 +77,7 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

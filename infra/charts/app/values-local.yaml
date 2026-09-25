@@ -40,6 +40,10 @@ backend:
     tag: local
     migrationsTag: local
 
+  deployment:
+    vault:
+      enabled: false
+
   # Disable OpenShift Routes (not available on k3s)
   routes:
     enabled: false
@@ -95,6 +99,10 @@ publicFrontend:
 public-backend:
   enabled: true
 
+  deployment:
+    vault:
+      enabled: false
+
   image:
     tag: local
 
@@ -125,6 +133,10 @@ public-frontend:
   image:
     tag: local
     pullPolicy: IfNotPresent
+
+  deployment:
+    vault:
+      enabled: false
 
   route:
     enabled: false
