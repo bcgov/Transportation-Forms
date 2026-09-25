@@ -66,8 +66,9 @@ the Vault role is `${LICENSE_PLATE}-nonprod` for DEV/TEST and
 
 The workflow derives the Vault role as `${LICENSE_PLATE}-nonprod` for DEV/TEST
 and `${LICENSE_PLATE}-prod` for PROD.
-The Helm charts append `internal` for the backend path and `public` for both
-public workloads, producing `${VAULT_ROLE}/internal` and `${VAULT_ROLE}/public`.
+The Helm charts append `${environment}/internal` for the backend path and
+`${environment}/public` for both public workloads, producing
+`${VAULT_ROLE}/${environment}/internal` and `${VAULT_ROLE}/${environment}/public`.
 
 ### Local Rancher Development
 
@@ -90,8 +91,7 @@ that commit with `force_build_all=true`. This establishes the OCI revision
 labels required by `bcgov/actions/image-tracker@v0.5.0`; images produced only by
 the previous `v4.2.1` builder may not contain those labels.
 
-The GitHub `test` environment must contain `OC_NAMESPACE`, `OC_SERVER`,
-`LICENSE_PLATE`, and `VAULT_ROLE`. Set the repository variable
+The GitHub `test` environment must contain `OC_SERVER` and `LICENSE_PLATE`. Set the repository variable
 `TARGET_ENV_DOMAIN` when the Silver default
 `apps.silver.devops.gov.bc.ca` is not appropriate.
 
