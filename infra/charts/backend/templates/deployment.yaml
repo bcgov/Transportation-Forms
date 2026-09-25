@@ -51,6 +51,11 @@ spec:
       {{- if .Values.deployment.vault.enabled }}
       serviceAccountName: {{ required "backend.deployment.vault.serviceAccountName is required when Vault is enabled" .Values.deployment.vault.serviceAccountName | quote }}
       {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
       # ── Init container: run Alembic migrations before the backend starts ────
       initContainers:
         - name: migrations
@@ -70,10 +75,10 @@ spec:
                   key: initial-admin-email
             {{- end }}
           securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
       # ── Main container ───────────────────────────────────────────────────────
       containers:
         - name: backend
@@ -161,6 +166,9 @@ spec:
                   name: {{ .Values.secretName }}
                   key: keycloak-redirect-uri
             {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           # ── Probes ─────────────────────────────────────────────────────────
           startupProbe:
             httpGet:
@@ -187,10 +195,7 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}

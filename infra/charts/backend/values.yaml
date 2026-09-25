@@ -32,10 +32,22 @@ deploymentStrategy:
 resources:
   requests:
     cpu: "50m"
-    memory: "128Mi"
+    memory: "256Mi"
   limits:
     cpu: "100m"
-    memory: "256Mi"
+    memory: "512Mi"
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
 
 autoscaling:
   enabled: false

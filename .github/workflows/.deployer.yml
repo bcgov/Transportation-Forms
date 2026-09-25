@@ -158,36 +158,13 @@ jobs:
               "SELECT to_regclass('public.alembic_version') IS NOT NULL" | grep -qx t; then
               echo "Existing public-schema database detected; preserving its search path."
             else
-              oc annotate postgrescluster "${CLUSTER}" \
-                postgres-operator.crunchydata.com/autoCreateUserSchema=true \
-                --overwrite
-
-              for ATTEMPT in $(seq 1 30); do
-                if oc exec "${PRIMARY_POD}" -c database -- \
-                  psql -U postgres -d "${DATABASE}" -Atqc \
-                  "SELECT EXISTS (
-                     SELECT 1
-                     FROM pg_namespace n
-                     JOIN pg_roles r ON r.oid = n.nspowner
-                     WHERE n.nspname = '${DATABASE_USER}'
-                       AND r.rolname = '${DATABASE_USER}'
-                   )" | grep -qx t; then
-                  echo "Application schema ${DATABASE_USER} is ready."
-                  break
-                fi
-
-                if [[ "${ATTEMPT}" -eq 30 ]]; then
-                  echo "Crunchy did not create schema ${DATABASE_USER}." >&2
-                  exit 1
-                fi
-                echo "Waiting for application schema (${ATTEMPT}/30)..."
-                sleep 2
-              done
+              echo "New database detected; using the public schema."
             fi
 
             oc exec "${PRIMARY_POD}" -c database -- \
               psql -U postgres -d "${DATABASE}" -v ON_ERROR_STOP=1 \
-              -c "GRANT USAGE, CREATE ON SCHEMA public TO \"${DATABASE_USER}\""
+              -c "ALTER ROLE \"${DATABASE_USER}\" IN DATABASE \"${DATABASE}\" SET search_path TO public; \
+                  GRANT USAGE, CREATE ON SCHEMA public TO \"${DATABASE_USER}\""
 
             for ATTEMPT in $(seq 1 30); do
               if oc exec "${PRIMARY_POD}" -c database -- \
@@ -206,7 +183,8 @@ jobs:
 
             oc exec "${PRIMARY_POD}" -c database -- \
               psql -U postgres -d "${DATABASE}" -v ON_ERROR_STOP=1 \
-              -c "GRANT CONNECT ON DATABASE \"${DATABASE}\" TO \"${READONLY_USER}\"; \
+              -c "ALTER ROLE \"${READONLY_USER}\" IN DATABASE \"${DATABASE}\" SET search_path TO public; \
+                  GRANT CONNECT ON DATABASE \"${DATABASE}\" TO \"${READONLY_USER}\"; \
                   GRANT USAGE ON SCHEMA public TO \"${READONLY_USER}\"; \
                   REVOKE CREATE ON SCHEMA public FROM \"${READONLY_USER}\"; \
                   GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"${READONLY_USER}\"; \

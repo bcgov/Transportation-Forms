@@ -39,6 +39,8 @@ spec:
       {{- if .Values.deployment.vault.enabled }}
       serviceAccountName: {{ required "public-backend.deployment.vault.serviceAccountName is required when Vault is enabled" .Values.deployment.vault.serviceAccountName | quote }}
       {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       volumes:
         # ── DPR-2: NGINX sidecar removed; only FastAPI scratch tmp remains ──
         - name: app-tmp
@@ -106,10 +108,7 @@ spec:
           resources:
             {{- toYaml .Values.resources.app | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
