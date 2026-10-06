@@ -173,6 +173,73 @@ helm template transportation-forms infra/charts/app -f infra/charts/app/values.y
 helm upgrade --install transportation-forms-dev infra/charts/app --namespace <ns>
 ```
 
+### IP Access Behind the Reverse Proxy
+
+DEV and TEST OpenShift Routes accept only the reverse-proxy source networks
+`142.34.53.0/24` and `142.34.226.0/24`. The staff Caddy and public NGINX
+frontends then check the real client IP from `X-Forwarded-For`, traversing
+trusted proxy hops from right to left. Both frontends reject missing forwarded
+headers and unlisted clients on port 3000; their port 3001 health checks are
+unrestricted. PROD and local have client blocking disabled, and PROD has no
+Route IP whitelist. Both backend Routes are disabled by default; requests go
+through the frontend Routes and in-cluster backend Services.
+
+Before deploying to an OpenShift namespace, create an **externally managed**
+Secret named `transportation-forms-ip-access` there. It is shared by releases
+in that namespace and is not managed by Helm. Provide two newline-separated
+IPv4 address/CIDR keys (blank lines are ignored):
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: transportation-forms-ip-access
+type: Opaque
+stringData:
+  trustedProxyCidrs: |
+    10.0.0.0/8
+    142.34.53.0/24
+    142.34.226.0/24
+  allowedClientCidrs: |
+    10.0.0.0/8
+    142.22.0.0/16
+    142.23.0.0/16
+    142.24.0.0/16
+    142.25.0.0/16
+    142.26.0.0/16
+    142.27.0.0/16
+    142.28.0.0/16
+    142.29.0.0/16
+    142.30.0.0/16
+    142.31.0.0/16
+    142.32.0.0/16
+    142.33.0.0/16
+    142.34.0.0/16
+    142.35.0.0/16
+    142.36.0.0/16
+```
+
+To add a client range, update only `allowedClientCidrs` in the Secret, then
+restart **both** frontend Deployments in the namespace (substitute the release
+name and namespace):
+
+```bash
+oc rollout restart deployment/<release>-frontend deployment/<release>-public-frontend -n <namespace>
+oc rollout status deployment/<release>-frontend -n <namespace>
+oc rollout status deployment/<release>-public-frontend -n <namespace>
+```
+
+No Helm upgrade or Route change is needed for a client-list edit. A change to
+an RP source network also requires updating the Route's
+`global.ipAccess.routeProxyCidrs` Helm value, as well as `trustedProxyCidrs` in
+the Secret. The Route annotation cannot read a Secret directly. Confirm the
+actual source address the OpenShift router observes before narrowing its
+allowlist; if it sees a `10.0.0.0/8` HA address instead of the RP addresses,
+the RP-only annotation will block traffic. Frontend pods validate CIDRs at
+startup and refuse invalid or empty lists; revert the Secret to its prior
+value and restart again if an update fails. Single-replica deployments using
+the default `Recreate` strategy can have brief downtime during restarts.
+
 ## Verify Deployment in OpenShift
 
 ```bash

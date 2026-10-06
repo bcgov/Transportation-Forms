@@ -2,6 +2,8 @@
 # Applied on top of values.yaml: helm upgrade ... -f values.yaml -f values-prod.yaml
 
 global:
+  ipAccess:
+    enabled: false
   secrets:
     persist: true
 

@@ -30,6 +30,20 @@ spec:
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.global.ipAccess.existingSecret }}
+        - name: ip-access
+          secret:
+            secretName: {{ .Values.global.ipAccess.existingSecret | quote }}
+            items:
+              - key: trustedProxyCidrs
+                path: trustedProxyCidrs
+              {{- if .Values.global.ipAccess.enabled }}
+              - key: allowedClientCidrs
+                path: allowedClientCidrs
+              {{- end }}
+        {{- else if .Values.global.ipAccess.enabled }}
+        {{- fail "global.ipAccess.existingSecret is required when IP access is enabled" }}
+        {{- end }}
       containers:
         - name: frontend
           image: {{ include "frontend.image" . }}
@@ -44,6 +58,8 @@ spec:
           env:
             - name: BACKEND_URL
               value: "http://{{ .Release.Name }}-backend:{{ .Values.backendPort }}"
+            - name: IP_ACCESS_ENABLED
+              value: {{ .Values.global.ipAccess.enabled | quote }}
           volumeMounts:
             - name: caddy-data
               mountPath: /data
@@ -51,6 +67,11 @@ spec:
               mountPath: /config
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.global.ipAccess.existingSecret }}
+            - name: ip-access
+              mountPath: /etc/ip-access
+              readOnly: true
+            {{- end }}
           # ── Probes (use the isolated health port — no WAF overhead) ─────────
           startupProbe:
             httpGet:

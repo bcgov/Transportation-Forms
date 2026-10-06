@@ -13,6 +13,9 @@
 global:
   registry: ghcr.io
   repository: bcgov/transportation-forms
+  ipAccess:
+    enabled: false
+    existingSecret: ""
 
 # ── Ingress (nginx-ingress on k3s replaces OpenShift Routes) ─────────────────
 ingress:
