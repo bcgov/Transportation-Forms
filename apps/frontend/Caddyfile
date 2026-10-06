@@ -7,6 +7,7 @@
 
 	# Ensure coraza_waf runs before other handlers
 	order coraza_waf first
+	order abort before handle
 
 	servers :3000 {
 		import /config/ip-access/global/*.caddy

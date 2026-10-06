@@ -12,9 +12,13 @@ ROOT = Path(__file__).resolve().parents[3]
 
 class CaddyPolicyTests(unittest.TestCase):
     def test_denials_abort_before_site_handlers(self):
+        caddyfile = (ROOT / "apps" / "frontend" / "Caddyfile").read_text(
+            encoding="utf-8"
+        )
         entrypoint = (ROOT / "apps" / "frontend" / "entrypoint.sh").read_text(
             encoding="utf-8"
         )
+        self.assertIn("order abort before handle", caddyfile)
         self.assertIn("abort @missing_xff", entrypoint)
         self.assertIn("abort @unlisted", entrypoint)
         self.assertIn("@unlisted not client_ip", entrypoint)
