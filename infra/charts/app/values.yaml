@@ -3,6 +3,10 @@ global:
   registry: ghcr.io
   repository: bcgov/transportation-forms
   crunchyCluster: ""
+  ipAccess:
+    enabled: true
+    routeProxyCidrs: "142.34.53.0/24 142.34.226.0/24"
+    existingSecret: transportation-forms-ip-access
   secrets:
     # false  → Helm will delete secrets when the release is removed (safe for PR envs)
     # true   → Helm will not delete secrets on release removal (safe for long-lived envs)
@@ -92,7 +96,7 @@ backend:
     enabled: true
 
   routes:
-    enabled: true
+    enabled: false
     host: ""
 
   networkPolicy:
@@ -263,7 +267,7 @@ public-backend:
 
   # DPR-1 (FEAT-0005) — legacy Route gate; default off (cutover gate cleared)
   route:
-    enabled: true
+    enabled: false
 
   networkPolicy:
     enabled: true

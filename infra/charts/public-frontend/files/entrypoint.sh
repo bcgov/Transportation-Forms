@@ -7,6 +7,7 @@
 # Helm chart Deployment.
 # ─────────────────────────────────────────────────────────────────────────────
 set -eu
+. /usr/local/lib/ip-access.sh
 
 if [ -f /vault/secrets/secrets.env ]; then
     . /vault/secrets/secrets.env
@@ -30,7 +31,27 @@ CONF_D=/etc/nginx/conf.d
 TEMPLATES=/etc/nginx/templates
 
 # Recreate dirs that live inside emptyDir mounts (/var/run, /var/cache/nginx).
-mkdir -p "${CONF_D}/maps" /var/run/nginx /var/cache/nginx/proxy
+mkdir -p "${CONF_D}/maps" "${CONF_D}/trust" "${CONF_D}/access" /var/run/nginx /var/cache/nginx/proxy
+
+if [ -d /etc/ip-access ]; then
+    ip_access_validate_file /etc/ip-access/trustedProxyCidrs "${CONF_D}/trusted.txt"
+    {
+        while IFS= read -r cidr; do printf 'set_real_ip_from %s;\n' "$cidr"; done < "${CONF_D}/trusted.txt"
+        printf 'real_ip_header X-Forwarded-For;\nreal_ip_recursive on;\n'
+    } > "${CONF_D}/trust/realip.conf"
+
+    if [ "${IP_ACCESS_ENABLED:-false}" = true ]; then
+        ip_access_validate_file /etc/ip-access/allowedClientCidrs "${CONF_D}/allowed.txt"
+        {
+            printf 'if ($http_x_forwarded_for = "") { return 403; }\n'
+            while IFS= read -r cidr; do printf 'allow %s;\n' "$cidr"; done < "${CONF_D}/allowed.txt"
+            printf 'deny all;\n'
+        } > "${CONF_D}/access/allowlist.conf"
+    fi
+elif [ "${IP_ACCESS_ENABLED:-false}" = true ]; then
+    printf 'IP access is enabled but /etc/ip-access is missing\n' >&2
+    exit 1
+fi
 
 # Bot UA map — mounted via separate ConfigMap into ${TEMPLATES}/maps/.
 if [ -d "${TEMPLATES}/maps" ]; then
@@ -42,4 +63,5 @@ envsubst '${BACKEND_UPSTREAM_HOST} ${BACKEND_UPSTREAM_PORT} ${INTERNAL_AUTH_SECR
     < "${TEMPLATES}/default.conf.template" \
     > "${CONF_D}/00-default.conf"
 
+nginx -t
 exec "$@"

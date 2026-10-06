@@ -45,6 +45,7 @@ spec:
           {{`export KEYCLOAK_CLIENT_ID="{{ .Data.data.KEYCLOAK_CLIENT_ID }}"`}}
           {{`export KEYCLOAK_CLIENT_SECRET="{{ .Data.data.KEYCLOAK_CLIENT_SECRET }}"`}}
           {{`export KEYCLOAK_REDIRECT_URI="{{ .Data.data.KEYCLOAK_REDIRECT_URI }}"`}}
+          {{`export CORS_ORIGINS="{{ .Data.data.KEYCLOAK_REDIRECT_URI }}"`}}
           {{`export INITIAL_ADMIN_EMAIL="{{ .Data.data.INITIAL_ADMIN_EMAIL }}"`}}
           {{`{{- end }}`}}
       {{- end }}
@@ -101,8 +102,10 @@ spec:
               value: {{ .Values.env.sqlalchemyEcho | quote }}
             - name: LOG_LEVEL
               value: {{ .Values.env.logLevel | quote }}
+            {{- if not .Values.deployment.vault.enabled }}
             - name: CORS_ORIGINS
               value: {{ .Values.env.corsOrigins | quote }}
+            {{- end }}
             - name: AUTH_COOKIE_SECURE
               value: {{ .Values.env.authCookieSecure | default "true" | quote }}
             {{- if not .Values.deployment.vault.enabled }}

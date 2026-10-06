@@ -31,6 +31,7 @@ COPY --chown=1001:0 apps/public-frontend/robots.txt      /usr/share/nginx/html/r
 
 # Custom main nginx.conf (http{}-level zones + map includes)
 COPY --chown=1001:0 infra/charts/public-frontend/files/nginx.conf      /etc/nginx/nginx.conf
+COPY --chown=1001:0 apps/shared/ip-access.sh                      /usr/local/lib/ip-access.sh
 
 # Entrypoint: render conf.d templates from envsubst, then exec
 COPY --chown=1001:0 infra/charts/public-frontend/files/entrypoint.sh   /entrypoint.sh

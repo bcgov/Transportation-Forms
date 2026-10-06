@@ -7,10 +7,17 @@
 
 	# Ensure coraza_waf runs before other handlers
 	order coraza_waf first
+	order abort before handle
+
+	servers :3000 {
+		import /config/ip-access/global/*.caddy
+	}
 }
 
 # ── Primary port: static files + WAF + API reverse proxy ─────────────────────
 :3000 {
+	import /config/ip-access/site/*.caddy
+
 	# Coraza WAF – OWASP Core Rule Set
 	coraza_waf {
 		load_owasp_crs
@@ -23,11 +30,17 @@
 
 	# Reverse-proxy all /api/* and /auth/* requests to the backend
 	handle /api/* {
-		reverse_proxy {$BACKEND_URL:http://app:8000}
+		reverse_proxy {$BACKEND_URL:http://app:8000} {
+			header_up X-Real-IP {client_ip}
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 
 	handle /auth/* {
-		reverse_proxy {$BACKEND_URL:http://app:8000}
+		reverse_proxy {$BACKEND_URL:http://app:8000} {
+			header_up X-Real-IP {client_ip}
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 
 	# Static assets must retain normal file-server semantics. In particular, a

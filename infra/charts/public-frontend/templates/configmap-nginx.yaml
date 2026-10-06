@@ -30,6 +30,7 @@ data:
         listen 3000 default_server;
         server_name _;
 
+        include /etc/nginx/conf.d/access/*.conf;
 
         # Method allow-list (defence-in-depth — read-only public API).
         if ($request_method !~ ^(GET|HEAD|OPTIONS)$) {
@@ -100,7 +101,7 @@ data:
             # so downstream browser + CDN caches can still hold it briefly.
             proxy_set_header  Host              $host;
             proxy_set_header  X-Real-IP         $remote_addr;
-            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-For   $remote_addr;
             proxy_set_header  X-Forwarded-Proto $scheme;
             proxy_set_header  X-Request-ID      $request_id;
             proxy_set_header  X-Internal-Auth   $internal_auth_value;
@@ -125,7 +126,7 @@ data:
             # so browsers revalidate every request.
             proxy_set_header  Host              $host;
             proxy_set_header  X-Real-IP         $remote_addr;
-            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-For   $remote_addr;
             proxy_set_header  X-Forwarded-Proto $scheme;
             proxy_set_header  X-Request-ID      $request_id;
             proxy_set_header  X-Internal-Auth   $internal_auth_value;
@@ -148,7 +149,7 @@ data:
             # No proxy_cache directive; FastAPI returns Cache-Control:no-store.
             proxy_set_header  Host              $host;
             proxy_set_header  X-Real-IP         $remote_addr;
-            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-For   $remote_addr;
             proxy_set_header  X-Forwarded-Proto $scheme;
             proxy_set_header  X-Request-ID      $request_id;
             proxy_set_header  X-Internal-Auth   $internal_auth_value;
@@ -177,7 +178,7 @@ data:
         {{- end }}
             proxy_set_header  Host              $host;
             proxy_set_header  X-Real-IP         $remote_addr;
-            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-For   $remote_addr;
             proxy_set_header  X-Forwarded-Proto $scheme;
             proxy_set_header  X-Request-ID      $request_id;
             proxy_set_header  X-Internal-Auth   $internal_auth_value;
@@ -205,7 +206,7 @@ data:
         {{- end }}
             proxy_set_header  Host              $host;
             proxy_set_header  X-Real-IP         $remote_addr;
-            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-For   $remote_addr;
             proxy_set_header  X-Forwarded-Proto $scheme;
             proxy_set_header  X-Request-ID      $request_id;
             proxy_set_header  X-Internal-Auth   $internal_auth_value;
@@ -230,7 +231,7 @@ data:
 
             proxy_set_header  Host              $host;
             proxy_set_header  X-Real-IP         $remote_addr;
-            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-For   $remote_addr;
             proxy_set_header  X-Forwarded-Proto $scheme;
             proxy_set_header  X-Request-ID      $request_id;
             proxy_set_header  X-Internal-Auth   $internal_auth_value;
@@ -254,7 +255,7 @@ data:
 
             proxy_set_header  Host              $host;
             proxy_set_header  X-Real-IP         $remote_addr;
-            proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header  X-Forwarded-For   $remote_addr;
             proxy_set_header  X-Forwarded-Proto $scheme;
             proxy_set_header  X-Request-ID      $request_id;
             proxy_set_header  X-Internal-Auth   $internal_auth_value;

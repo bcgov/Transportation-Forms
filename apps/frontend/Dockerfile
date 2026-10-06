@@ -24,17 +24,23 @@ COPY apps/frontend/js/             /srv/static/js/
 # Copy Caddy and WAF configuration
 COPY apps/frontend/Caddyfile       /etc/caddy/Caddyfile
 COPY apps/frontend/coraza.conf     /etc/caddy/coraza.conf
+COPY apps/shared/ip-access.sh       /usr/local/lib/ip-access.sh
+COPY apps/frontend/entrypoint.sh    /entrypoint.sh
 
 # OpenShift compatibility: UID 1001, root group (GID 0).
 # Caddy data/config dirs must be writable by the container user.
 RUN chown -R 1001:0 /srv /etc/caddy /data /config && \
-    chmod -R g=u   /srv /etc/caddy /data /config
+    chmod -R g=u   /srv /etc/caddy /data /config && \
+    chmod 755 /entrypoint.sh
 
 USER 1001
 
 # 3000 – primary HTTP port (static files + reverse proxy to backend)
 # 3001 – health check port (isolated from WAF)
 EXPOSE 3000 3001
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget -q -O /dev/null http://localhost:3001/healthz || exit 1
