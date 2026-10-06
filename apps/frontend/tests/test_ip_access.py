@@ -10,6 +10,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 
 
+class CaddyPolicyTests(unittest.TestCase):
+    def test_denials_abort_before_site_handlers(self):
+        entrypoint = (ROOT / "apps" / "frontend" / "entrypoint.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("abort @missing_xff", entrypoint)
+        self.assertIn("abort @unlisted", entrypoint)
+        self.assertIn("@unlisted not client_ip", entrypoint)
+        self.assertNotIn("respond @missing_xff", entrypoint)
+        self.assertNotIn("respond @unlisted", entrypoint)
+
+
 class CIDRValidationTests(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "Run Bash checks inside WSL")
     @unittest.skipUnless(shutil.which("bash"), "bash is required")

@@ -18,10 +18,10 @@ if [ -d /etc/ip-access ]; then
         ip_access_validate_file /etc/ip-access/allowedClientCidrs "$policy_dir/allowed.txt"
         {
             printf '@missing_xff not header X-Forwarded-For *\n'
-            printf 'respond @missing_xff "Forbidden" 403\n'
+            printf 'abort @missing_xff\n'
             printf '@unlisted not client_ip'
             while IFS= read -r cidr; do printf ' %s' "$cidr"; done < "$policy_dir/allowed.txt"
-            printf '\nrespond @unlisted "Forbidden" 403\n'
+            printf '\nabort @unlisted\n'
         } > "$policy_dir/site/allowlist.caddy"
     fi
 elif [ "${IP_ACCESS_ENABLED:-false}" = true ]; then
