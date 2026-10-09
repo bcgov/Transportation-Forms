@@ -354,10 +354,11 @@
                         <div class="mb-3 form-page__full">
                             <label for="keywordInput" class="form-label">Keywords</label>
                             <div class="input-group">
-                                <input type="text" class="form-control" id="keywordInput" placeholder="Add keywords...">
-                                <button class="btn btn-outline-secondary" type="button" id="addKeywordBtn">Add</button>
+                                <input type="text" class="form-control" id="keywordInput" placeholder="Add keywords..." aria-describedby="keywordFeedback">
+                                <button class="btn btn-outline-secondary" type="button" id="addKeywordBtn" aria-label="Add keyword">Add</button>
                             </div>
-                            <div id="keywordTags" class="mt-2"></div>
+                            <div id="keywordFeedback" role="status" aria-live="polite" aria-label="Keyword status"></div>
+                            <div id="keywordTags" class="mt-2" role="list" aria-label="Form keywords"></div>
                             <small class="text-muted">Press Enter to add a keyword.</small>
                         </div>
 

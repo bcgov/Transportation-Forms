@@ -1498,6 +1498,18 @@ body.form-details-drawer-open {
     font-size: 0.8125rem;
 }
 
+#formCreate #keywordFeedback:not(:empty) {
+    margin-top: 0.35rem;
+    font-size: 0.875rem;
+}
+
+#formCreate #keywordTags .badge {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+
 #formCreate #businessAreaMessage:not(:empty) {
     margin: 0.5rem 0;
     color: #9a3412;

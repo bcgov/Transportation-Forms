@@ -11,7 +11,7 @@
 import { API_BASE, ROUTES } from '../constants.js';
 import { escapeHtml, showAlert, getFormNumberDisplay } from '../utils.js';
 import { clearAllFieldErrors, clearFieldError, showFieldError, showValidationErrors } from '../validation.js';
-import { initKeywords, getKeywords, setKeywords, addKeyword } from './keywords.js';
+import { initKeywords, getKeywords, setKeywords, addKeyword, setKeywordsLocked } from './keywords.js';
 import {
     initFileUpload,
     getUploadedFileUrl,
@@ -35,6 +35,7 @@ let _workflowListenersAttached = false;
 let _businessAreasState = 'loading';
 let _businessAreaLoadVersion = 0;
 let _savedBusinessAreaId = null;
+let _loadedKeywords = [];
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
@@ -226,7 +227,7 @@ function _updateWorkflowButtons(status) {
 
     if (!status) {
         // Create mode — just show "Save draft"
-        if (saveDraftBtn) saveDraftBtn.style.display = '';
+        if (saveDraftBtn) saveDraftBtn.style.display = hasPermission('form:create') ? '' : 'none';
         return;
     }
 
@@ -236,7 +237,7 @@ function _updateWorkflowButtons(status) {
     const isOwner = _currentFormCreatedById === userId;
 
     if (status === 'draft') {
-        if (saveDraftBtn) saveDraftBtn.style.display = '';
+        if (saveDraftBtn) saveDraftBtn.style.display = hasPermission('form:edit') ? '' : 'none';
         if (submitForReviewBtn && isOwner && hasPermission('form:submit_for_review')) {
             submitForReviewBtn.style.display = '';
         }
@@ -296,6 +297,7 @@ function _setFormFieldsLocked(locked) {
     if (keywordInput) keywordInput.disabled = locked;
     const addKeywordBtn = document.getElementById('addKeywordBtn');
     if (addKeywordBtn) addKeywordBtn.disabled = locked;
+    setKeywordsLocked(locked);
 }
 
 // ─── Workflow action handlers ─────────────────────────────────────────────────
@@ -548,6 +550,8 @@ export async function showCreateView() {
     initFileUpload();
     initBusinessAreaCombobox();
     _initFormListeners();
+    _setFormFieldsLocked(!hasPermission('form:create'));
+    _updateWorkflowButtons(null);
 
     // Load dynamic dropdown data
     _loadFormBusinessAreas();
@@ -613,12 +617,13 @@ async function _loadFormForEdit(formId) {
         _onFormSourceChange();
 
         setKeywords(form.keywords || []);
+        _loadedKeywords = getKeywords();
 
         // Workflow button state and field locking (FEAT-0001)
         _currentFormStatus = form.status;
         _savedBusinessAreaId = form.business_area?.id || null;
         _updateWorkflowButtons(form.status);
-        const isLocked = ['pending_review', 'published', 'archived'].includes(form.status);
+        const isLocked = form.status !== 'draft' || !hasPermission('form:edit');
         _setFormFieldsLocked(isLocked);
 
         // Label the submit button based on status
@@ -706,7 +711,7 @@ export async function handleFormSubmit(event) {
         title: document.getElementById('title').value,
         description: document.getElementById('description').value,
         is_public: document.getElementById('isPublic').checked,
-        keywords: getKeywords(),
+        ...((!_currentFormId || JSON.stringify(getKeywords()) !== JSON.stringify(_loadedKeywords)) && { keywords: getKeywords() }),
         business_area_id: document.getElementById('businessAreaValue').value,
         effective_date: document.getElementById('effectiveDate').value || null,
         collects_personal_info: document.getElementById('collectsPersonalInfo').value,
@@ -800,6 +805,7 @@ export function resetFormState() {
     _businessAreasState = 'loading';
     _savedBusinessAreaId = null;
     setKeywords([]);
+    _loadedKeywords = [];
     _currentFormId = null;
     _currentFormStatus = null;
     _currentFormCreatedById = null;  // FEAT-0013

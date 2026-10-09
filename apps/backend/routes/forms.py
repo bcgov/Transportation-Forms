@@ -5,6 +5,7 @@ error handling, and authorization checks.
 """
 
 import logging
+import re
 from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
@@ -19,7 +20,13 @@ from fastapi import (
     Request,
 )
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 from sqlalchemy.orm import Session
 
 from backend.auth.authorization import require_permission
@@ -36,6 +43,33 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # Pydantic Models (Request/Response)
 # ============================================================================
+
+_KEYWORD_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+_KEYWORD_EXTRA_STRIPPED_CONTROLS = re.compile(r"[\x1c-\x1f\x85]")
+
+
+def _validate_keywords(keywords: Optional[List[str]]) -> Optional[List[str]]:
+    if keywords is None:
+        return None
+    cleaned = []
+    seen = set()
+    for value in keywords:
+        keyword = value.strip()
+        if not keyword:
+            raise ValueError("Keywords cannot be blank")
+        if len(keyword) > 50:
+            raise ValueError("Keywords must be 50 characters or fewer")
+        if (
+            _KEYWORD_CONTROL_CHARACTERS.search(keyword)
+            or _KEYWORD_EXTRA_STRIPPED_CONTROLS.search(value)
+        ):
+            raise ValueError("Keywords cannot contain control characters")
+        folded = keyword.lower()
+        if folded in seen:
+            raise ValueError("Duplicate keywords are not allowed")
+        seen.add(folded)
+        cleaned.append(keyword)
+    return cleaned
 
 
 class BusinessAreaRef(BaseModel):
@@ -99,6 +133,11 @@ class FormCreateRequest(BaseModel):
         description="Does this form collect personal information? ('Yes' or 'No')",
     )
 
+    @field_validator("keywords")
+    @classmethod
+    def validate_keywords(cls, keywords: Optional[List[str]]) -> Optional[List[str]]:
+        return _validate_keywords(keywords)
+
     @model_validator(mode="after")
     def validate_form_source(self) -> "FormCreateRequest":
         """Cross-field validation for form_source and its dependent fields."""
@@ -160,6 +199,11 @@ class FormUpdateRequest(BaseModel):
         max_length=20,
         description="Short file-type label (e.g. 'pdf', 'docx', 'unknown')",
     )
+
+    @field_validator("keywords")
+    @classmethod
+    def validate_keywords(cls, keywords: Optional[List[str]]) -> Optional[List[str]]:
+        return _validate_keywords(keywords)
 
     @model_validator(mode="after")
     def validate_update_fields(self) -> "FormUpdateRequest":
