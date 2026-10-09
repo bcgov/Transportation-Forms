@@ -19,7 +19,7 @@ from backend.main import app
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-from backend.models import Form, Role, UserRole
+from backend.models import BusinessArea, Form, Role, UserRole
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -74,7 +74,15 @@ def _cleanup():
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest.fixture()
-def seed_form(db, user_factory):
+def business_area(db):
+    area = BusinessArea(id=uuid.uuid4(), name=f"RBAC area {uuid.uuid4().hex}")
+    db.add(area)
+    db.flush()
+    return area
+
+
+@pytest.fixture()
+def seed_form(db, user_factory, business_area):
     """A published form suitable for update/archive tests."""
     owner = user_factory(email="form-owner-0019@example.com")
     form = Form(
@@ -86,6 +94,7 @@ def seed_form(db, user_factory):
         current_version=1,
         keywords=["test"],
         created_by_id=owner.id,
+        business_area_id=business_area.id,
         collects_personal_info="No",
         form_source="URL",
         form_source_url="https://example.com/existing.pdf",
@@ -179,11 +188,13 @@ class TestStaffViewerDenied:
 
 class TestAuthorizedUserSucceeds:
 
-    def test_create_with_permission(self, db, test_user):
+    def test_create_with_permission(self, db, test_user, business_area):
         """TC1.4: User with form:create POST /forms → 201."""
         client = _make_client(db, test_user, permissions=["form:read", "form:create"])
         try:
-            resp = client.post("/api/v1/forms", json=_FORM_CREATE_PAYLOAD)
+            resp = client.post("/api/v1/forms", json={
+                **_FORM_CREATE_PAYLOAD, "business_area_id": str(business_area.id)
+            })
             assert resp.status_code == 201
             assert resp.json()["title"] == _FORM_CREATE_PAYLOAD["title"]
         finally:
@@ -279,13 +290,15 @@ class TestPermissionSpecificity:
 
 class TestRegressionAllPermissions:
 
-    def test_full_lifecycle(self, db, test_user, seed_form):
+    def test_full_lifecycle(self, db, test_user, seed_form, business_area):
         """TC1.11: User with all write perms can create, update, archive, unarchive."""
         all_perms = ["form:read", "form:create", "form:edit", "form:archive"]
         client = _make_client(db, test_user, permissions=all_perms)
         try:
             # Create
-            resp = client.post("/api/v1/forms", json=_FORM_CREATE_PAYLOAD)
+            resp = client.post("/api/v1/forms", json={
+                **_FORM_CREATE_PAYLOAD, "business_area_id": str(business_area.id)
+            })
             assert resp.status_code == 201
             new_id = resp.json()["id"]
 

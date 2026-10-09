@@ -66,6 +66,12 @@ export function initFileUpload() {
         }, { signal });
         dropZone.addEventListener('drop', handleFileDrop, { signal });
         dropZone.addEventListener('click', () => fileInput && fileInput.click(), { signal });
+        dropZone.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                fileInput?.click();
+            }
+        }, { signal });
     }
 
     if (fileInput) {

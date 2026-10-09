@@ -9,7 +9,15 @@ from backend.main import app
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-from backend.models import UserRole
+from backend.models import BusinessArea, UserRole
+
+
+@pytest.fixture()
+def active_area(db):
+    area = BusinessArea(id=uuid.uuid4(), name=f"Personal info {uuid.uuid4().hex}")
+    db.add(area)
+    db.flush()
+    return area
 
 
 @pytest.fixture()
@@ -42,7 +50,7 @@ def forms_client(db, user_factory, role_factory):
 
 
 @pytest.mark.integration
-def test_create_form_with_personal_info_yes(forms_client: TestClient):
+def test_create_form_with_personal_info_yes(forms_client: TestClient, active_area):
     response = forms_client.post(
         "/api/v1/forms",
         json={
@@ -50,6 +58,7 @@ def test_create_form_with_personal_info_yes(forms_client: TestClient):
             "description": "Form for driver onboarding.",
             "is_public": False,
             "collects_personal_info": "Yes",
+            "business_area_id": str(active_area.id),
         },
     )
 
@@ -59,13 +68,14 @@ def test_create_form_with_personal_info_yes(forms_client: TestClient):
 
 
 @pytest.mark.integration
-def test_create_form_defaults_personal_info_to_no(forms_client: TestClient):
+def test_create_form_defaults_personal_info_to_no(forms_client: TestClient, active_area):
     response = forms_client.post(
         "/api/v1/forms",
         json={
             "title": "Vehicle Checklist",
             "description": "Daily vehicle checklist.",
             "is_public": True,
+            "business_area_id": str(active_area.id),
         },
     )
 
@@ -75,7 +85,7 @@ def test_create_form_defaults_personal_info_to_no(forms_client: TestClient):
 
 
 @pytest.mark.integration
-def test_update_form_personal_info_field(forms_client: TestClient):
+def test_update_form_personal_info_field(forms_client: TestClient, active_area):
     create_response = forms_client.post(
         "/api/v1/forms",
         json={
@@ -83,6 +93,7 @@ def test_update_form_personal_info_field(forms_client: TestClient):
             "description": "Permit renewal request form.",
             "is_public": False,
             "collects_personal_info": "No",
+            "business_area_id": str(active_area.id),
         },
     )
     assert create_response.status_code == 201

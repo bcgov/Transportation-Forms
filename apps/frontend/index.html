@@ -276,17 +276,21 @@
 
             <!-- Create/Edit View -->
             <div id="createView" style="display: none;">
-                <div class="form-container">
-                    <h2 class="mb-4"><i class="fas fa-plus-circle"></i> Create New Form</h2>
-
+                <div class="form-page">
+                    <nav class="form-page__breadcrumb" aria-label="Breadcrumb"><a href="/forms" data-route="/forms">Manage Forms</a><span aria-hidden="true">/</span><span id="formBreadcrumbCurrent">Add New Form</span></nav>
+                    <header class="form-page__header">
+                        <div><h1 id="formPageHeading">Add New Form</h1><p id="formPageSubtitle">Complete the form details below.</p></div>
+                        <span id="formStatusBadge" class="form-page__status" style="display:none;"></span>
+                    </header>
+                    <section class="form-page__surface" aria-labelledby="formDetailsHeading">
+                    <h2 id="formDetailsHeading">Form details</h2>
                     <form id="formCreate" novalidate>
                         <!-- Form Number (TASK-413) -->
                         <div class="mb-3">
-                            <label class="form-label"><strong>Form Number</strong> <span id="formNumberRequiredStar"
-                                    style="color: red;">*</span></label>
+                            <label for="formNumber" class="form-label">Form Number <span id="formNumberRequiredStar" class="form-page__required">*</span></label>
                             <!-- Dropdown: shown on Create only -->
                             <div id="formNumberSelectContainer">
-                                <div class="input-group mb-2">
+                                <div class="input-group">
                                     <select class="form-select" id="formNumber" name="formNumber" required>
                                         <option value="">-- Loading approved form numbers --</option>
                                     </select>
@@ -295,11 +299,12 @@
                                     <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
                                     <small class="text-muted">Loading available form numbers...</small>
                                 </div>
+                                <small class="text-muted">Select a reserved form number to assign to this new
+                                    form</small>
                                 <div id="formNumberError" class="alert alert-danger"
                                     style="display: none; margin-bottom: 0.5rem;"></div>
                                 <div class="invalid-feedback" id="error-formNumber"></div>
-                                <small class="text-muted">Select a reserved form number to assign to this new
-                                    form</small>
+                                
                             </div>
                             <!-- Read-only display: shown on Edit only -->
                             <div id="formNumberReadonlyContainer" style="display: none;">
@@ -308,10 +313,28 @@
                             </div>
                         </div>
 
-                        <!-- Title -->
                         <div class="mb-3">
-                            <label for="title" class="form-label"><strong>Form Title</strong> <span
-                                    style="color: red;">*</span></label>
+                            <label for="businessAreaInput" class="form-label">Business Area <span class="form-page__required">*</span></label>
+                            <div class="position-relative" id="businessAreaCombobox">
+                                <input type="text" id="businessAreaInput" class="form-control"
+                                    placeholder="Type to search business areas..." autocomplete="off" role="combobox"
+                                    aria-required="true" aria-describedby="businessAreaHelp businessAreaMessage error-businessAreaInput"
+                                    aria-expanded="false" aria-controls="businessAreaDropdown" aria-haspopup="listbox"
+                                    aria-autocomplete="list">
+                                <input type="hidden" id="businessAreaValue">
+                                <ul id="businessAreaDropdown" role="listbox" class="dropdown-menu w-100 p-0"
+                                    style="display:none; max-height:220px; overflow-y:auto; z-index:1060;"></ul>
+                            </div>
+                            <small id="businessAreaHelp" class="text-muted">Required for all forms. Select an active Business Area.</small>
+                            <div class="invalid-feedback d-block" id="error-businessAreaInput"></div>
+                            <p id="businessAreaMessage" role="status" aria-live="polite"></p>
+                            
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="retryBusinessAreasBtn" style="display:none;">Retry loading Business Areas</button>
+                        </div>
+
+                        <!-- Title -->
+                        <div class="mb-3 form-page__full">
+                            <label for="title" class="form-label">Form Title <span class="form-page__required">*</span></label>
                             <input type="text" class="form-control" id="title" name="title"
                                 placeholder="Enter form title" required>
                             <div class="invalid-feedback" id="error-title"></div>
@@ -319,39 +342,23 @@
                         </div>
 
                         <!-- Description (required per TASK-110C) -->
-                        <div class="mb-3">
-                            <label for="description" class="form-label"><strong>Description</strong> <span
-                                    style="color: red;">*</span></label>
+                        <div class="mb-3 form-page__full">
+                            <label for="description" class="form-label">Description <span class="form-page__required">*</span></label>
                             <textarea class="form-control" id="description" name="description" rows="4"
                                 placeholder="Describe the purpose and usage of this form" required></textarea>
                             <div class="invalid-feedback" id="error-description"></div>
                             <small class="text-muted">Required. Describe the purpose and usage of this form</small>
                         </div>
 
-                        <!-- Business Areas (dynamically loaded from API) -->
-                        <div class="mb-3">
-                            <label for="businessAreaInput" class="form-label">Business Area</label>
-                            <div class="position-relative" id="businessAreaCombobox">
-                                <input type="text" id="businessAreaInput" class="form-control"
-                                    placeholder="Type to search business areas..." autocomplete="off" role="combobox"
-                                    aria-expanded="false" aria-controls="businessAreaDropdown" aria-haspopup="listbox"
-                                    aria-autocomplete="list">
-                                <input type="hidden" id="businessAreaValue">
-                                <ul id="businessAreaDropdown" role="listbox" class="dropdown-menu w-100 p-0"
-                                    style="display:none; max-height:220px; overflow-y:auto; z-index:1060;"></ul>
-                            </div>
-                            <small class="text-muted">Select the business area this form belongs to (optional)</small>
-                        </div>
-
                         <!-- Keywords -->
-                        <div class="mb-3">
-                            <label for="keywords" class="form-label">Keywords</label>
+                        <div class="mb-3 form-page__full">
+                            <label for="keywordInput" class="form-label">Keywords</label>
                             <div class="input-group">
                                 <input type="text" class="form-control" id="keywordInput" placeholder="Add keywords...">
                                 <button class="btn btn-outline-secondary" type="button" id="addKeywordBtn">Add</button>
                             </div>
                             <div id="keywordTags" class="mt-2"></div>
-                            <small class="text-muted">Add keywords to help users find this form in searches</small>
+                            <small class="text-muted">Press Enter to add a keyword.</small>
                         </div>
 
                         <!-- Form Source (TASK-110C) -->
@@ -366,8 +373,14 @@
                             <div class="invalid-feedback" id="error-formSource"></div>
                         </div>
 
+                        <!-- Effective Date -->
+                        <div class="mb-3">
+                            <label for="effectiveDate" class="form-label">Effective Date</label>
+                            <input type="date" class="form-control" id="effectiveDate" name="effectiveDate">
+                        </div>
+
                         <!-- Conditional: URL field -->
-                        <div class="mb-3" id="sourceUrlSection" style="display:none;">
+                        <div class="mb-3 form-page__full" id="sourceUrlSection" style="display:none;">
                             <label for="formSourceUrl" class="form-label"><strong>Form URL</strong> <span
                                     style="color:red;">*</span></label>
                             <input type="url" class="form-control" id="formSourceUrl" name="formSourceUrl"
@@ -377,12 +390,11 @@
                         </div>
 
                         <!-- Conditional: File upload -->
-                        <div class="mb-3" id="sourceDownloadSection" style="display:none;">
+                        <div class="mb-3 form-page__full" id="sourceDownloadSection" style="display:none;">
                             <label class="form-label"><strong>Form Attachment</strong> <span
                                     style="color:red;">*</span></label>
                             <div id="dropZone"
-                               
-                               
+                                role="button" tabindex="0" aria-label="Choose a form attachment"
                                 style="border:2px dashed #003366; border-radius:8px; padding:2rem; text-align:center; cursor:pointer; background:#f8f9fa; transition:background .2s;">
                                 <i class="fas fa-cloud-upload-alt" style="font-size:2rem; color:#003366;"></i>
                                 <p class="mt-2 mb-0"><strong>Click to select a file</strong> or drag &amp; drop it here
@@ -409,16 +421,10 @@
                             <small class="text-muted">Required when Form Source is &ldquo;Download&rdquo;</small>
                         </div>
 
-                        <!-- Effective Date -->
-                        <div class="mb-3">
-                            <label for="effectiveDate" class="form-label">Effective Date</label>
-                            <input type="date" class="form-control" id="effectiveDate" name="effectiveDate">
-                        </div>
-
                         <!-- Collects Personal Information -->
                         <div class="mb-3">
-                            <label for="collectsPersonalInfo" class="form-label"><strong>Does this form collect personal
-                                    info?</strong> <span style="color: red;">*</span></label>
+                                <label for="collectsPersonalInfo" class="form-label">Does this form collect personal
+                                    info? <span class="form-page__required">*</span></label>
                             <select class="form-select" id="collectsPersonalInfo" name="collectsPersonalInfo" required>
                                 <option value="No">No</option>
                                 <option value="Yes">Yes</option>
@@ -440,10 +446,10 @@
                         </div>
 
                         <!-- General form error area -->
-                        <div id="formErrors" class="alert alert-danger" style="display:none;"></div>
+                        <div id="formErrors" class="alert alert-danger form-page__full" role="alert" tabindex="-1" style="display:none;"></div>
 
                         <!-- Action Buttons -->
-                        <div class="mt-4 d-flex flex-wrap gap-2">
+                        <div class="form-page__actions form-page__full">
                             <button type="submit" class="btn btn-bc-primary btn-lg px-4" id="submitBtn">
                                 <i class="fas fa-save"></i> Save draft
                             </button>
@@ -472,10 +478,11 @@
                                 <i class="fas fa-trash"></i> Delete
                             </button>
                             <button type="button" class="btn btn-outline-secondary btn-lg px-4" data-action="back-to-list">
-                                <i class="fas fa-arrow-left"></i> Back to List
+                                <i class="fas fa-arrow-left"></i> Back to forms
                             </button>
                         </div>
                     </form>
+                    </section>
                 </div>
             </div>
             <!-- Reserve Form Number View (TASK-409) -->

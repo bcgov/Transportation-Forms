@@ -55,6 +55,14 @@ class FormService:
     }
 
     @staticmethod
+    def _require_active_business_area(db: Session, business_area_id: Optional[UUID]) -> None:
+        if not business_area_id or not db.query(BusinessArea.id).filter(
+            BusinessArea.id == business_area_id,
+            BusinessArea.deleted_at.is_(None),
+        ).with_for_update().first():
+            raise FormWorkflowValidationError("Select an active Business Area.")
+
+    @staticmethod
     def _normalize_newlines(value: Optional[str]) -> Optional[str]:
         """FEAT-0027 US-011: normalise CRLF/CR line endings to LF before persistence.
 
@@ -117,6 +125,8 @@ class FormService:
         # Validate description is provided (required per TASK-110C)
         if not description or not description.strip():
             raise ValueError("description is required")
+
+        FormService._require_active_business_area(db, business_area_id)
 
         # FEAT-0027 US-011: normalise newlines (\r\n, \r -> \n) before persistence
         description = FormService._normalize_newlines(description)
@@ -462,6 +472,10 @@ class FormService:
         if not form:
             return None
 
+        FormService._require_active_business_area(
+            db, kwargs.get("business_area_id", form.business_area_id)
+        )
+
         # Track old values for audit
         old_values = {
             "title": form.title,
@@ -690,6 +704,7 @@ class FormService:
     @staticmethod
     def submit_form_for_review(db: Session, form_id: UUID, user_id: UUID) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
+        FormService._require_active_business_area(db, form.business_area_id)
 
         if form.form_number_reservation_id:
             reservation = (

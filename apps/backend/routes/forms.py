@@ -672,8 +672,10 @@ async def update_form(
             update_data["keywords"] = request.keywords
         if request.effective_date is not None:
             update_data["effective_date"] = request.effective_date
-        if request.business_area_id is not None:
-            update_data["business_area_id"] = UUID(request.business_area_id)
+        if "business_area_id" in request.model_fields_set:
+            update_data["business_area_id"] = (
+                UUID(request.business_area_id) if request.business_area_id else None
+            )
         if request.collects_personal_info is not None:
             update_data["collects_personal_info"] = request.collects_personal_info
         # TASK-416: attachment fields — use model_fields_set to support explicit null (clearing)

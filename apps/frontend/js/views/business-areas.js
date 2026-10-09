@@ -99,6 +99,8 @@ export function initBusinessAreaCombobox(
     const input = document.getElementById(inputId);
     const dropdown = document.getElementById(dropdownId);
     if (!input || !dropdown) return;
+    if (input.dataset.businessAreaInitialized === 'true') return;
+    input.dataset.businessAreaInitialized = 'true';
 
     input.addEventListener('input', () => {
         // Clear confirmed hidden value when the visible text no longer matches
@@ -107,6 +109,7 @@ export function initBusinessAreaCombobox(
         if (!confirmedLabel || confirmedLabel.label !== input.value) {
             if (hiddenEl) hiddenEl.value = '';
         }
+        input.dispatchEvent(new Event('business-area:change', { bubbles: true }));
         renderBusinessAreaDropdown(input.value.toLowerCase(), inputId, dropdownId, hiddenId);
         _setBusinessAreaDropdownVisible(true, inputId, dropdownId);
     });
@@ -204,8 +207,9 @@ export function selectBusinessArea(
     const hidden = document.getElementById(hiddenId);
     if (input) input.value = label;
     if (hidden) hidden.value = id;
-    closeBusinessAreaDropdown(inputId, dropdownId);
     input?.focus();
+    closeBusinessAreaDropdown(inputId, dropdownId);
+    input?.dispatchEvent(new Event('business-area:change', { bubbles: true }));
 }
 
 function _setBusinessAreaDropdownVisible(visible, inputId, dropdownId) {

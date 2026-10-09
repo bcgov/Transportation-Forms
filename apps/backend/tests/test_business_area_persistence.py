@@ -5,8 +5,8 @@ Covers:
 - Business area returned in GET /forms/{id} as scalar object
 - Business area returned in GET /forms (list) as scalar object
 - Business area updated via PUT /forms/{id}
-- Business area cleared via PUT /forms/{id}
-- Form created without business area has null
+- Legacy forms without a business area remain readable and correctable
+- Create without business area is rejected
 """
 
 import uuid
@@ -17,7 +17,7 @@ from backend.main import app
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-from backend.models import BusinessArea, UserRole
+from backend.models import BusinessArea, Form, UserRole
 
 
 @pytest.fixture()
@@ -86,7 +86,7 @@ def test_create_form_with_business_area(ba_client, business_area):
 
 @pytest.mark.integration
 def test_create_form_without_business_area(ba_client):
-    """Form created without business_area_id has null business_area."""
+    """A new form cannot omit business_area_id."""
     resp = ba_client.post(
         "/api/v1/forms",
         json={
@@ -95,8 +95,8 @@ def test_create_form_without_business_area(ba_client):
             "is_public": True,
         },
     )
-    assert resp.status_code == 201
-    assert resp.json()["business_area"] is None
+    assert resp.status_code == 400
+    assert "Business Area" in resp.json()["detail"]
 
 
 # ── GET single form returns business area ──────────────────────────────────────
@@ -154,19 +154,22 @@ def test_list_forms_returns_business_area(ba_client, business_area):
 
 
 @pytest.mark.integration
-def test_update_form_sets_business_area(ba_client, business_area):
-    """PUT /forms/{id} with business_area_id sets the association on a form that had none."""
-    create_resp = ba_client.post(
-        "/api/v1/forms",
-        json={
-            "title": "Update BA Test",
-            "description": "Test BA update.",
-            "is_public": False,
-        },
+def test_update_form_sets_business_area(ba_client, business_area, db, user_factory):
+    """PUT /forms/{id} corrects a legacy form that had no association."""
+    owner = user_factory()
+    legacy = Form(
+        id=uuid.uuid4(),
+        title="Update BA Test",
+        description="Test BA update.",
+        status="draft",
+        is_public=False,
+        current_version=0,
+        created_by_id=owner.id,
     )
-    assert create_resp.status_code == 201
-    form_id = create_resp.json()["id"]
-    assert create_resp.json()["business_area"] is None
+    db.add(legacy)
+    db.flush()
+    form_id = str(legacy.id)
+    assert ba_client.get(f"/api/v1/forms/{form_id}").json()["business_area"] is None
 
     update_resp = ba_client.put(
         f"/api/v1/forms/{form_id}",
@@ -215,11 +218,7 @@ def test_business_area_roundtrip(ba_client, business_area):
 
 @pytest.mark.integration
 def test_create_with_old_plural_field_is_ignored(ba_client, business_area):
-    """Sending the old business_area_ids array should NOT set business area.
-
-    This verifies the bug is detectable: if the frontend sends the wrong
-    field name, the business area is silently lost.
-    """
+    """An obsolete plural field does not satisfy the required scalar field."""
     resp = ba_client.post(
         "/api/v1/forms",
         json={
@@ -229,6 +228,5 @@ def test_create_with_old_plural_field_is_ignored(ba_client, business_area):
             "business_area_ids": [str(business_area.id)],  # Wrong field name!
         },
     )
-    assert resp.status_code == 201
-    # business_area should be null because the field was silently ignored
-    assert resp.json()["business_area"] is None
+    assert resp.status_code == 400
+    assert "Business Area" in resp.json()["detail"]

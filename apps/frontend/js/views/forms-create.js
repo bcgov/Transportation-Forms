@@ -10,7 +10,7 @@
 
 import { API_BASE, ROUTES } from '../constants.js';
 import { escapeHtml, showAlert, getFormNumberDisplay } from '../utils.js';
-import { clearAllFieldErrors, showFieldError, showValidationErrors } from '../validation.js';
+import { clearAllFieldErrors, clearFieldError, showFieldError, showValidationErrors } from '../validation.js';
 import { initKeywords, getKeywords, setKeywords, addKeyword } from './keywords.js';
 import {
     initFileUpload,
@@ -20,7 +20,7 @@ import {
     clearUploadState,
     restoreUploadState,
 } from './file-upload.js';
-import { loadBusinessAreas, initBusinessAreaCombobox, getBusinessAreaOptions, closeBusinessAreaDropdown } from './business-areas.js';
+import { loadBusinessAreas, initBusinessAreaCombobox, getBusinessAreaOptions, resetBusinessAreas, closeBusinessAreaDropdown } from './business-areas.js';
 import { getAuthToken, hasPermission, isAdminUser } from '../auth.js';
 import { getCurrentUser } from '../state.js';
 
@@ -32,6 +32,9 @@ let _currentFormCreatedById = null;  // FEAT-0013: track form creator for owners
 let _formNumberReservationId = null;
 let _formNumberReservations = [];
 let _workflowListenersAttached = false;
+let _businessAreasState = 'loading';
+let _businessAreaLoadVersion = 0;
+let _savedBusinessAreaId = null;
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
@@ -57,6 +60,81 @@ function _navigate(path) {
     }
 }
 
+function _hasActiveBusinessArea() {
+    const id = document.getElementById('businessAreaValue').value;
+    return _businessAreasState === 'ready' && getBusinessAreaOptions().some(area => area.id === id);
+}
+
+function _updateBusinessAreaActions() {
+    const available = _businessAreasState === 'ready' && getBusinessAreaOptions().length > 0;
+    const selected = _hasActiveBusinessArea();
+    document.getElementById('submitBtn').disabled = !available || (_currentFormId !== null && !selected);
+    document.getElementById('submitForReviewBtn').disabled = !selected ||
+        document.getElementById('businessAreaValue').value !== _savedBusinessAreaId;
+}
+
+function _showBusinessAreaError(message, focus = true) {
+    showFieldError('businessAreaInput', message);
+    if (focus) document.getElementById('businessAreaInput').focus();
+}
+
+function _handleInvalidBusinessArea(message) {
+    _businessAreasState = 'error';
+    document.getElementById('businessAreaMessage').textContent =
+        'The selected Business Area is no longer active. Retry loading and choose an active Business Area.';
+    document.getElementById('retryBusinessAreasBtn').style.display = '';
+    _showBusinessAreaError(message);
+    _updateBusinessAreaActions();
+}
+
+function _onBusinessAreaChange() {
+    if (_hasActiveBusinessArea()) {
+        clearFieldError('businessAreaInput');
+        document.getElementById('businessAreaMessage').textContent = '';
+    } else if (_currentFormId) {
+        _showBusinessAreaError('Select an active Business Area before saving or submitting.', false);
+    }
+    _updateBusinessAreaActions();
+}
+
+async function _loadFormBusinessAreas(existingArea = null) {
+    const loadVersion = ++_businessAreaLoadVersion;
+    _businessAreasState = 'loading';
+    _updateBusinessAreaActions();
+    const message = document.getElementById('businessAreaMessage');
+    const retry = document.getElementById('retryBusinessAreasBtn');
+    retry.style.display = 'none';
+    message.textContent = 'Loading Business Areas...';
+
+    const loaded = await loadBusinessAreas();
+    if (loadVersion !== _businessAreaLoadVersion) return;
+    _businessAreasState = loaded ? 'ready' : 'error';
+    const options = getBusinessAreaOptions();
+    const selected = existingArea && options.find(area => area.id === existingArea.id);
+    if (selected) {
+        document.getElementById('businessAreaInput').value = selected.label;
+        document.getElementById('businessAreaValue').value = selected.id;
+    }
+    if (!loaded) {
+        message.textContent = 'Unable to load Business Areas. Retry loading to save or submit.';
+        retry.style.display = '';
+    } else if (!options.length) {
+        message.textContent = 'No active Business Areas are available. An administrator must create or activate a Business Area before you can save or submit.';
+        if (_currentFormId) {
+            _showBusinessAreaError('This form has no active Business Area. Select one after an administrator creates or activates it.', false);
+        }
+    } else if (_currentFormId && !_hasActiveBusinessArea()) {
+        document.getElementById('businessAreaInput').value = existingArea?.name || '';
+        message.textContent = existingArea?.name
+            ? `The Business Area "${existingArea.name}" is no longer active. Select an active Business Area to continue.`
+            : 'This form has no Business Area. Select an active Business Area to continue.';
+        _showBusinessAreaError('Select an active Business Area before saving or submitting.', false);
+    } else {
+        message.textContent = '';
+    }
+    _updateBusinessAreaActions();
+}
+
 /** Wire up all event listeners for the create/edit form. Safe to call multiple times. */
 function _initFormListeners() {
     const form = document.getElementById('formCreate');
@@ -65,6 +143,11 @@ function _initFormListeners() {
     // Prevent duplicate listeners by removing before re-adding
     form.removeEventListener('submit', handleFormSubmit);
     form.addEventListener('submit', handleFormSubmit);
+    form.removeEventListener('business-area:change', _onBusinessAreaChange);
+    form.addEventListener('business-area:change', _onBusinessAreaChange);
+    const retryAreas = document.getElementById('retryBusinessAreasBtn');
+    retryAreas.removeEventListener('click', _retryBusinessAreas);
+    retryAreas.addEventListener('click', _retryBusinessAreas);
 
     const formSourceEl = document.getElementById('formSource');
     if (formSourceEl) {
@@ -89,6 +172,10 @@ function _initFormListeners() {
     }
 
     _initWorkflowButtonListeners();
+}
+
+function _retryBusinessAreas() {
+    _loadFormBusinessAreas(_savedBusinessAreaId ? { id: _savedBusinessAreaId } : null);
 }
 
 /** Wire workflow action button listeners once per page lifetime. */
@@ -215,6 +302,10 @@ function _setFormFieldsLocked(locked) {
 
 async function _submitFormForReview() {
     if (!_currentFormId) return;
+    if (!_hasActiveBusinessArea() || document.getElementById('businessAreaValue').value !== _savedBusinessAreaId) {
+        _showBusinessAreaError('Save the form with an active Business Area before submitting.');
+        return;
+    }
     const btn = document.getElementById('submitForReviewBtn');
     btn.disabled = true;
     try {
@@ -229,9 +320,13 @@ async function _submitFormForReview() {
         showAlert('Form submitted for review successfully.', 'success');
         setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
     } catch (error) {
-        showAlert('Error: ' + error.message, 'danger');
+        if (error.message.includes('Business Area')) {
+            _handleInvalidBusinessArea(error.message);
+        } else {
+            showAlert('Error: ' + error.message, 'danger');
+        }
     } finally {
-        btn.disabled = false;
+        _updateBusinessAreaActions();
     }
 }
 
@@ -455,7 +550,7 @@ export async function showCreateView() {
     _initFormListeners();
 
     // Load dynamic dropdown data
-    loadBusinessAreas();
+    _loadFormBusinessAreas();
     loadFormNumberReservations();
 }
 
@@ -517,23 +612,11 @@ async function _loadFormForEdit(formId) {
         }
         _onFormSourceChange();
 
-        // FEAT-0003: Pre-select the saved business area once the dropdown has loaded
-        loadBusinessAreas().then(() => {
-            const options = getBusinessAreaOptions();
-            const area = form.business_area || null;
-            if (area) {
-                const selected = options.find(o => o.id === area.id);
-                if (selected) {
-                    document.getElementById('businessAreaInput').value = selected.label;
-                    document.getElementById('businessAreaValue').value = selected.id;
-                }
-            }
-        });
-
         setKeywords(form.keywords || []);
 
         // Workflow button state and field locking (FEAT-0001)
         _currentFormStatus = form.status;
+        _savedBusinessAreaId = form.business_area?.id || null;
         _updateWorkflowButtons(form.status);
         const isLocked = ['pending_review', 'published', 'archived'].includes(form.status);
         _setFormFieldsLocked(isLocked);
@@ -542,17 +625,24 @@ async function _loadFormForEdit(formId) {
         const submitBtn = document.getElementById('submitBtn');
         if (form.status === 'draft') {
             if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-save"></i> Save draft';
-            document.querySelector('#createView h2').textContent = 'Edit Form';
+            document.getElementById('formPageHeading').textContent = 'Edit Form';
         } else {
             if (submitBtn) submitBtn.style.display = 'none';
-            document.querySelector('#createView h2').textContent =
+            document.getElementById('formPageHeading').textContent =
                 form.status === 'pending_review' ? 'Review Form' : 'View Form';
         }
+        document.getElementById('formBreadcrumbCurrent').textContent = getFormNumberDisplay(form) || 'Edit Form';
+        document.getElementById('formPageSubtitle').textContent =
+            `${getFormNumberDisplay(form) || 'Form'}: ${form.title}`;
+        const badge = document.getElementById('formStatusBadge');
+        badge.textContent = form.status.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
+        badge.style.display = '';
         document.getElementById('pageTitle').textContent = `Edit Form - ${form.title} - BC Gov`;
 
         document.getElementById('listView').style.display = 'none';
         document.getElementById('createView').style.display = 'block';
         window.scrollTo(0, 0);
+        await _loadFormBusinessAreas(form.business_area);
     } catch (error) {
         showAlert('Error loading form: ' + error.message, 'danger');
         setTimeout(() => _navigate(ROUTES.FORMS_LIST), 2000);
@@ -567,12 +657,26 @@ async function _loadFormForEdit(formId) {
 export async function handleFormSubmit(event) {
     event.preventDefault();
     clearAllFieldErrors();
+    let firstInvalidField = null;
+    const requireField = (fieldId, message) => {
+        showFieldError(fieldId, message);
+        const input = document.getElementById(fieldId) || (fieldId === 'fileUpload' && document.getElementById('formSource'));
+        if (!firstInvalidField && input && !input.disabled) firstInvalidField = input.id;
+    };
 
     // Validate form number selection on create only (TASK-413 / TASK-415)
     const formNumberValue = document.getElementById('formNumber').value;
     if (!_currentFormId && !formNumberValue) {
-        showFieldError('formNumber', 'Please select a Form Number.');
-        return;
+        requireField('formNumber', 'Please select a Form Number.');
+    }
+    if (!_hasActiveBusinessArea()) {
+        requireField('businessAreaInput', 'Select an active Business Area before saving.');
+    }
+    if (!document.getElementById('title').value.trim()) {
+        requireField('title', 'Enter a Form Title.');
+    }
+    if (!document.getElementById('description').value.trim()) {
+        requireField('description', 'Enter a Description.');
     }
 
     const formSource = document.getElementById('formSource').value;
@@ -582,11 +686,14 @@ export async function handleFormSubmit(event) {
     // TASK-416: In create mode a file is always required; in edit mode,
     // formSource='Download' with no file means "clear the attachment" — allowed.
     if (!_currentFormId && formSource === 'Download' && !uploadedFileUrl) {
-        showFieldError('fileUpload', 'Please upload a file before submitting.');
-        return;
+        requireField('fileUpload', 'Please upload a file before submitting.');
     }
     if (formSource === 'URL' && !document.getElementById('formSourceUrl').value.trim()) {
-        showFieldError('formSourceUrl', 'Form URL is required when Form Source is URL.');
+        requireField('formSourceUrl', 'Form URL is required when Form Source is URL.');
+    }
+    if (firstInvalidField) {
+        document.getElementById(firstInvalidField)?.focus();
+        _updateBusinessAreaActions();
         return;
     }
 
@@ -600,10 +707,7 @@ export async function handleFormSubmit(event) {
         description: document.getElementById('description').value,
         is_public: document.getElementById('isPublic').checked,
         keywords: getKeywords(),
-        business_area_id: (() => {
-            const v = document.getElementById('businessAreaValue').value;
-            return v || null;
-        })(),
+        business_area_id: document.getElementById('businessAreaValue').value,
         effective_date: document.getElementById('effectiveDate').value || null,
         collects_personal_info: document.getElementById('collectsPersonalInfo').value,
         // TASK-110C source fields
@@ -649,7 +753,11 @@ export async function handleFormSubmit(event) {
 
         if (!response.ok) {
             const error = await response.json();
-            showValidationErrors(error.detail);
+            if (typeof error.detail === 'string' && error.detail.includes('Business Area')) {
+                _handleInvalidBusinessArea(error.detail);
+            } else {
+                showValidationErrors(error.detail);
+            }
             throw new Error(
                 typeof error.detail === 'string'
                     ? error.detail
@@ -675,7 +783,7 @@ export async function handleFormSubmit(event) {
             showAlert('Error saving form: ' + error.message, 'danger');
         }
     } finally {
-        document.getElementById('submitBtn').disabled = false;
+        _updateBusinessAreaActions();
     }
 }
 
@@ -687,6 +795,10 @@ export function resetFormState() {
     const form = document.getElementById('formCreate');
     if (form) form.reset();
 
+    ++_businessAreaLoadVersion;
+    resetBusinessAreas();
+    _businessAreasState = 'loading';
+    _savedBusinessAreaId = null;
     setKeywords([]);
     _currentFormId = null;
     _currentFormStatus = null;
@@ -701,15 +813,20 @@ export function resetFormState() {
     }
 
     // Hide workflow action buttons — they are shown per-status in _updateWorkflowButtons
-    ['submitForReviewBtn', 'approvePublishBtn', 'rejectFormBtn', 'archiveFormBtn', 'deleteFormBtn', 'restoreFormBtn'].forEach(id => {
+    ['submitForReviewBtn', 'approvePublishBtn', 'rejectFormBtn', 'archiveFormBtn', 'deleteFormBtn', 'restoreFormBtn', 'unpublishFormBtn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
 
     _setFormFieldsLocked(false);
 
-    const heading = document.querySelector('#createView h2');
+    const heading = document.getElementById('formPageHeading');
     if (heading) heading.textContent = 'Add New Form';
+    document.getElementById('formBreadcrumbCurrent').textContent = 'Add New Form';
+    document.getElementById('formPageSubtitle').textContent = 'Complete the form details below.';
+    document.getElementById('formStatusBadge').style.display = 'none';
+    document.getElementById('businessAreaMessage').textContent = '';
+    document.getElementById('retryBusinessAreasBtn').style.display = 'none';
 
     // TASK-415: Reset to dropdown mode (as opposed to read-only edit mode)
     const formNumberSelect = document.getElementById('formNumberSelectContainer');
@@ -739,6 +856,7 @@ export function resetFormState() {
     closeBusinessAreaDropdown();
 
     clearAllFieldErrors();
+    _updateBusinessAreaActions();
 }
 
 /**
