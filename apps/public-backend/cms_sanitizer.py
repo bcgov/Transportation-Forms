@@ -99,6 +99,12 @@ _ALLOWED_ATTRIBUTES: Dict[str, Set[str]] = {
     "div": {"class"},
     "code": {"class"},
     "pre": {"class"},
+    "h1": {"id"},
+    "h2": {"id"},
+    "h3": {"id"},
+    "h4": {"id"},
+    "h5": {"id"},
+    "h6": {"id"},
     # Tags that may carry only the global attrs handled below
     "blockquote": set(),
     "abbr": {"title"},

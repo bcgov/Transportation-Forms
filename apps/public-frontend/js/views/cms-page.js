@@ -147,12 +147,22 @@ function _renderPage(page, article) {
   footnote.append(backLink);
   article.replaceChildren(bodyElement, footnote);
 
+  let fragmentId = '';
+  try {
+    fragmentId = decodeURIComponent(window.location.hash.slice(1));
+  } catch {
+    fragmentId = '';
+  }
+  const target = document.getElementById(fragmentId);
+  const fragmentTarget = bodyElement.contains(target) ? target : null;
+
   // Move keyboard focus to the heading so screen-readers announce the
   // new page (mirrors the pattern used by home.js / detail.js).
   if (heading) {
     heading.setAttribute('tabindex', '-1');
-    heading.focus({ preventScroll: false });
+    heading.focus({ preventScroll: Boolean(fragmentTarget) });
   }
+  if (fragmentTarget) fragmentTarget.scrollIntoView();
 }
 
 function _resetPage(article) {

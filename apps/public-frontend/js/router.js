@@ -44,6 +44,7 @@ let _onHomeShow = null;
 let _onDetailShow = null;
 let _onCmsPageShow = null;
 let _onNotFoundShow = null;
+let _lastDispatchedUrl = null;
 
 export function registerRoutes({ onHome, onDetail, onCmsPage, onNotFound }) {
   _onHomeShow = onHome;
@@ -57,6 +58,7 @@ export function registerRoutes({ onHome, onDetail, onCmsPage, onNotFound }) {
  * Public so it can be triggered on popstate or after navigation.
  */
 export async function dispatch() {
+  _lastDispatchedUrl = window.location.pathname + window.location.search;
   const path = window.location.pathname;
   _hideAll();
 
@@ -126,7 +128,9 @@ export function navigateTo(path, { state = null, replace = false } = {}) {
 
 /** Wire up popstate + delegated [data-route] / anchor interception. */
 export function initRouter() {
-  window.addEventListener('popstate', () => { dispatch(); });
+  window.addEventListener('popstate', () => {
+    if (window.location.pathname + window.location.search !== _lastDispatchedUrl) dispatch();
+  });
   document.addEventListener('click', e => {
     const a = e.target.closest('a');
     if (!a) return;
