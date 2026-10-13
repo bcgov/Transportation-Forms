@@ -23,8 +23,10 @@ def test_enter_and_add_share_keyword_validation_without_submitting():
 def test_keywords_validate_trimmed_casefolded_length_and_controls():
     widget = _source("js/views/keywords.js")
 
-    assert "input.value.trim()" in widget
+    assert "const value = input.value;" in widget
+    assert "const keyword = value.trim();" in widget
     assert "Array.from(keyword).length > 50" in widget
+    assert "CONTROL_CHARACTERS.test(value)" in widget
     assert "toLocaleLowerCase('en-US')" in widget
     assert "[\\x00-\\x1f\\x7f-\\x9f]" in widget
     assert "input.focus()" in widget

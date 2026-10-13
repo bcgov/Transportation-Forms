@@ -58,12 +58,13 @@ export function setKeywords(arr) {
 export function addKeyword() {
   const input = document.getElementById(INPUT_ID);
   if (!input || input.disabled) return;
-  const keyword = input.value.trim();
+  const value = input.value;
+  const keyword = value.trim();
 
   let error = '';
   if (!keyword) error = 'Enter a keyword before adding it.';
   else if (Array.from(keyword).length > 50) error = 'Keywords must be 50 characters or fewer.';
-  else if (CONTROL_CHARACTERS.test(keyword)) error = 'Keywords cannot contain control characters.';
+  else if (CONTROL_CHARACTERS.test(value)) error = 'Keywords cannot contain control characters.';
   else if (_keywords.some(existing => existing.trim().toLocaleLowerCase('en-US') === keyword.toLocaleLowerCase('en-US'))) {
     error = 'This keyword has already been added.';
   }

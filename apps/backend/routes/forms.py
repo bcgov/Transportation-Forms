@@ -49,7 +49,6 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 _KEYWORD_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-_KEYWORD_EXTRA_STRIPPED_CONTROLS = re.compile(r"[\x1c-\x1f\x85]")
 
 
 def _validate_keywords(keywords: Optional[List[str]]) -> Optional[List[str]]:
@@ -63,10 +62,7 @@ def _validate_keywords(keywords: Optional[List[str]]) -> Optional[List[str]]:
             raise ValueError("Keywords cannot be blank")
         if len(keyword) > 50:
             raise ValueError("Keywords must be 50 characters or fewer")
-        if (
-            _KEYWORD_CONTROL_CHARACTERS.search(keyword)
-            or _KEYWORD_EXTRA_STRIPPED_CONTROLS.search(value)
-        ):
+        if _KEYWORD_CONTROL_CHARACTERS.search(value):
             raise ValueError("Keywords cannot contain control characters")
         folded = keyword.lower()
         if folded in seen:

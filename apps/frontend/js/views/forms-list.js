@@ -447,7 +447,7 @@ export function _renderFormActionButtons(form) {
     const isOwner = creatorId === userId;
 
     // Edit — draft + published, form:edit
-    if ((status === 'draft' || status === 'published') && hasPermission('form:edit')) {
+    if (((status === 'draft' && isOwner) || status === 'published') && hasPermission('form:edit')) {
         buttons.push(`<button class="forms-result-card__action" type="button"
             data-action="navigate" data-route="/edit/${id}"
             aria-label="Edit form ${formLabel}">

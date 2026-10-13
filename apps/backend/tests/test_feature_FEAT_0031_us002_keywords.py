@@ -40,6 +40,9 @@ def test_valid_keywords_are_trimmed_and_keep_original_case(model):
         ["\x85Truck"],
         ["\x1cTruck"],
         ["a\nb"],
+        ["\nTruck"],
+        ["Truck\t"],
+        ["Truck\n"],
         ["Truck", " truck "],
     ],
 )

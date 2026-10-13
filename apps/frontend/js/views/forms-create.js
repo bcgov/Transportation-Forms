@@ -236,7 +236,7 @@ function _updateWorkflowButtons(status) {
     const isOwner = _currentFormCreatedById === userId;
 
     if (status === 'draft') {
-        if (saveDraftBtn) saveDraftBtn.style.display = hasPermission('form:edit') ? '' : 'none';
+        if (saveDraftBtn) saveDraftBtn.style.display = isOwner && hasPermission('form:edit') ? '' : 'none';
         if (submitForReviewBtn && isOwner && hasPermission('form:edit') && hasPermission('form:submit_for_review')) {
             submitForReviewBtn.style.display = '';
         }
@@ -365,14 +365,17 @@ async function _submitFormForReview() {
     let saved = false;
     let submitting = false;
     let submitResponseReceived = false;
+    let saveOutcomeUncertain = false;
     try {
         if (JSON.stringify(formData) !== _loadedFormSnapshot) {
+            saveOutcomeUncertain = true;
             const update = await fetch(`${API_BASE}/forms/${_currentFormId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
                 body: JSON.stringify({ ...formData, expected_version: _currentFormVersion }),
             });
             if (!update.ok) {
+                if (update.status < 500) saveOutcomeUncertain = false;
                 const error = await update.json().catch(() => ({}));
                 if (update.status === 409) {
                     _submitNeedsReload = true;
@@ -384,6 +387,7 @@ async function _submitFormForReview() {
                 throw new Error('Your changes could not be saved. Review the form and try again.');
             }
             const updated = await update.json();
+            saveOutcomeUncertain = false;
             _currentFormVersion = updated.current_version;
             _savedBusinessAreaId = updated.business_area?.id || null;
             _loadedKeywords = getKeywords();
@@ -412,6 +416,7 @@ async function _submitFormForReview() {
         }
         _markSubmitted();
     } catch (error) {
+        if (saveOutcomeUncertain) _submitNeedsReload = true;
         if (submitting && !submitResponseReceived) {
             try {
                 const check = await fetch(`${API_BASE}/forms/${_currentFormId}`);
@@ -432,6 +437,8 @@ async function _submitFormForReview() {
         const message = submitting
             ? (saved ? 'Changes were saved, but submission failed. ' : 'Submission failed. ')
                 + (_submitNeedsReload ? 'Reload and reconcile before retrying.' : 'You can retry without re-entering your values.')
+            : saveOutcomeUncertain
+                ? 'Save outcome could not be confirmed. Reload and reconcile before submitting again.'
             : (_submitNeedsReload
                 ? 'The form changed before your save. Reload and reconcile before submitting.'
                 : 'Your changes could not be saved. Review the form and try again.');
@@ -666,7 +673,8 @@ async function _loadFormForEdit(formId) {
         _currentFormStatus = form.status;
         _savedBusinessAreaId = form.business_area?.id || null;
         _updateWorkflowButtons(form.status);
-        const isLocked = form.status !== 'draft' || !hasPermission('form:edit');
+        const isLocked = form.status !== 'draft' || !hasPermission('form:edit')
+            || _currentFormCreatedById !== getCurrentUser()?.id;
         _setFormFieldsLocked(isLocked);
 
         // Label the submit button based on status
@@ -788,12 +796,14 @@ export async function handleFormSubmit(event) {
     _submitInProgress = true;
     _updateBusinessAreaActions();
 
+    let saveOutcomeUncertain = false;
     try {
         document.getElementById('submitBtn').disabled = true;
 
         let response;
         if (_currentFormId) {
             // PUT /api/v1/forms/{id}
+            saveOutcomeUncertain = true;
             response = await fetch(`${API_BASE}/forms/${_currentFormId}`, {
                 method: 'PUT',
                 headers: {
@@ -815,6 +825,7 @@ export async function handleFormSubmit(event) {
         }
 
         if (!response.ok) {
+            if (response.status < 500) saveOutcomeUncertain = false;
             const error = await response.json();
             if (response.status === 409) {
                 _submitNeedsReload = true;
@@ -835,6 +846,7 @@ export async function handleFormSubmit(event) {
         }
 
         await response.json(); // consume the saved form (caller can extend if needed)
+        saveOutcomeUncertain = false;
         showAlert(
             _currentFormId ? 'Form updated successfully' : 'Form created successfully',
             'success',
@@ -844,6 +856,11 @@ export async function handleFormSubmit(event) {
 
         setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
     } catch (error) {
+        if (saveOutcomeUncertain) {
+            _submitNeedsReload = true;
+            showAlert('Save outcome could not be confirmed. Reload and reconcile before saving again.', 'danger', { persistent: true });
+            return;
+        }
         // Only show a generic alert when no inline field errors are already visible
         const hasInlineErrors =
             document.getElementById('formErrors')?.style.display !== 'none' ||
