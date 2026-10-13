@@ -99,9 +99,15 @@ _ALLOWED_ATTRIBUTES: Dict[str, Set[str]] = {
     "div": {"class"},
     "code": {"class"},
     "pre": {"class"},
+    "abbr": {"title"},
+    "h1": {"id"},
+    "h2": {"id"},
+    "h3": {"id"},
+    "h4": {"id"},
+    "h5": {"id"},
+    "h6": {"id"},
     # Tags that may carry only the global attrs handled below
     "blockquote": set(),
-    "abbr": {"title"},
 }
 
 # URL schemes allowed in href / src style attributes.  Note: nh3 also
