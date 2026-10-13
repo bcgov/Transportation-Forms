@@ -36,6 +36,10 @@ let _businessAreasState = 'loading';
 let _businessAreaLoadVersion = 0;
 let _savedBusinessAreaId = null;
 let _loadedKeywords = [];
+let _loadedFormSnapshot = null;
+let _currentFormVersion = null;
+let _submitInProgress = false;
+let _submitNeedsReload = false;
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
@@ -69,9 +73,12 @@ function _hasActiveBusinessArea() {
 function _updateBusinessAreaActions() {
     const available = _businessAreasState === 'ready' && getBusinessAreaOptions().length > 0;
     const selected = _hasActiveBusinessArea();
-    document.getElementById('submitBtn').disabled = !available || (_currentFormId !== null && !selected);
-    document.getElementById('submitForReviewBtn').disabled = !selected ||
-        document.getElementById('businessAreaValue').value !== _savedBusinessAreaId;
+    const save = document.getElementById('submitBtn');
+    save.disabled = _submitInProgress || _submitNeedsReload || !available || (_currentFormId !== null && !selected);
+    save.setAttribute('aria-busy', String(_submitInProgress));
+    const submit = document.getElementById('submitForReviewBtn');
+    submit.disabled = _submitInProgress || _submitNeedsReload || !selected;
+    submit.setAttribute('aria-busy', String(_submitInProgress));
 }
 
 function _showBusinessAreaError(message, focus = true) {
@@ -186,14 +193,8 @@ function _initWorkflowButtonListeners() {
 
     document.getElementById('submitForReviewBtn')
         ?.addEventListener('click', _submitFormForReview);
-    document.getElementById('approvePublishBtn')
-        ?.addEventListener('click', _approveAndPublish);
     document.getElementById('archiveFormBtn')
         ?.addEventListener('click', _archiveForm);
-    document.getElementById('rejectFormBtn')
-        ?.addEventListener('click', _openFormRejectModal);
-    document.getElementById('confirmFormRejectBtn')
-        ?.addEventListener('click', _confirmFormReject);
     // FEAT-0013: Delete and Restore buttons on edit page
     document.getElementById('deleteFormBtn')
         ?.addEventListener('click', _deleteFormFromEdit);
@@ -213,15 +214,13 @@ function _initWorkflowButtonListeners() {
 function _updateWorkflowButtons(status) {
     const saveDraftBtn = document.getElementById('submitBtn');
     const submitForReviewBtn = document.getElementById('submitForReviewBtn');
-    const approvePublishBtn = document.getElementById('approvePublishBtn');
-    const rejectFormBtn = document.getElementById('rejectFormBtn');
     const archiveFormBtn = document.getElementById('archiveFormBtn');
     const deleteFormBtn = document.getElementById('deleteFormBtn');
     const restoreFormBtn = document.getElementById('restoreFormBtn');
     const unpublishFormBtn = document.getElementById('unpublishFormBtn');
 
     // Default: hide all workflow extras
-    [submitForReviewBtn, approvePublishBtn, rejectFormBtn, archiveFormBtn, deleteFormBtn, restoreFormBtn, unpublishFormBtn].forEach(el => {
+    [submitForReviewBtn, archiveFormBtn, deleteFormBtn, restoreFormBtn, unpublishFormBtn].forEach(el => {
         if (el) el.style.display = 'none';
     });
 
@@ -238,7 +237,7 @@ function _updateWorkflowButtons(status) {
 
     if (status === 'draft') {
         if (saveDraftBtn) saveDraftBtn.style.display = hasPermission('form:edit') ? '' : 'none';
-        if (submitForReviewBtn && isOwner && hasPermission('form:submit_for_review')) {
+        if (submitForReviewBtn && isOwner && hasPermission('form:edit') && hasPermission('form:submit_for_review')) {
             submitForReviewBtn.style.display = '';
         }
         // FEAT-0013: Delete button for draft forms (owner or admin only)
@@ -248,12 +247,6 @@ function _updateWorkflowButtons(status) {
     } else if (status === 'pending_review') {
         // Locked — no save/edit actions available to creators
         if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-        if (approvePublishBtn && hasPermission('form:approve') && hasPermission('form:review')) {
-            approvePublishBtn.style.display = '';
-        }
-        if (rejectFormBtn && hasPermission('form:approve') && hasPermission('form:review')) {
-            rejectFormBtn.style.display = '';
-        }
     } else if (status === 'published') {
         if (saveDraftBtn) saveDraftBtn.style.display = 'none';
         if (archiveFormBtn && hasPermission('form:archive')) {
@@ -302,102 +295,145 @@ function _setFormFieldsLocked(locked) {
 
 // ─── Workflow action handlers ─────────────────────────────────────────────────
 
+function _showSubmitMessage(message, type = 'info') {
+    const status = document.getElementById('formSubmitStatus');
+    status.textContent = message;
+    status.className = `alert alert-${type} form-page__full`;
+    status.style.display = 'block';
+}
+
+function _markSubmitted() {
+    _currentFormStatus = 'pending_review';
+    _updateWorkflowButtons(_currentFormStatus);
+    _setFormFieldsLocked(true);
+    document.getElementById('formStatusBadge').textContent = 'Pending Review';
+    document.getElementById('formPageHeading').textContent = 'Review Form';
+    _showSubmitMessage('Form submitted for review successfully.', 'success');
+    document.getElementById('formSubmitStatus').focus();
+    showAlert('Form submitted for review successfully.', 'success');
+    setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
+}
+
+function _showSubmitError(message) {
+    const errors = document.getElementById('formErrors');
+    errors.textContent = message;
+    const invalidFields = [...document.querySelectorAll('#formCreate .is-invalid')];
+    if (invalidFields.length) {
+        const list = document.createElement('ul');
+        invalidFields.forEach(field => {
+            const item = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = `#${field.id}`;
+            link.textContent = document.querySelector(`label[for="${field.id}"]`)?.textContent.trim()
+                || 'Review field';
+            link.addEventListener('click', event => {
+                event.preventDefault();
+                field.focus();
+            });
+            item.appendChild(link);
+            list.appendChild(item);
+        });
+        errors.appendChild(list);
+    }
+    errors.style.display = 'block';
+    errors.focus();
+    showAlert(message, 'danger', { persistent: true });
+}
+
 async function _submitFormForReview() {
-    if (!_currentFormId) return;
-    if (!_hasActiveBusinessArea() || document.getElementById('businessAreaValue').value !== _savedBusinessAreaId) {
-        _showBusinessAreaError('Save the form with an active Business Area before submitting.');
+    if (!_currentFormId || _currentFormStatus !== 'draft' || _submitInProgress || _submitNeedsReload
+        || _currentFormCreatedById !== getCurrentUser()?.id
+        || !hasPermission('form:edit') || !hasPermission('form:submit_for_review')) return;
+
+    clearAllFieldErrors();
+    const { firstInvalidField, formData } = _validatedFormData();
+    if (firstInvalidField) {
+        _showSubmitError('Correct the highlighted fields before submitting for review.');
         return;
     }
-    const btn = document.getElementById('submitForReviewBtn');
-    btn.disabled = true;
+
+    _submitInProgress = true;
+    _updateBusinessAreaActions();
+    document.getElementById('formErrors').style.display = 'none';
+    _showSubmitMessage('Saving changes before submission...');
+    let saved = false;
+    let submitting = false;
+    let submitResponseReceived = false;
     try {
+        if (JSON.stringify(formData) !== _loadedFormSnapshot) {
+            const update = await fetch(`${API_BASE}/forms/${_currentFormId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
+                body: JSON.stringify({ ...formData, expected_version: _currentFormVersion }),
+            });
+            if (!update.ok) {
+                const error = await update.json().catch(() => ({}));
+                if (update.status === 409) {
+                    _submitNeedsReload = true;
+                } else if (typeof error.detail === 'string' && error.detail.includes('Business Area')) {
+                    _handleInvalidBusinessArea(error.detail);
+                } else {
+                    showValidationErrors(error.detail);
+                }
+                throw new Error('Your changes could not be saved. Review the form and try again.');
+            }
+            const updated = await update.json();
+            _currentFormVersion = updated.current_version;
+            _savedBusinessAreaId = updated.business_area?.id || null;
+            _loadedKeywords = getKeywords();
+            _loadedFormSnapshot = JSON.stringify(_collectFormData());
+            saved = true;
+        }
+
+        submitting = true;
+        _showSubmitMessage(saved ? 'Changes saved. Submitting for review...' : 'Submitting for review...');
         const response = await fetch(`${API_BASE}/staff/forms/${_currentFormId}/submit`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${getAuthToken()}` },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
+            body: JSON.stringify({ expected_version: _currentFormVersion }),
         });
+        submitResponseReceived = response.status < 500;
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
-            throw new Error(err.detail || 'Failed to submit for review');
+            if (response.status === 409 && typeof err.detail === 'string' && err.detail.includes('version')) {
+                _submitNeedsReload = true;
+                throw new Error('The form changed after your save. Reload and reconcile before submitting again.');
+            }
+            if (typeof err.detail === 'string' && err.detail.includes('Business Area')) {
+                _handleInvalidBusinessArea(err.detail);
+            }
+            throw new Error(err.detail || 'Submission failed');
         }
-        showAlert('Form submitted for review successfully.', 'success');
-        setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
+        _markSubmitted();
     } catch (error) {
-        if (error.message.includes('Business Area')) {
-            _handleInvalidBusinessArea(error.message);
-        } else {
-            showAlert('Error: ' + error.message, 'danger');
+        if (submitting && !submitResponseReceived) {
+            try {
+                const check = await fetch(`${API_BASE}/forms/${_currentFormId}`);
+                if (!check.ok) throw new Error('Unable to confirm form state');
+                const current = await check.json();
+                if (current.status === 'pending_review') {
+                    _markSubmitted();
+                    return;
+                }
+                if (current.current_version !== _currentFormVersion) {
+                    _submitNeedsReload = true;
+                    throw new Error('Form changed; reload and reconcile before submitting again.');
+                }
+            } catch (_checkError) {
+                _submitNeedsReload = true;
+            }
         }
+        const message = submitting
+            ? (saved ? 'Changes were saved, but submission failed. ' : 'Submission failed. ')
+                + (_submitNeedsReload ? 'Reload and reconcile before retrying.' : 'You can retry without re-entering your values.')
+            : (_submitNeedsReload
+                ? 'The form changed before your save. Reload and reconcile before submitting.'
+                : 'Your changes could not be saved. Review the form and try again.');
+        _showSubmitMessage(message, 'danger');
+        _showSubmitError(message);
     } finally {
+        _submitInProgress = false;
         _updateBusinessAreaActions();
-    }
-}
-
-async function _approveAndPublish() {
-    if (!_currentFormId) return;
-    const btn = document.getElementById('approvePublishBtn');
-    btn.disabled = true;
-    try {
-        const response = await fetch(`${API_BASE}/staff/forms/${_currentFormId}/approve`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${getAuthToken()}` },
-        });
-        if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error(err.detail || 'Failed to approve form');
-        }
-        showAlert('Form has been approved and published.', 'success');
-        setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
-    } catch (error) {
-        showAlert('Error: ' + error.message, 'danger');
-    } finally {
-        btn.disabled = false;
-    }
-}
-
-function _openFormRejectModal() {
-    const reasonField = document.getElementById('formRejectReason');
-    if (reasonField) {
-        reasonField.value = '';
-        reasonField.classList.remove('is-invalid');
-    }
-    window.bootstrap?.Modal.getOrCreateInstance(
-        document.getElementById('formRejectModal')
-    )?.show();
-}
-
-async function _confirmFormReject() {
-    if (!_currentFormId) return;
-    const reasonField = document.getElementById('formRejectReason');
-    const reason = reasonField?.value?.trim() || '';
-    if (!reason) {
-        reasonField?.classList.add('is-invalid');
-        return;
-    }
-
-    const btn = document.getElementById('confirmFormRejectBtn');
-    btn.disabled = true;
-    try {
-        const response = await fetch(`${API_BASE}/staff/forms/${_currentFormId}/reject`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${getAuthToken()}`,
-            },
-            body: JSON.stringify({ reason_notes: reason }),
-        });
-        if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error(err.detail || 'Failed to reject form');
-        }
-        window.bootstrap?.Modal.getInstance(
-            document.getElementById('formRejectModal')
-        )?.hide();
-        showAlert('Form rejected and returned to draft.', 'warning');
-        setTimeout(() => _navigate(ROUTES.FORMS_LIST), 1500);
-    } catch (error) {
-        showAlert('Error: ' + error.message, 'danger');
-    } finally {
-        btn.disabled = false;
     }
 }
 
@@ -587,6 +623,7 @@ async function _loadFormForEdit(formId) {
 
         _currentFormId = formId;
         _currentFormCreatedById = form.created_by?.id || null;  // FEAT-0013
+        _currentFormVersion = form.current_version;
 
         // Scalar fields
         document.getElementById('title').value = form.title;
@@ -648,6 +685,7 @@ async function _loadFormForEdit(formId) {
         document.getElementById('createView').style.display = 'block';
         window.scrollTo(0, 0);
         await _loadFormBusinessAreas(form.business_area);
+        _loadedFormSnapshot = JSON.stringify(_collectFormData());
     } catch (error) {
         showAlert('Error loading form: ' + error.message, 'danger');
         setTimeout(() => _navigate(ROUTES.FORMS_LIST), 2000);
@@ -659,9 +697,7 @@ async function _loadFormForEdit(formId) {
  * Validates client-side before sending, maps API validation errors to field UI.
  * @param {Event} event  The form submit event.
  */
-export async function handleFormSubmit(event) {
-    event.preventDefault();
-    clearAllFieldErrors();
+function _validatedFormData() {
     let firstInvalidField = null;
     const requireField = (fieldId, message) => {
         showFieldError(fieldId, message);
@@ -696,18 +732,20 @@ export async function handleFormSubmit(event) {
     if (formSource === 'URL' && !document.getElementById('formSourceUrl').value.trim()) {
         requireField('formSourceUrl', 'Form URL is required when Form Source is URL.');
     }
-    if (firstInvalidField) {
-        document.getElementById(firstInvalidField)?.focus();
-        _updateBusinessAreaActions();
-        return;
-    }
+    return { firstInvalidField, formData: firstInvalidField ? null : _collectFormData() };
+}
 
+function _collectFormData() {
+    const formNumberValue = document.getElementById('formNumber').value;
+    const formSource = document.getElementById('formSource').value;
+    const uploadedFileUrl = getUploadedFileUrl();
+    const uploadedFileFilename = getUploadedFileFilename();
     // Editing + Download + no file → treat as clearing the attachment
     const effectiveFormSource = (_currentFormId && formSource === 'Download' && !uploadedFileUrl)
         ? null
         : (formSource || null);
 
-    const formData = {
+    return {
         title: document.getElementById('title').value,
         description: document.getElementById('description').value,
         is_public: document.getElementById('isPublic').checked,
@@ -727,8 +765,22 @@ export async function handleFormSubmit(event) {
         // TASK-413: Reservation linkage on create only (TASK-415 locks it on edit)
         ...(!_currentFormId && { form_number_reservation_id: formNumberValue || null }),
     };
+}
+
+export async function handleFormSubmit(event) {
+    event.preventDefault();
+    if (_submitInProgress || _submitNeedsReload) return;
+    clearAllFieldErrors();
+    const { firstInvalidField, formData } = _validatedFormData();
+    if (firstInvalidField) {
+        document.getElementById(firstInvalidField)?.focus();
+        _updateBusinessAreaActions();
+        return;
+    }
 
     const token = getAuthToken();
+    _submitInProgress = true;
+    _updateBusinessAreaActions();
 
     try {
         document.getElementById('submitBtn').disabled = true;
@@ -742,7 +794,7 @@ export async function handleFormSubmit(event) {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
                 },
-                body: JSON.stringify(formData),
+                body: JSON.stringify({ ...formData, expected_version: _currentFormVersion }),
             });
         } else {
             // POST /api/v1/forms
@@ -758,7 +810,13 @@ export async function handleFormSubmit(event) {
 
         if (!response.ok) {
             const error = await response.json();
-            if (typeof error.detail === 'string' && error.detail.includes('Business Area')) {
+            if (response.status === 409) {
+                _submitNeedsReload = true;
+                const summary = document.getElementById('formErrors');
+                summary.textContent = 'The form changed. Reload and reconcile before saving again.';
+                summary.style.display = 'block';
+                summary.focus();
+            } else if (typeof error.detail === 'string' && error.detail.includes('Business Area')) {
                 _handleInvalidBusinessArea(error.detail);
             } else {
                 showValidationErrors(error.detail);
@@ -788,6 +846,7 @@ export async function handleFormSubmit(event) {
             showAlert('Error saving form: ' + error.message, 'danger');
         }
     } finally {
+        _submitInProgress = false;
         _updateBusinessAreaActions();
     }
 }
@@ -806,6 +865,10 @@ export function resetFormState() {
     _savedBusinessAreaId = null;
     setKeywords([]);
     _loadedKeywords = [];
+    _loadedFormSnapshot = null;
+    _currentFormVersion = null;
+    _submitInProgress = false;
+    _submitNeedsReload = false;
     _currentFormId = null;
     _currentFormStatus = null;
     _currentFormCreatedById = null;  // FEAT-0013
@@ -819,7 +882,7 @@ export function resetFormState() {
     }
 
     // Hide workflow action buttons — they are shown per-status in _updateWorkflowButtons
-    ['submitForReviewBtn', 'approvePublishBtn', 'rejectFormBtn', 'archiveFormBtn', 'deleteFormBtn', 'restoreFormBtn', 'unpublishFormBtn'].forEach(id => {
+    ['submitForReviewBtn', 'archiveFormBtn', 'deleteFormBtn', 'restoreFormBtn', 'unpublishFormBtn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
@@ -862,6 +925,9 @@ export function resetFormState() {
     closeBusinessAreaDropdown();
 
     clearAllFieldErrors();
+    const submitStatus = document.getElementById('formSubmitStatus');
+    submitStatus.textContent = '';
+    submitStatus.style.display = 'none';
     _updateBusinessAreaActions();
 }
 

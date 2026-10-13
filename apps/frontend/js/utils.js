@@ -77,8 +77,8 @@ export function getFormSourceTypeLabel(form) {
     return 'No source';
 }
 
-export function showAlert(message, type = 'info') {
-    showNotification(message, type);
+export function showAlert(message, type = 'info', options = {}) {
+    showNotification(message, type, options);
     // const alertDiv = document.createElement('div');
     // alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
     // alertDiv.textContent = message;
@@ -92,7 +92,7 @@ export function showAlert(message, type = 'info') {
     // setTimeout(() => alertDiv.remove(), 5000);
 }
 
-export function showNotification(message, type = 'info') {
+export function showNotification(message, type = 'info', options = {}) {
     const safeType = ['success', 'danger', 'warning', 'info'].includes(type) ? type : 'info';
     const typeIcons = {
         success: 'fa-check-circle',
@@ -124,7 +124,7 @@ export function showNotification(message, type = 'info') {
     container.insertAdjacentHTML('beforeend', toastHtml);
 
     const toastEl = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastEl);
+    const toast = new bootstrap.Toast(toastEl, { autohide: !options.persistent });
     toast.show();
 
     // Clean up DOM after hidden

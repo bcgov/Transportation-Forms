@@ -407,7 +407,10 @@ class TestFormWorkflowApi:
     def test_submit_form_not_found_returns_404(self, db, user_factory, client_factory):
         reviewer = _create_user(user_factory, "reviewer-notfound@example.com")
         reviewer_client = client_factory(reviewer, ["staff_manager"])
-        resp = reviewer_client.post(f"/api/v1/staff/forms/{uuid.uuid4()}/submit")
+        resp = reviewer_client.post(
+            f"/api/v1/staff/forms/{uuid.uuid4()}/submit",
+            json={"expected_version": 0},
+        )
         assert resp.status_code == 404
 
     @pytest.mark.integration

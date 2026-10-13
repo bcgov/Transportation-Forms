@@ -113,7 +113,8 @@ def test_legacy_form_can_be_corrected_and_submitted(
 
     assert client.get(path, headers=admin_token_headers).status_code == 200
     response = client.post(
-        f"/api/v1/staff/forms/{form.id}/submit", headers=admin_token_headers
+        f"/api/v1/staff/forms/{form.id}/submit",
+        json={"expected_version": form.current_version}, headers=admin_token_headers,
     )
     assert response.status_code == 400
     assert "Business Area" in response.json()["detail"]
@@ -130,7 +131,9 @@ def test_legacy_form_can_be_corrected_and_submitted(
     assert response.status_code == 200, response.text
     assert response.json()["business_area"]["id"] == str(active_area.id)
     response = client.post(
-        f"/api/v1/staff/forms/{form.id}/submit", headers=admin_token_headers
+        f"/api/v1/staff/forms/{form.id}/submit",
+        json={"expected_version": response.json()["current_version"]},
+        headers=admin_token_headers,
     )
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "pending_review"
@@ -149,9 +152,9 @@ def test_deleted_area_blocks_submit_and_unprivileged_submit_stays_denied(
     db.flush()
     path = f"/api/v1/staff/forms/{saved_form}/submit"
 
-    denied = client.post(path, headers=user_token_headers)
+    denied = client.post(path, json={"expected_version": 0}, headers=user_token_headers)
     assert denied.status_code == 403
-    invalid = client.post(path, headers=admin_token_headers)
+    invalid = client.post(path, json={"expected_version": 0}, headers=admin_token_headers)
     assert invalid.status_code == 400
     assert "Business Area" in invalid.json()["detail"]
     form = db.query(Form).filter(Form.id == uuid.UUID(saved_form)).one()

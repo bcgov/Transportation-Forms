@@ -448,6 +448,7 @@
 
                         <!-- General form error area -->
                         <div id="formErrors" class="alert alert-danger form-page__full" role="alert" tabindex="-1" style="display:none;"></div>
+                        <div id="formSubmitStatus" class="alert alert-info form-page__full" role="status" aria-live="polite" tabindex="-1" style="display:none;"></div>
 
                         <!-- Action Buttons -->
                         <div class="form-page__actions form-page__full">
@@ -457,12 +458,6 @@
                             <!-- FEAT-0001: Workflow action buttons (shown/hidden by forms-create.js) -->
                             <button type="button" class="btn btn-primary btn-lg px-4" id="submitForReviewBtn" style="display:none;">
                                 <i class="fas fa-paper-plane"></i> Submit for Review
-                            </button>
-                            <button type="button" class="btn btn-success btn-lg px-4" id="approvePublishBtn" style="display:none;">
-                                <i class="fas fa-check-circle"></i> Approve &amp; Publish
-                            </button>
-                            <button type="button" class="btn btn-danger btn-lg px-4" id="rejectFormBtn" style="display:none;">
-                                <i class="fas fa-times-circle"></i> Reject
                             </button>
                             <button type="button" class="btn btn-warning btn-lg px-4" id="archiveFormBtn" style="display:none;">
                                 <i class="fas fa-archive"></i> Archive
@@ -1314,34 +1309,6 @@
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="button" class="btn btn-warning" id="confirmFormUnpublishBtn">
                             <i class="fas fa-eye-slash"></i> Confirm Unpublish
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Form Reject Modal (FEAT-0001) -->
-        <div class="modal fade" id="formRejectModal" tabindex="-1" aria-labelledby="formRejectModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title" id="formRejectModalLabel"><i class="fas fa-times-circle"></i> Reject Form</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p class="text-muted">The form will be returned to <strong>Draft</strong> status. The creator will see your reason.</p>
-                        <div class="mb-3">
-                            <label for="formRejectReason" class="form-label"><strong>Reason for Rejection</strong> <span style="color:red;">*</span></label>
-                            <textarea class="form-control" id="formRejectReason" rows="4"
-                                placeholder="Explain what needs to be fixed before resubmission..." required maxlength="1000"></textarea>
-                            <div class="invalid-feedback">Rejection reason is required.</div>
-                            <small class="text-muted">Max 1000 characters.</small>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-danger" id="confirmFormRejectBtn">
-                            <i class="fas fa-times-circle"></i> Confirm Rejection
                         </button>
                     </div>
                 </div>

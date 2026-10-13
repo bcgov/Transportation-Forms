@@ -34,7 +34,11 @@ from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
 from backend.models import AuditLog, Role, UserRole
-from backend.services.forms import FormService
+from backend.services.forms import (
+    FormService,
+    FormWorkflowConflictError,
+    FormWorkflowValidationError,
+)
 from backend.services import s3_service
 from backend.services.s3_service import S3ObjectNotFound, MIME_TYPE_MAP
 
@@ -170,6 +174,7 @@ class FormUpdateRequest(BaseModel):
     """Request model for updating a form."""
 
     title: Optional[str] = Field(None, min_length=1, max_length=255)
+    expected_version: Optional[int] = Field(None, ge=0)
     description: Optional[str] = Field(None, max_length=2000)
     is_public: Optional[bool] = None
     keywords: Optional[List[str]] = None
@@ -703,6 +708,15 @@ async def update_form(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Form cannot be edited while it is in Pending Review state",
             )
+        if (
+            form_check
+            and form_check.status == "draft"
+            and str(form_check.created_by_id) != current_user.sub
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the form creator can edit this draft",
+            )
 
         # Build update kwargs
         update_data = {}
@@ -733,12 +747,26 @@ async def update_form(
             if field in request.model_fields_set:
                 update_data[field] = getattr(request, field)
 
-        form = FormService.update_form(
-            db=db,
-            form_id=form_uuid,
-            updated_by_id=UUID(current_user.sub),
-            **update_data,
-        )
+        try:
+            form = FormService.update_form(
+                db=db,
+                form_id=form_uuid,
+                updated_by_id=UUID(current_user.sub),
+                expected_version=request.expected_version,
+                **update_data,
+            )
+        except FormWorkflowConflictError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+            ) from exc
+        except PermissionError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+            ) from exc
+        except FormWorkflowValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            ) from exc
 
         if not form:
             raise HTTPException(

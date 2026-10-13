@@ -16,7 +16,7 @@ from backend.auth.jwt_handler import TokenData
 from backend.auth.permissions import DEFAULT_ROLES
 from backend.database import get_db
 from backend.main import app
-from backend.models import AuditLog, Form, Role, UserRole
+from backend.models import AuditLog, BusinessArea, Form, Role, UserRole
 
 
 _EXPLICIT_TEST_ROLE_PERMISSIONS = {
@@ -53,6 +53,9 @@ def _perms_for_roles(*role_names: str) -> list[str]:
 def _create_form(
     db, creator_id, *, status="draft", title="Test Form",
 ) -> Form:
+    area = BusinessArea(id=uuid.uuid4(), name=f"State action {uuid.uuid4().hex}")
+    db.add(area)
+    db.flush()
     form = Form(
         id=uuid.uuid4(),
         title=title,
@@ -62,6 +65,7 @@ def _create_form(
         current_version=0,
         keywords=[],
         created_by_id=creator_id,
+        business_area_id=area.id,
     )
     db.add(form)
     db.flush()
@@ -326,7 +330,7 @@ class TestSubmitOwnershipEnforcement:
         form = _create_form(db, creator.id, status="draft")
 
         client = client_factory(creator, ["staff_manager"])
-        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit")
+        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit", json={"expected_version": form.current_version})
         assert resp.status_code == 200
         assert resp.json()["status"] == "pending_review"
 
@@ -340,7 +344,7 @@ class TestSubmitOwnershipEnforcement:
         form = _create_form(db, creator.id, status="draft")
 
         client = client_factory(other, ["staff_manager"])
-        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit")
+        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit", json={"expected_version": form.current_version})
         assert resp.status_code == 403
         assert "creator" in resp.json()["detail"].lower()
 
@@ -354,7 +358,7 @@ class TestSubmitOwnershipEnforcement:
         form = _create_form(db, creator.id, status="draft")
 
         client = client_factory(admin, ["admin"])
-        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit")
+        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit", json={"expected_version": form.current_version})
         assert resp.status_code == 403
 
     @pytest.mark.integration
@@ -367,7 +371,7 @@ class TestSubmitOwnershipEnforcement:
 
         # staff_viewer has no submit permission
         client = client_factory(creator, ["staff_viewer"])
-        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit")
+        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit", json={"expected_version": form.current_version})
         assert resp.status_code == 403
 
     @pytest.mark.integration
@@ -379,7 +383,7 @@ class TestSubmitOwnershipEnforcement:
         form = _create_form(db, creator.id, status="published")
 
         client = client_factory(creator, ["staff_manager"])
-        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit")
+        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit", json={"expected_version": form.current_version})
         assert resp.status_code == 400
 
     @pytest.mark.integration
@@ -392,7 +396,7 @@ class TestSubmitOwnershipEnforcement:
         form = _create_form(db, creator.id, status="draft")
 
         client = client_factory(reviewer, ["reviewer"])
-        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit")
+        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit", json={"expected_version": form.current_version})
         assert resp.status_code == 403
 
     @pytest.mark.integration
@@ -404,7 +408,7 @@ class TestSubmitOwnershipEnforcement:
         form = _create_form(db, creator.id, status="draft")
 
         client = client_factory(creator, ["staff_viewer"])
-        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit")
+        resp = client.post(f"/api/v1/staff/forms/{form.id}/submit", json={"expected_version": form.current_version})
         assert resp.status_code == 403
 
 

@@ -42,6 +42,10 @@ class WorkflowStatusResponse(BaseModel):
     status: str
 
 
+class SubmitRequest(BaseModel):
+    expected_version: int = Field(..., ge=0)
+
+
 class RejectRequest(BaseModel):
     """Reject request body."""
 
@@ -192,7 +196,8 @@ async def list_pending_approvals(
 @router.post("/{form_id}/submit", response_model=WorkflowStatusResponse)
 async def submit_form_for_review(
     form_id: str,
-    current_user: TokenData = Depends(require_all_permissions(_PERM_SUBMIT)),
+    request: SubmitRequest,
+    current_user: TokenData = Depends(require_all_permissions(_PERM_EDIT, _PERM_SUBMIT)),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
     # FEAT-0013 / US-004: Only the form creator may submit for review (no admin bypass).
@@ -216,7 +221,7 @@ async def submit_form_for_review(
 
     try:
         form = FormService.submit_form_for_review(
-            db, form_uuid, UUID(current_user.sub)
+            db, form_uuid, UUID(current_user.sub), request.expected_version
         )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
