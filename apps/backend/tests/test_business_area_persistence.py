@@ -43,6 +43,7 @@ def ba_client(db, user_factory, role_factory):
     app.dependency_overrides[get_current_user] = lambda: token
 
     client = TestClient(app)
+    client.user_id = user.id
     yield client
 
     app.dependency_overrides.pop(get_db, None)
@@ -154,9 +155,8 @@ def test_list_forms_returns_business_area(ba_client, business_area):
 
 
 @pytest.mark.integration
-def test_update_form_sets_business_area(ba_client, business_area, db, user_factory):
+def test_update_form_sets_business_area(ba_client, business_area, db):
     """PUT /forms/{id} corrects a legacy form that had no association."""
-    owner = user_factory()
     legacy = Form(
         id=uuid.uuid4(),
         title="Update BA Test",
@@ -164,7 +164,7 @@ def test_update_form_sets_business_area(ba_client, business_area, db, user_facto
         status="draft",
         is_public=False,
         current_version=0,
-        created_by_id=owner.id,
+        created_by_id=ba_client.user_id,
     )
     db.add(legacy)
     db.flush()

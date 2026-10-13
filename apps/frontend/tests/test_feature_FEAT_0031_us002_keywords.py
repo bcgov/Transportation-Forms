@@ -17,7 +17,7 @@ def test_enter_and_add_share_keyword_validation_without_submitting():
     assert "event.preventDefault()" in widget
     assert "addKeyword();" in widget
     assert "clone.addEventListener('click', addKeyword);" in form
-    assert "isComposing" not in widget
+    assert "!event.isComposing" in widget
 
 
 def test_keywords_validate_trimmed_casefolded_length_and_controls():

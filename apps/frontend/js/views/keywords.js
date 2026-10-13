@@ -22,7 +22,7 @@ export function initKeywords() {
 }
 
 function _handleKeywordKeydown(event) {
-  if (event.key === 'Enter') {
+  if (event.key === 'Enter' && !event.isComposing) {
     event.preventDefault();
     addKeyword();
   }

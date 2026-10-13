@@ -19,13 +19,16 @@ from backend.main import app
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
-from backend.models import UserRole
+from backend.models import BusinessArea, UserRole
 
 
 @pytest.fixture()
 def ft_client(db, user_factory, role_factory):
     """TestClient wired for file_type integration tests."""
     user = user_factory(email="ft_user@example.com")
+    area = BusinessArea(id=uuid.uuid4(), name=f"File type {uuid.uuid4().hex}")
+    db.add(area)
+    db.flush()
     role = role_factory(
         name=f"ft_writer_{uuid.uuid4().hex}",
         permissions=["form:read", "form:create", "form:edit"],
@@ -45,6 +48,7 @@ def ft_client(db, user_factory, role_factory):
     app.dependency_overrides[get_current_user] = lambda: token
 
     client = TestClient(app)
+    client.business_area_id = str(area.id)
     yield client
 
     app.dependency_overrides.pop(get_db, None)
@@ -61,6 +65,7 @@ def _create_download_form(client, *, file_type="pdf", title="Download Form"):
         json={
             "title": title,
             "description": "Form with file attachment.",
+            "business_area_id": client.business_area_id,
             "is_public": False,
             "form_source": "Download",
             "form_attachment_url": "uploads/fake-key.pdf",
@@ -77,6 +82,7 @@ def _create_url_form(client, *, title="URL Form"):
         json={
             "title": title,
             "description": "Form with URL source.",
+            "business_area_id": client.business_area_id,
             "is_public": True,
             "form_source": "URL",
             "form_source_url": "https://example.com/form.pdf",
@@ -124,6 +130,7 @@ def test_url_form_ignores_supplied_file_type(ft_client):
         json={
             "title": "URL Form With File Type",
             "description": "Should ignore file_type.",
+            "business_area_id": ft_client.business_area_id,
             "is_public": False,
             "form_source": "URL",
             "form_source_url": "https://example.com/form.pdf",
@@ -191,6 +198,7 @@ def test_existing_form_without_file_type_returns_null(ft_client):
         json={
             "title": "Legacy Form",
             "description": "Created before FEAT-0002.",
+            "business_area_id": ft_client.business_area_id,
             "is_public": True,
         },
     )

@@ -282,9 +282,15 @@ function _setFormFieldsLocked(locked) {
         const el = document.querySelector(sel);
         if (el) el.disabled = locked;
     });
-    // File upload area
-    const uploadArea = document.getElementById('fileUploadArea');
-    if (uploadArea) uploadArea.style.pointerEvents = locked ? 'none' : '';
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) fileInput.disabled = locked;
+    const dropZone = document.getElementById('dropZone');
+    if (dropZone) {
+        dropZone.tabIndex = locked ? -1 : 0;
+        dropZone.setAttribute('aria-disabled', String(locked));
+    }
+    const clearFileBtn = document.querySelector('#uploadedFileInfo .btn-close');
+    if (clearFileBtn) clearFileBtn.disabled = locked;
     // Keywords input
     const keywordInput = document.getElementById('keywordInput');
     if (keywordInput) keywordInput.disabled = locked;
