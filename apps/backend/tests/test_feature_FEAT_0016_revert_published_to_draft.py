@@ -32,7 +32,7 @@ from backend.auth.jwt_handler import TokenData
 from backend.auth.permissions import Permission
 from backend.database import get_db
 from backend.main import app
-from backend.models import AuditLog, Form, FormWorkflow, Role, UserRole
+from backend.models import AuditLog, BusinessArea, Form, FormWorkflow, Role, UserRole
 from backend.services.forms import (
     FormService,
     FormWorkflowValidationError,
@@ -64,6 +64,9 @@ def _make_user(user_factory, email: str):
 
 
 def _make_published_form(db: Session, owner_id) -> Form:
+    area = BusinessArea(id=uuid.uuid4(), name=f"Revert area {uuid.uuid4().hex}")
+    db.add(area)
+    db.flush()
     form = Form(
         id=uuid.uuid4(),
         title="FEAT-0016 Published Form",
@@ -73,6 +76,7 @@ def _make_published_form(db: Session, owner_id) -> Form:
         current_version=1,
         keywords=["test"],
         created_by_id=owner_id,
+        business_area_id=area.id,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
@@ -529,7 +533,8 @@ class TestTC2RevertedDraftOwnershipAndReview:
             assert revert_resp.status_code == 200
 
             submit_resp = client.post(
-                _SUBMIT_URL.format(form_id=str(published_form.id))
+                _SUBMIT_URL.format(form_id=str(published_form.id)),
+                json={"expected_version": published_form.current_version},
             )
             assert submit_resp.status_code == 200
             assert submit_resp.json()["status"] == "pending_review"
@@ -561,7 +566,8 @@ class TestTC2RevertedDraftOwnershipAndReview:
         )
         try:
             submit_resp = prev_owner_client.post(
-                _SUBMIT_URL.format(form_id=str(published_form.id))
+                _SUBMIT_URL.format(form_id=str(published_form.id)),
+                json={"expected_version": published_form.current_version},
             )
             assert submit_resp.status_code == 403
             db.refresh(published_form)
@@ -590,7 +596,8 @@ class TestTC2RevertedDraftOwnershipAndReview:
         other_client = _make_client(db, other_user, ["form:submit_for_review"])
         try:
             submit_resp = other_client.post(
-                _SUBMIT_URL.format(form_id=str(published_form.id))
+                _SUBMIT_URL.format(form_id=str(published_form.id)),
+                json={"expected_version": published_form.current_version},
             )
             assert submit_resp.status_code == 403
         finally:
@@ -615,7 +622,8 @@ class TestTC2RevertedDraftOwnershipAndReview:
             )
             assert client_resp.status_code == 200
             submit_resp = revert_and_submit_client.post(
-                _SUBMIT_URL.format(form_id=str(published_form.id))
+                _SUBMIT_URL.format(form_id=str(published_form.id)),
+                json={"expected_version": published_form.current_version},
             )
             assert submit_resp.status_code == 200
             assert submit_resp.json()["status"] == "pending_review"

@@ -59,13 +59,21 @@ export function initFileUpload() {
     if (dropZone) {
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
-            dropZone.classList.add('drag-over');
+            if (!fileInput?.disabled) dropZone.classList.add('drag-over');
         }, { signal });
         dropZone.addEventListener('dragleave', () => {
             dropZone.classList.remove('drag-over');
         }, { signal });
         dropZone.addEventListener('drop', handleFileDrop, { signal });
-        dropZone.addEventListener('click', () => fileInput && fileInput.click(), { signal });
+        dropZone.addEventListener('click', () => {
+            if (fileInput && !fileInput.disabled) fileInput.click();
+        }, { signal });
+        dropZone.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                if (fileInput && !fileInput.disabled) fileInput.click();
+            }
+        }, { signal });
     }
 
     if (fileInput) {
@@ -82,6 +90,7 @@ export function initFileUpload() {
 function handleFileDrop(event) {
     event.preventDefault();
     document.getElementById('dropZone').classList.remove('drag-over');
+    if (document.getElementById('fileInput')?.disabled) return;
     const file = event.dataTransfer.files[0];
     if (file) uploadFile(file);
 }
@@ -102,6 +111,7 @@ export async function handleFileSelect(eventOrFile) {
  * @param {File} file
  */
 export async function uploadFile(file) {
+    if (document.getElementById('fileInput')?.disabled) return;
     document.getElementById('uploadProgress').style.display = 'block';
     document.getElementById('uploadProgressText').textContent = `Uploading ${file.name}\u2026`;
     document.getElementById('uploadedFileInfo').style.display = 'none';

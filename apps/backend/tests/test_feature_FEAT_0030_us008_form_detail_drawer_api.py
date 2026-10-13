@@ -11,7 +11,7 @@ from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
 from backend.database import get_db
 from backend.main import app
-from backend.models import BusinessArea, UserRole
+from backend.models import BusinessArea, Form, UserRole
 
 
 @pytest.fixture()
@@ -38,14 +38,14 @@ def form_detail_client(db, user_factory, role_factory):
     app.dependency_overrides.pop(get_current_user, None)
 
 
-def _create_form(client: TestClient, business_area_id: uuid.UUID | None = None) -> dict:
+def _create_form(client: TestClient, business_area_id: uuid.UUID) -> dict:
     response = client.post(
         "/api/v1/forms",
         json={
             "title": "US-008 detail contract",
             "description": "First line\nSecond line",
             "is_public": False,
-            "business_area_id": str(business_area_id) if business_area_id else None,
+            "business_area_id": str(business_area_id),
         },
     )
     assert response.status_code == 201
@@ -114,10 +114,23 @@ def test_single_form_detail_uses_null_for_blank_mailbox(form_detail_client, db):
 
 
 @pytest.mark.integration
-def test_single_form_detail_without_business_area_returns_null(form_detail_client):
-    created = _create_form(form_detail_client)
+def test_single_form_detail_without_business_area_returns_null(
+    form_detail_client, db, user_factory
+):
+    owner = user_factory()
+    legacy = Form(
+        id=uuid.uuid4(),
+        title="Legacy detail form",
+        description="First line\nSecond line",
+        is_public=False,
+        status="draft",
+        current_version=0,
+        created_by_id=owner.id,
+    )
+    db.add(legacy)
+    db.flush()
 
-    response = form_detail_client.get(f"/api/v1/forms/{created['id']}")
+    response = form_detail_client.get(f"/api/v1/forms/{legacy.id}")
 
     assert response.status_code == 200
     assert response.json()["business_area"] is None

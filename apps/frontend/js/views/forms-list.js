@@ -447,15 +447,15 @@ export function _renderFormActionButtons(form) {
     const isOwner = creatorId === userId;
 
     // Edit — draft + published, form:edit
-    if ((status === 'draft' || status === 'published') && hasPermission('form:edit')) {
+    if (((status === 'draft' && isOwner) || status === 'published') && hasPermission('form:edit')) {
         buttons.push(`<button class="forms-result-card__action" type="button"
             data-action="navigate" data-route="/edit/${id}"
             aria-label="Edit form ${formLabel}">
             <i class="fas fa-edit" aria-hidden="true"></i> Edit</button>`);
     }
 
-    // Submit — draft only, creator only, form:submit_for_review
-    if (status === 'draft' && isOwner && hasPermission('form:submit_for_review')) {
+    // Submit — draft only, creator only, with edit and submit permissions
+    if (status === 'draft' && isOwner && hasPermission('form:edit') && hasPermission('form:submit_for_review')) {
         buttons.push(`<button class="forms-result-card__action forms-result-card__action--submit" type="button"
             data-action="submit-form" data-form-id="${id}"
             data-form-title="${_escapeAttribute(form.title)}"
@@ -946,9 +946,14 @@ async function _submitForm(formId, formTitle) {
     if (!confirm(`Submit "${title}" for review?`)) return null;
 
     try {
+        const detail = await fetch(`${API_BASE}/forms/${formId}`);
+        if (!detail.ok) throw new Error('Unable to load the current form version');
+        const form = await detail.json();
+        if (form.status !== 'draft') throw new Error('Form is no longer a draft');
         const response = await fetch(`${API_BASE}/staff/forms/${formId}/submit`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${getAuthToken()}` },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
+            body: JSON.stringify({ expected_version: form.current_version }),
         });
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));

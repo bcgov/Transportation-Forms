@@ -8,7 +8,7 @@ from backend.auth.jwt_handler import TokenData
 from backend.auth.permissions import DEFAULT_ROLES
 from backend.database import get_db
 from backend.main import app
-from backend.models import Form, FormWorkflow, Role, UserRole
+from backend.models import BusinessArea, Form, FormWorkflow, Role, UserRole
 from backend.services.forms import (
     FormService,
     FormWorkflowConflictError,
@@ -36,6 +36,9 @@ def _create_user(user_factory, email: str):
 
 
 def _create_form(db, creator_id, *, status="draft", reservation_id=None):
+    area = BusinessArea(id=uuid.uuid4(), name=f"Workflow area {uuid.uuid4().hex}")
+    db.add(area)
+    db.flush()
     form = Form(
         id=uuid.uuid4(),
         title="Workflow Test Form",
@@ -45,6 +48,7 @@ def _create_form(db, creator_id, *, status="draft", reservation_id=None):
         current_version=0,
         keywords=[],
         created_by_id=creator_id,
+        business_area_id=area.id,
         form_number_reservation_id=reservation_id,
     )
     db.add(form)
@@ -403,7 +407,10 @@ class TestFormWorkflowApi:
     def test_submit_form_not_found_returns_404(self, db, user_factory, client_factory):
         reviewer = _create_user(user_factory, "reviewer-notfound@example.com")
         reviewer_client = client_factory(reviewer, ["staff_manager"])
-        resp = reviewer_client.post(f"/api/v1/staff/forms/{uuid.uuid4()}/submit")
+        resp = reviewer_client.post(
+            f"/api/v1/staff/forms/{uuid.uuid4()}/submit",
+            json={"expected_version": 0},
+        )
         assert resp.status_code == 404
 
     @pytest.mark.integration

@@ -55,6 +55,14 @@ class FormService:
     }
 
     @staticmethod
+    def _require_active_business_area(db: Session, business_area_id: Optional[UUID]) -> None:
+        if not business_area_id or not db.query(BusinessArea.id).filter(
+            BusinessArea.id == business_area_id,
+            BusinessArea.deleted_at.is_(None),
+        ).with_for_update().first():
+            raise FormWorkflowValidationError("Select an active Business Area.")
+
+    @staticmethod
     def _normalize_newlines(value: Optional[str]) -> Optional[str]:
         """FEAT-0027 US-011: normalise CRLF/CR line endings to LF before persistence.
 
@@ -117,6 +125,8 @@ class FormService:
         # Validate description is provided (required per TASK-110C)
         if not description or not description.strip():
             raise ValueError("description is required")
+
+        FormService._require_active_business_area(db, business_area_id)
 
         # FEAT-0027 US-011: normalise newlines (\r\n, \r -> \n) before persistence
         description = FormService._normalize_newlines(description)
@@ -443,10 +453,11 @@ class FormService:
 
     @staticmethod
     def update_form(
-        db: Session, form_id: UUID, updated_by_id: UUID, **kwargs
+        db: Session, form_id: UUID, updated_by_id: UUID,
+        expected_version: Optional[int] = None, **kwargs
     ) -> Optional[Form]:
         """
-        Update a form (all fields except status/version).
+        Update a form's content and advance its version without changing status.
 
         Args:
             db: Database session
@@ -458,9 +469,26 @@ class FormService:
         Returns:
             Updated Form object or None if not found
         """
-        form = FormService.get_form_by_id(db, form_id)
+        form = db.query(Form).filter(
+            Form.id == form_id, Form.deleted_at.is_(None)
+        ).with_for_update().populate_existing().first()
         if not form:
             return None
+
+        if form.status == "draft" and form.created_by_id != updated_by_id:
+            raise PermissionError("Only the form creator can edit this draft")
+        if form.status == "pending_review":
+            raise PermissionError(
+                "Form cannot be edited while it is in Pending Review state"
+            )
+        if expected_version is not None and form.current_version != expected_version:
+            raise FormWorkflowConflictError(
+                "Form version changed; reload and reconcile before saving"
+            )
+
+        FormService._require_active_business_area(
+            db, kwargs.get("business_area_id", form.business_area_id)
+        )
 
         # Track old values for audit
         old_values = {
@@ -507,6 +535,8 @@ class FormService:
         # Handle business area updates
         if "business_area_id" in kwargs:
             form.business_area_id = kwargs["business_area_id"]
+
+        form.current_version += 1
 
         # FEAT-0005 BUGFIX (2026-06-11): when the attachment changes on an
         # already-published form, the `form_versions` row that backs the
@@ -598,7 +628,7 @@ class FormService:
             query = query.with_for_update(nowait=True)
 
         try:
-            form = query.first()
+            form = query.populate_existing().first()
         except OperationalError as exc:
             raise FormWorkflowConflictError(
                 "Form status was changed by another user; unable to acquire lock"
@@ -688,8 +718,15 @@ class FormService:
         return form
 
     @staticmethod
-    def submit_form_for_review(db: Session, form_id: UUID, user_id: UUID) -> Form:
+    def submit_form_for_review(
+        db: Session, form_id: UUID, user_id: UUID, expected_version: Optional[int] = None
+    ) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
+        if expected_version is not None and form.current_version != expected_version:
+            raise FormWorkflowConflictError(
+                "Form version changed; reload and reconcile before submitting"
+            )
+        FormService._require_active_business_area(db, form.business_area_id)
 
         if form.form_number_reservation_id:
             reservation = (

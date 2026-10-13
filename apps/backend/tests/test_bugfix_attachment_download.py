@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 from botocore.exceptions import ClientError
 
-from backend.models import AuditLog, Form, FormVersion
+from backend.models import AuditLog, BusinessArea, Form, FormVersion
 from backend.services import s3_service
 from backend.services.forms import FormService
 from backend.services.s3_service import S3ObjectNotFound
@@ -26,6 +26,9 @@ from backend.services.s3_service import S3ObjectNotFound
 # ---------------------------------------------------------------------------
 
 def _make_download_form(db, creator_id, *, s3_key="uploads/test.pdf", status="draft"):
+    area = BusinessArea(id=uuid.uuid4(), name=f"Attachment area {uuid.uuid4().hex}")
+    db.add(area)
+    db.flush()
     form = Form(
         id=uuid.uuid4(),
         title="Attachment Form",
@@ -34,6 +37,7 @@ def _make_download_form(db, creator_id, *, s3_key="uploads/test.pdf", status="dr
         is_public=True,
         keywords=[],
         created_by_id=creator_id,
+        business_area_id=area.id,
         form_source="Download",
         form_attachment_url=s3_key,
         form_attachment_filename="test.pdf",
@@ -45,6 +49,9 @@ def _make_download_form(db, creator_id, *, s3_key="uploads/test.pdf", status="dr
 
 
 def _make_url_form(db, creator_id):
+    area = BusinessArea(id=uuid.uuid4(), name=f"URL area {uuid.uuid4().hex}")
+    db.add(area)
+    db.flush()
     form = Form(
         id=uuid.uuid4(),
         title="URL Form",
@@ -53,6 +60,7 @@ def _make_url_form(db, creator_id):
         is_public=True,
         keywords=[],
         created_by_id=creator_id,
+        business_area_id=area.id,
         form_source="URL",
         form_attachment_url=None,
     )

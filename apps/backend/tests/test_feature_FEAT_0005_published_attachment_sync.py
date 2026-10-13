@@ -38,7 +38,7 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.models import Form, FormVersion
+from backend.models import BusinessArea, Form, FormVersion
 from backend.services.forms import FormService
 
 
@@ -56,6 +56,9 @@ def _make_published_download_form(
     Bypasses the workflow service so the test exercises the
     *attachment-replacement* code path in isolation.
     """
+    area = BusinessArea(id=uuid.uuid4(), name=f"Attachment sync {uuid.uuid4().hex}")
+    db.add(area)
+    db.flush()
     form = Form(
         id=uuid.uuid4(),
         title="Published Download Form",
@@ -64,6 +67,7 @@ def _make_published_download_form(
         is_public=True,
         keywords=[],
         created_by_id=creator_id,
+        business_area_id=area.id,
         form_source="Download",
         form_attachment_url=s3_key,
         form_attachment_filename=filename,
@@ -241,6 +245,9 @@ class TestUpdateFormDoesNotSyncForUnpublishedForms:
         self, mock_size, mock_delete, db, user_factory
     ):
         editor = user_factory(email="bugf-draft@example.com")
+        area = BusinessArea(id=uuid.uuid4(), name=f"Draft attachment {uuid.uuid4().hex}")
+        db.add(area)
+        db.flush()
         form = Form(
             id=uuid.uuid4(),
             title="Draft form",
@@ -249,6 +256,7 @@ class TestUpdateFormDoesNotSyncForUnpublishedForms:
             is_public=False,
             keywords=[],
             created_by_id=editor.id,
+            business_area_id=area.id,
             form_source="Download",
             form_attachment_url="uploads/draft-a.pdf",
             form_attachment_filename="draft-a.pdf",

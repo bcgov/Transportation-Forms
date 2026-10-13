@@ -5,6 +5,7 @@ error handling, and authorization checks.
 """
 
 import logging
+import re
 from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
@@ -19,7 +20,13 @@ from fastapi import (
     Request,
 )
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 from sqlalchemy.orm import Session
 
 from backend.auth.authorization import require_permission
@@ -27,7 +34,11 @@ from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
 from backend.models import AuditLog, Role, UserRole
-from backend.services.forms import FormService
+from backend.services.forms import (
+    FormService,
+    FormWorkflowConflictError,
+    FormWorkflowValidationError,
+)
 from backend.services import s3_service
 from backend.services.s3_service import S3ObjectNotFound, MIME_TYPE_MAP
 
@@ -36,6 +47,29 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # Pydantic Models (Request/Response)
 # ============================================================================
+
+_KEYWORD_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def _validate_keywords(keywords: Optional[List[str]]) -> Optional[List[str]]:
+    if keywords is None:
+        return None
+    cleaned = []
+    seen = set()
+    for value in keywords:
+        keyword = value.strip()
+        if not keyword:
+            raise ValueError("Keywords cannot be blank")
+        if len(keyword) > 50:
+            raise ValueError("Keywords must be 50 characters or fewer")
+        if _KEYWORD_CONTROL_CHARACTERS.search(value):
+            raise ValueError("Keywords cannot contain control characters")
+        folded = keyword.lower()
+        if folded in seen:
+            raise ValueError("Duplicate keywords are not allowed")
+        seen.add(folded)
+        cleaned.append(keyword)
+    return cleaned
 
 
 class BusinessAreaRef(BaseModel):
@@ -99,6 +133,11 @@ class FormCreateRequest(BaseModel):
         description="Does this form collect personal information? ('Yes' or 'No')",
     )
 
+    @field_validator("keywords")
+    @classmethod
+    def validate_keywords(cls, keywords: Optional[List[str]]) -> Optional[List[str]]:
+        return _validate_keywords(keywords)
+
     @model_validator(mode="after")
     def validate_form_source(self) -> "FormCreateRequest":
         """Cross-field validation for form_source and its dependent fields."""
@@ -131,6 +170,7 @@ class FormUpdateRequest(BaseModel):
     """Request model for updating a form."""
 
     title: Optional[str] = Field(None, min_length=1, max_length=255)
+    expected_version: Optional[int] = Field(None, ge=0)
     description: Optional[str] = Field(None, max_length=2000)
     is_public: Optional[bool] = None
     keywords: Optional[List[str]] = None
@@ -160,6 +200,11 @@ class FormUpdateRequest(BaseModel):
         max_length=20,
         description="Short file-type label (e.g. 'pdf', 'docx', 'unknown')",
     )
+
+    @field_validator("keywords")
+    @classmethod
+    def validate_keywords(cls, keywords: Optional[List[str]]) -> Optional[List[str]]:
+        return _validate_keywords(keywords)
 
     @model_validator(mode="after")
     def validate_update_fields(self) -> "FormUpdateRequest":
@@ -659,6 +704,15 @@ async def update_form(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Form cannot be edited while it is in Pending Review state",
             )
+        if (
+            form_check
+            and form_check.status == "draft"
+            and str(form_check.created_by_id) != current_user.sub
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the form creator can edit this draft",
+            )
 
         # Build update kwargs
         update_data = {}
@@ -672,8 +726,10 @@ async def update_form(
             update_data["keywords"] = request.keywords
         if request.effective_date is not None:
             update_data["effective_date"] = request.effective_date
-        if request.business_area_id is not None:
-            update_data["business_area_id"] = UUID(request.business_area_id)
+        if "business_area_id" in request.model_fields_set:
+            update_data["business_area_id"] = (
+                UUID(request.business_area_id) if request.business_area_id else None
+            )
         if request.collects_personal_info is not None:
             update_data["collects_personal_info"] = request.collects_personal_info
         # TASK-416: attachment fields — use model_fields_set to support explicit null (clearing)
@@ -687,12 +743,26 @@ async def update_form(
             if field in request.model_fields_set:
                 update_data[field] = getattr(request, field)
 
-        form = FormService.update_form(
-            db=db,
-            form_id=form_uuid,
-            updated_by_id=UUID(current_user.sub),
-            **update_data,
-        )
+        try:
+            form = FormService.update_form(
+                db=db,
+                form_id=form_uuid,
+                updated_by_id=UUID(current_user.sub),
+                expected_version=request.expected_version,
+                **update_data,
+            )
+        except FormWorkflowConflictError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+            ) from exc
+        except PermissionError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+            ) from exc
+        except FormWorkflowValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            ) from exc
 
         if not form:
             raise HTTPException(

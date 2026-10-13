@@ -7,7 +7,13 @@ export function showFieldError(fieldId, message) {
         el.style.display = 'block';
         el.classList.add('d-block');
         const input = document.getElementById(fieldId) || document.getElementById('formSource');
-        if (input) input.classList.add('is-invalid');
+        if (input) {
+            input.classList.add('is-invalid');
+            input.setAttribute('aria-invalid', 'true');
+            const describedBy = new Set((input.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+            describedBy.add(el.id);
+            input.setAttribute('aria-describedby', [...describedBy].join(' '));
+        }
     }
 }
 
@@ -18,12 +24,18 @@ export function clearFieldError(fieldId) {
         el.style.display = 'none';
         el.classList.remove('d-block');
     }
-    const input = document.getElementById(fieldId);
-    if (input) input.classList.remove('is-invalid');
+    const input = document.getElementById(fieldId) || (fieldId === 'fileUpload' && document.getElementById('formSource'));
+    if (input) {
+        input.classList.remove('is-invalid');
+        input.removeAttribute('aria-invalid');
+        const describedBy = (input.getAttribute('aria-describedby') || '').split(/\s+/).filter(id => id && id !== el?.id);
+        if (describedBy.length) input.setAttribute('aria-describedby', describedBy.join(' '));
+        else input.removeAttribute('aria-describedby');
+    }
 }
 
 export function clearAllFieldErrors() {
-    ['title', 'description', 'formSource', 'formSourceUrl', 'fileUpload'].forEach(clearFieldError);
+    ['title', 'description', 'formNumber', 'businessAreaInput', 'formSource', 'formSourceUrl', 'fileUpload'].forEach(clearFieldError);
     const generalErrors = document.getElementById('formErrors');
     if (generalErrors) { generalErrors.style.display = 'none'; generalErrors.textContent = ''; }
 }
@@ -38,6 +50,7 @@ export function showValidationErrors(detail) {
             const fieldMap = {
                 'title': 'title',
                 'description': 'description',
+                'business_area_id': 'businessAreaInput',
                 'form_source': 'formSource',
                 'form_source_url': 'formSourceUrl',
                 'form_attachment_url': 'fileUpload',
