@@ -39,6 +39,13 @@ def _utc_naive_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _normalize_effective_date(value: Optional[datetime]) -> Optional[datetime]:
+    """Convert aware instants to naive UTC without shifting date-only inputs."""
+    if value is None or value.utcoffset() is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 _ACTIVITY_FIELDS = (
     "title", "description", "is_public", "keywords", "business_area_id",
     "effective_date", "collects_personal_info", "form_source",
@@ -305,7 +312,7 @@ class FormService:
             is_public=is_public,
             keywords=keywords or [],
             created_by_id=created_by_id,
-            effective_date=effective_date,
+            effective_date=_normalize_effective_date(effective_date),
             status="draft",
             current_version=0,
             business_area_id=business_area_id,
@@ -614,6 +621,9 @@ class FormService:
         )
 
         old_values = {field: getattr(form, field) for field in _ACTIVITY_FIELDS}
+        old_values["effective_date"] = _normalize_effective_date(
+            old_values["effective_date"]
+        )
 
         # Update fields
         if "title" in kwargs:
@@ -625,7 +635,7 @@ class FormService:
         if "keywords" in kwargs:
             form.keywords = kwargs["keywords"]
         if "effective_date" in kwargs:
-            form.effective_date = kwargs["effective_date"]
+            form.effective_date = _normalize_effective_date(kwargs["effective_date"])
         if "collects_personal_info" in kwargs:
             form.collects_personal_info = kwargs["collects_personal_info"]
         # TASK-416: handle attachment field updates and S3 deletion
