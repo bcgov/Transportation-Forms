@@ -6,7 +6,10 @@ Includes audit logging, soft deletes, and version management.
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid7
+from urllib.parse import urlsplit, urlunsplit
+import logging
+import re
 from sqlalchemy.orm import Session
 from sqlalchemy import asc, case, desc, text, func as sa_func
 from sqlalchemy.exc import OperationalError
@@ -16,10 +19,14 @@ from backend.models import (
     Form,
     FormWorkflow,
     AuditLog,
+    FormActivityEvent,
     FormNumberReservation,
     FormVersion,
+    User,
 )
 from backend.services import s3_service
+
+logger = logging.getLogger(__name__)
 
 
 def _utc_naive_now() -> datetime:
@@ -30,6 +37,134 @@ def _utc_naive_now() -> datetime:
     SQLAlchemy ``DateTime`` columns used here.
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+_ACTIVITY_FIELDS = (
+    "title", "description", "is_public", "keywords", "business_area_id",
+    "effective_date", "collects_personal_info", "form_source",
+    "form_source_url", "form_attachment_url", "form_attachment_filename",
+    "file_type", "form_number_reservation_id",
+)
+_OBJECT_KEY = re.compile(r"uploads/[A-Za-z0-9_./-]+")
+_SENSITIVE_PAIR = re.compile(
+    r"(?i)\b(token|secret|password|api[_-]?key|signature|credential)"
+    r"\s*[:=]\s*[^\s,;&]+"
+)
+_EMBEDDED_URL = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
+
+
+def _safe_text(value: str) -> str:
+    """Remove embedded URL credentials/query strings and obvious secret pairs."""
+    def clean_url(match: re.Match) -> str:
+        url = match.group(0)
+        try:
+            parts = urlsplit(url)
+            if not parts.hostname:
+                return "[unavailable]"
+            host = parts.hostname
+            if ":" in host:
+                host = f"[{host}]"
+            if parts.port:
+                host = f"{host}:{parts.port}"
+            return urlunsplit((parts.scheme, host, parts.path, "", ""))
+        except ValueError:
+            return "[unavailable]"
+
+    return _SENSITIVE_PAIR.sub("[redacted]", _EMBEDDED_URL.sub(clean_url, value))
+
+
+def _activity_value(field: str, value: Any) -> Any:
+    """Store JSON-safe historical values, never a signed attachment URL."""
+    if isinstance(value, (UUID, datetime)):
+        value = value.isoformat() if isinstance(value, datetime) else str(value)
+    if field == "form_attachment_url":
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return "[unavailable]"
+        try:
+            path = urlsplit(value).path
+        except ValueError:
+            return "[unavailable]"
+        match = _OBJECT_KEY.search(path)
+        return (
+            match.group(0) if match and (
+                match.start() == 0 or path[match.start() - 1] == "/"
+            ) else "[unavailable]"
+        )
+    if field == "form_source_url" and isinstance(value, str):
+        try:
+            parts = urlsplit(value)
+            # A URL's user-info, query and fragment can all contain credentials.
+            if parts.scheme not in ("http", "https") or not parts.hostname:
+                return "[unavailable]"
+            host = parts.hostname
+            if ":" in host:
+                host = f"[{host}]"
+            if parts.port:
+                host = f"{host}:{parts.port}"
+            return urlunsplit((parts.scheme, host, parts.path, "", ""))
+        except ValueError:
+            return "[unavailable]"
+    if isinstance(value, str):
+        return _safe_text(value)
+    if isinstance(value, list):
+        return [_safe_text(item) if isinstance(item, str) else item for item in value]
+    return value
+
+
+def _activity_values(values: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        field: _activity_value(field, values[field])
+        for field in _ACTIVITY_FIELDS if field in values
+    }
+
+
+def _record_form_activity(
+    db: Session, form: "Form", user_id: Optional[UUID], event_name: str,
+    old: Optional[Dict[str, Any]] = None,
+    new: Optional[Dict[str, Any]] = None,
+    reason: Optional[str] = None,
+) -> None:
+    """Stage required history in the caller's form-write transaction."""
+    try:
+        if user_id is None:
+            label = "System"
+        else:
+            actor = db.query(User).filter(User.id == user_id).first()
+            if actor is None:
+                raise RuntimeError("Audit actor unavailable")
+            label = " ".join(
+                part.strip() for part in (actor.first_name, actor.last_name)
+                if part and part.strip()
+            ) or (actor.email.strip() if actor.email else "")
+        if not label:
+            raise RuntimeError("Audit actor unavailable")
+        label = _safe_text(label)
+        old_values = _activity_values(old or {})
+        new_values = _activity_values(new or {})
+        changed = [
+            key for key in _ACTIVITY_FIELDS
+            if key in old_values or key in new_values
+        ]
+        if event_name not in ("Form created", "Form saved"):
+            changed = ["status"]
+            old_values = {"status": (old or {}).get("status")}
+            new_values = {"status": (new or {}).get("status")}
+            if (old or {}).get("created_by_id") != (new or {}).get("created_by_id"):
+                changed.append("created_by_id")
+                old_values["created_by_id"] = (old or {}).get("created_by_id")
+                new_values["created_by_id"] = (new or {}).get("created_by_id")
+        db.add(FormActivityEvent(
+            id=uuid7(), occurred_at=_utc_naive_now(),
+            form_id=form.id, event_name=event_name, actor_label=label,
+            changed_fields=changed, old_values=old_values, new_values=new_values,
+            reason=_safe_text(reason.strip()) if reason and reason.strip() else None,
+        ))
+        db.flush()
+    except Exception:
+        db.rollback()
+        raise
 
 
 class FormWorkflowValidationError(ValueError):
@@ -184,33 +319,21 @@ class FormService:
         )
 
         db.add(form)
-        db.commit()
-        db.refresh(form)
-
-        # Audit log
-        audit_new_values = {
-            "id": str(form.id),
-            "title": title,
-            "is_public": is_public,
-            "form_source": form_source,
-            "file_type": file_type,
-            "collects_personal_info": form.collects_personal_info,
-        }
-
-        # Include reservation_id in audit log if provided (TASK-413)
-        if form_number_reservation_id:
-            audit_new_values["form_number_reservation_id"] = str(
-                form_number_reservation_id
-            )
-
-        FormService._audit_log(
-            db=db,
-            entity_type="forms",
-            entity_id=str(form.id),
-            action="CREATE",
-            user_id=created_by_id,
-            new_values=audit_new_values,
+        db.flush()
+        values = {field: getattr(form, field) for field in _ACTIVITY_FIELDS}
+        _record_form_activity(
+            db, form, created_by_id, "Form created", new=values,
         )
+        db.add(AuditLog(
+            entity_type="forms", entity_id=str(form.id), action="CREATE",
+            user_id=created_by_id, new_values=_activity_values(values),
+        ))
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        db.refresh(form)
 
         return form
 
@@ -490,14 +613,7 @@ class FormService:
             db, kwargs.get("business_area_id", form.business_area_id)
         )
 
-        # Track old values for audit
-        old_values = {
-            "title": form.title,
-            "description": form.description,
-            "is_public": form.is_public,
-            "keywords": form.keywords,
-            "collects_personal_info": form.collects_personal_info,
-        }
+        old_values = {field: getattr(form, field) for field in _ACTIVITY_FIELDS}
 
         # Update fields
         if "title" in kwargs:
@@ -518,14 +634,7 @@ class FormService:
         if "form_source_url" in kwargs:
             form.form_source_url = kwargs["form_source_url"]
         if "form_attachment_url" in kwargs:
-            old_url = form.form_attachment_url
-            new_url = kwargs["form_attachment_url"]
-            # Delete the old file from S3 whenever the URL changes (removed or replaced)
-            if old_url and old_url != new_url:
-                old_key = FormService._extract_s3_object_key(old_url)
-                if old_key:
-                    s3_service.delete_file(old_key)
-            form.form_attachment_url = new_url
+            form.form_attachment_url = kwargs["form_attachment_url"]
         if "form_attachment_filename" in kwargs:
             form.form_attachment_filename = kwargs["form_attachment_filename"]
         # FEAT-0002: file_type tracking
@@ -536,6 +645,13 @@ class FormService:
         if "business_area_id" in kwargs:
             form.business_area_id = kwargs["business_area_id"]
 
+        new_values = {field: getattr(form, field) for field in _ACTIVITY_FIELDS}
+        changed_fields = [
+            field for field in _ACTIVITY_FIELDS
+            if old_values[field] != new_values[field]
+        ]
+        if not changed_fields:
+            return form
         form.current_version += 1
 
         # FEAT-0005 BUGFIX (2026-06-11): when the attachment changes on an
@@ -550,7 +666,7 @@ class FormService:
         # this update.
         _attachment_fields_changed = bool(
             {"form_attachment_url", "form_source", "form_attachment_filename", "file_type"}
-            & set(kwargs.keys())
+            & set(changed_fields)
         )
         if _attachment_fields_changed and form.status == "published":
             if form.form_source == "Download" and form.form_attachment_url:
@@ -560,24 +676,32 @@ class FormService:
                 # retire any current FormVersion so /file returns 404 cleanly.
                 FormService._retire_current_form_version(db, form)
 
-        db.commit()
-        db.refresh(form)
-
-        # Audit log
-        # Convert UUID values to strings for JSON serialization (PortableJSON/JSONB)
-        audit_new_values = {
-            k: str(v) if isinstance(v, UUID) else v
-            for k, v in kwargs.items()
-        }
-        FormService._audit_log(
-            db=db,
-            entity_type="forms",
-            entity_id=str(form.id),
-            action="UPDATE",
-            user_id=updated_by_id,
-            old_values=old_values,
-            new_values=audit_new_values,
+        before = {field: old_values[field] for field in changed_fields}
+        after = {field: new_values[field] for field in changed_fields}
+        _record_form_activity(
+            db, form, updated_by_id, "Form saved", old=before, new=after,
         )
+        db.add(AuditLog(
+            entity_type="forms", entity_id=str(form.id), action="UPDATE",
+            user_id=updated_by_id,
+            old_values=_activity_values(before), new_values=_activity_values(after),
+        ))
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        db.refresh(form)
+        # External cleanup cannot be part of the database transaction. Do not
+        # delete the old object until both the form and required audit are durable.
+        if "form_attachment_url" in changed_fields and old_values["form_attachment_url"]:
+            old_key = FormService._extract_s3_object_key(old_values["form_attachment_url"])
+            if old_key:
+                try:
+                    s3_service.delete_file(old_key)
+                except Exception:
+                    # Retain orphaned storage rather than report a committed save as failed.
+                    logger.warning("Superseded form attachment cleanup failed")
 
         return form
 
@@ -708,12 +832,34 @@ class FormService:
                 },
             )
         )
+        # BR-007 is an allowlist: legacy unpublish is a valid transition, but
+        # is not one of the approved user-facing activity event types.
+        included_events = {
+            "submit": "Form submitted", "approve": "Form approved",
+            "reject": "Form rejected", "request_changes": "Changes requested",
+            "publish": "Form published", "archive": "Form archived",
+            "restore": "Form restored",
+        }
+        if action in included_events:
+            _record_form_activity(
+                db, form, triggered_by_id, included_events[action],
+                old={"status": from_status}, new={"status": to_status},
+                reason=reason_notes,
+            )
 
         # Sync FormVersion so public_forms_v can resolve the file for download.
         if to_status == "published":
-            FormService._sync_form_version(db, form, triggered_by_id)
+            try:
+                FormService._sync_form_version(db, form, triggered_by_id)
+            except Exception:
+                db.rollback()
+                raise
 
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         db.refresh(form)
         return form
 
@@ -896,8 +1042,17 @@ class FormService:
                 },
             )
         )
-
-        db.commit()
+        _record_form_activity(
+            db, form, reverting_user_id, "Form reverted",
+            old={"status": from_status, "created_by_id": str(prior_owner_id)},
+            new={"status": "draft", "created_by_id": str(reverting_user_id)},
+            reason=cleaned_reason,
+        )
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         db.refresh(form)
         return form
 

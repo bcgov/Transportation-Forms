@@ -24,6 +24,7 @@ class Permission(str, Enum):
     FORM_EDIT = "form:edit"
     FORM_DELETE = "form:delete"
     FORM_ARCHIVE = "form:archive"
+    FORM_AUDIT = "form:audit"
 
     # Form Workflow Permissions
     FORM_SUBMIT_FOR_REVIEW = "form:submit_for_review"
@@ -109,6 +110,7 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.FORM_EDIT,
             Permission.FORM_DELETE,
             Permission.FORM_ARCHIVE,
+            Permission.FORM_AUDIT,
             Permission.FORM_SUBMIT_FOR_REVIEW,
             Permission.FORM_REVIEW,
             Permission.FORM_APPROVE,

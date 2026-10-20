@@ -29,6 +29,7 @@ from backend.routes.reservations import router as reservations_router
 from backend.routes.stats import router as stats_router
 from backend.routes.cms_pages import admin_router as cms_pages_admin_router
 from backend.routes.cms_redirects import admin_router as cms_redirects_admin_router
+from backend.routes.form_audit import router as form_audit_router
 
 # Configure logging
 logger = structlog.get_logger()
@@ -139,6 +140,7 @@ async def serve_frontend():
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(forms.router, prefix="/api/v1")
 app.include_router(workflow.router, prefix="/api/v1")
+app.include_router(form_audit_router, prefix="/api/v1")
 app.include_router(business_areas.router, prefix="/api/v1")
 app.include_router(business_areas_admin_router, prefix="/api/v1")
 app.include_router(roles.router, prefix="/api/v1")

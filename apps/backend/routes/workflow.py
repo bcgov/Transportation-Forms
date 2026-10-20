@@ -131,6 +131,18 @@ def _handle_workflow_error(exc: Exception) -> NoReturn:
     )
 
 
+def _rollback_unexpected(db: Session, exc: Exception) -> None:
+    # Validation/authorization failures have not written a business action.
+    # Rolling back those requests also discards the caller's test transaction.
+    if not isinstance(
+        exc, (
+            FormNotFoundError, FormWorkflowConflictError,
+            FormWorkflowValidationError, ValueError,
+        ),
+    ):
+        db.rollback()
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 
@@ -225,6 +237,7 @@ async def submit_form_for_review(
         )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
+        _rollback_unexpected(db, exc)
         _handle_workflow_error(exc)
 
 
@@ -249,6 +262,7 @@ async def approve_form(
         )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
+        _rollback_unexpected(db, exc)
         _handle_workflow_error(exc)
 
 
@@ -273,6 +287,7 @@ async def reject_form(
         )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
+        _rollback_unexpected(db, exc)
         _handle_workflow_error(exc)
 
 
@@ -289,6 +304,7 @@ async def publish_form(
         form = FormService.publish_form(db, UUID(form_id), UUID(current_user.sub))
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
+        _rollback_unexpected(db, exc)
         _handle_workflow_error(exc)
 
 
@@ -302,6 +318,7 @@ async def unpublish_form(
         form = FormService.unpublish_form(db, UUID(form_id), UUID(current_user.sub))
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
+        _rollback_unexpected(db, exc)
         _handle_workflow_error(exc)
 
 
@@ -330,6 +347,7 @@ async def revert_form_to_draft(
         )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
+        _rollback_unexpected(db, exc)
         _handle_workflow_error(exc)
 
 
@@ -345,6 +363,7 @@ async def archive_form(
         )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
+        _rollback_unexpected(db, exc)
         _handle_workflow_error(exc)
 
 
@@ -358,6 +377,7 @@ async def restore_form(
         form = FormService.restore_form(db, UUID(form_id), UUID(current_user.sub))
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
+        _rollback_unexpected(db, exc)
         _handle_workflow_error(exc)
 
 
