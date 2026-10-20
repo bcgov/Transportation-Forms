@@ -389,6 +389,29 @@ class AuditLog(Base):
     )
 
 
+class FormActivityEvent(Base):
+    """Launch-forward, actor-snapshotted history of successful form actions."""
+
+    __tablename__ = "form_activity_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    form_id = Column(
+        UUID(as_uuid=True), ForeignKey("forms.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+    event_name = Column(String(50), nullable=False)
+    actor_label = Column(String(255), nullable=False)
+    changed_fields = Column(PortableJSON, nullable=False)
+    old_values = Column(PortableJSON, nullable=False)
+    new_values = Column(PortableJSON, nullable=False)
+    reason = Column(Text, nullable=True)
+    occurred_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_form_activity_page", "form_id", "occurred_at", "id"),
+    )
+
+
 # ============================================================================
 # TABLE 10: form_downloads (Analytics)
 # ============================================================================
