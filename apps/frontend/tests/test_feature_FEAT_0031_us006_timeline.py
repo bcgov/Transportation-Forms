@@ -30,7 +30,7 @@ def test_inline_link_opens_protected_modal_without_exposing_values_in_rows():
 
     assert "const details = document.createElement('a');" in audit
     assert "details.href = '#auditDetailModal';" in audit
-    assert "summary.append(details);" in audit
+    assert "summary.append(document.createTextNode(' '), details);" in audit
     assert "event.preventDefault();" in audit
     assert "openDetails(detail.dataset.auditDetail, detail);" in audit
     assert "trigger.isConnected && trigger.focus()" in audit
@@ -49,4 +49,3 @@ def test_event_summaries_use_field_names_and_event_type_without_values():
     assert "fieldNames(event.changed_fields)" in audit
     assert "actor.textContent = event.actor_label;" in audit
     assert "fieldLabel(field).toLowerCase().replace(/\\burl\\b/g, 'URL')" in audit
-    assert "fields.textContent = presentation.fieldsNote;" in audit

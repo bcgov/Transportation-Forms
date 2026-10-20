@@ -80,6 +80,9 @@ function fieldNames(fields) {
 }
 
 function eventPresentation(event) {
+    if (event.event_name === 'Form created') {
+        return { title: label(event.event_name), summary: 'created this form as a draft.' };
+    }
     const fields = fieldNames(event.changed_fields);
     if (event.event_name === 'Form saved') {
         const sourceFields = new Set([
@@ -90,13 +93,6 @@ function eventPresentation(event) {
             && event.changed_fields.every(field => sourceFields.has(field));
         const title = sourceOnly ? 'Form source updated' : 'Form details saved';
         return { title, summary: fields ? `changed ${fields}.` : 'saved changes to this form.' };
-    }
-    if (event.event_name === 'Form created') {
-        return {
-            title: label(event.event_name),
-            summary: 'created this form as a draft.',
-            fieldsNote: fields ? `Initial fields: ${fields}.` : null,
-        };
     }
     const actions = {
         'Form submitted': 'submitted the saved form for review',
@@ -208,20 +204,16 @@ function renderRows(events) {
         const actor = document.createElement('span');
         actor.className = 'form-audit__actor';
         actor.textContent = event.actor_label;
-        summary.append(actor, document.createTextNode(` ${presentation.summary} `));
-        const details = document.createElement('a');
-        details.href = '#auditDetailModal';
-        details.dataset.auditDetail = event.id;
-        details.setAttribute('aria-label', `View details for event ${list.children.length + 1}: ${presentation.title} at ${timestamp.getAttribute('aria-label')}`);
-        details.textContent = 'View details';
-        summary.append(details);
-        content.append(name, summary);
-        if (presentation.fieldsNote) {
-            const fields = document.createElement('p');
-            fields.className = 'form-audit__fields';
-            fields.textContent = presentation.fieldsNote;
-            content.append(fields);
+        summary.append(actor, document.createTextNode(` ${presentation.summary}`));
+        if (event.event_name !== 'Form created' && event.event_name !== 'Form submitted') {
+            const details = document.createElement('a');
+            details.href = '#auditDetailModal';
+            details.dataset.auditDetail = event.id;
+            details.setAttribute('aria-label', `View details for event ${list.children.length + 1}: ${presentation.title} at ${timestamp.getAttribute('aria-label')}`);
+            details.textContent = 'View details';
+            summary.append(document.createTextNode(' '), details);
         }
+        content.append(name, summary);
         item.append(timestamp, point, content);
         list.append(item);
     }

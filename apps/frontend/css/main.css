@@ -1644,10 +1644,6 @@ body.form-details-drawer-open {
     font-weight: 700;
 }
 
-.form-audit__content .form-audit__fields {
-    font-size: 0.75rem;
-}
-
 .form-audit__content a {
     display: inline;
 }
