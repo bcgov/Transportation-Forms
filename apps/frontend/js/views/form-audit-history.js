@@ -268,6 +268,44 @@ function valueNode(value) {
     return node;
 }
 
+function keywordDifferences(previous, next) {
+    const before = previous ?? [];
+    const after = next ?? [];
+    if (!Array.isArray(before) || !Array.isArray(after)
+        || !before.every(keyword => typeof keyword === 'string')
+        || !after.every(keyword => typeof keyword === 'string')) {
+        throw new Error('Invalid keyword audit values');
+    }
+    const beforeSet = new Set(before);
+    const afterSet = new Set(after);
+    return {
+        removed: before.filter(keyword => !afterSet.has(keyword)),
+        added: after.filter(keyword => !beforeSet.has(keyword)),
+    };
+}
+
+function keywordList(keywords) {
+    if (!keywords.length) return valueNode('None');
+    const list = document.createElement('ul');
+    list.className = 'form-audit__keywords';
+    for (const keyword of keywords) {
+        const item = document.createElement('li');
+        item.textContent = keyword;
+        list.append(item);
+    }
+    return list;
+}
+
+function comparisonColumn(heading, content) {
+    const column = document.createElement('div');
+    column.className = 'form-audit__comparison-column';
+    const label = document.createElement('h5');
+    label.className = 'form-audit__comparison-label';
+    label.textContent = heading;
+    column.append(label, content);
+    return column;
+}
+
 async function openDetails(id, trigger) {
     const ticket = generation;
     detailId = id;
@@ -299,14 +337,25 @@ async function openDetails(id, trigger) {
         }
         for (const change of event.changes) {
             const field = document.createElement('section');
+            field.className = 'form-audit__field';
             const title = document.createElement('h4');
             title.className = 'h6';
             title.textContent = fieldLabel(change.field);
-            const previous = document.createElement('p');
-            previous.append(document.createTextNode('Previous: '), valueNode(change.old_value));
-            const next = document.createElement('p');
-            next.append(document.createTextNode('New: '), valueNode(change.new_value));
-            field.append(title, previous, next);
+            const comparison = document.createElement('div');
+            comparison.className = 'form-audit__comparison';
+            if (change.field === 'keywords') {
+                const { removed, added } = keywordDifferences(change.old_value, change.new_value);
+                comparison.append(
+                    comparisonColumn('Removed', keywordList(removed)),
+                    comparisonColumn('Added', keywordList(added)),
+                );
+            } else {
+                comparison.append(
+                    comparisonColumn('Previous', valueNode(change.old_value)),
+                    comparisonColumn('New', valueNode(change.new_value)),
+                );
+            }
+            field.append(title, comparison);
             content.append(field);
         }
     } catch (_error) {
