@@ -57,9 +57,14 @@ crunchy:
 
   # ── pgBackRest backups ────────────────────────────────────────────────────────
   pgBackRest:
-    enabled: false  # S3 backups disabled for DEV
+    enabled: true
+    backupPath: /backups/dev/cluster/1
+    retentionFullType: count
     s3:
-      enabled: false   # No S3 for DEV — volume-based backups only
+      enabled: true
+      retention: 7
+      fullBackupSchedule: 0 9 * * *
+      incrementalBackupSchedule: 0 0/5 * * * # every 5 hour incremental
     pvc:
       retention: 1
       retentionFullType: count
