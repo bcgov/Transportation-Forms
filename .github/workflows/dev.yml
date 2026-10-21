@@ -90,6 +90,7 @@ jobs:
           image-tag: ${{ steps.image.outputs.ref }}
           sysdig-secure-token: ${{ secrets.SYSDIG_SECURE_TOKEN }}
           stop-on-failed-policy-eval: false   # report-only at first
+          skip-summary: true
           
       - name: Upload SARIF
         if: always() && hashFiles('sarif.json') != ''
