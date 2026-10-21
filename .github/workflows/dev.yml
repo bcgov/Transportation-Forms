@@ -31,6 +31,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
