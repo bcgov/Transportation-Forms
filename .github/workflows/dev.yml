@@ -101,6 +101,7 @@ jobs:
     name: Deploy to DEV
     needs: build
     if: |
+      false &&
       always() &&
       !contains(needs.build.result, 'failure') &&
       !contains(needs.build.result, 'cancelled')
