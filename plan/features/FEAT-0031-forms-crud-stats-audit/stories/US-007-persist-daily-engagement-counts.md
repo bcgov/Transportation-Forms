@@ -3,7 +3,7 @@ feature_id: FEAT-0031
 story_id: US-007
 title: Persist anonymous daily engagement counts within bounded capacity
 owner: Business Analyst
-status: draft
+status: in_progress
 created: 2026-10-16 13:30:00
 updated: 2026-10-22 13:40:00
 depends_on: []

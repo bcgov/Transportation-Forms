@@ -11,7 +11,10 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    BigInteger,
+    Date,
     Index,
+    PrimaryKeyConstraint,
     UniqueConstraint,
     CheckConstraint,
     JSON,
@@ -445,6 +448,42 @@ class FormDownload(Base):
     __table_args__ = (
         Index("idx_form_downloads_form_date", "form_id", "created_at"),
         Index("idx_form_downloads_user_date", "user_id", "created_at"),
+    )
+
+
+class DailyEngagementCount(Base):
+    """Anonymous aggregate keyed by form, metric, source, and fixed-PCT day.
+
+    There is deliberately no foreign key to forms: deleted forms retain their
+    historical counts. The migration also installs an owner-facing trigger
+    rejecting decreases, which metadata.create_all() cannot install.
+    """
+
+    __tablename__ = "daily_engagement_counts"
+
+    form_id = Column(UUID(as_uuid=True), nullable=False)
+    metric = Column(String(32), nullable=False)
+    source = Column(String(6), nullable=False)
+    pct_day = Column(Date, nullable=False)
+    count = Column(BigInteger, nullable=False)
+
+    __table_args__ = (
+        PrimaryKeyConstraint(
+            "form_id", "metric", "source", "pct_day",
+            name="pk_daily_engagement_counts",
+        ),
+        CheckConstraint(
+            "metric IN ('download', 'detail_view', 'link_click')",
+            name="ck_daily_engagement_counts_metric",
+        ),
+        CheckConstraint(
+            "source IN ('Staff', 'Public')",
+            name="ck_daily_engagement_counts_source",
+        ),
+        CheckConstraint(
+            "count >= 0",
+            name="ck_daily_engagement_counts_nonnegative",
+        ),
     )
 
 

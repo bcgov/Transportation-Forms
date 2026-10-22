@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 from audit import log_form_download
 from config import settings
 from database import get_db
+from daily_engagement import record_daily_engagement
 from http_cache import compute_etag, etag_matches
 from models import PublicForm
 from problem import problem_response
@@ -413,7 +414,10 @@ def download_public_form(
         # Defence-in-depth: clients must never cache the redirect itself.
         "Cache-Control": "private, no-store",
     }
-    return Response(status_code=200, headers=headers, content=b"")
+    response = Response(status_code=200, headers=headers, content=b"")
+    if request.method == "GET" and "range" not in request.headers:
+        record_daily_engagement(row.form_id, "download", "Public")
+    return response
 
 
 # ------------------------------------------------------------------

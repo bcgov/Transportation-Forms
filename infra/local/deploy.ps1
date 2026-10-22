@@ -22,13 +22,39 @@ function Invoke-CheckedCommand {
     }
 }
 
-function Get-KubernetesSecretValue {
+function Get-KubernetesSecretEncodedValue {
     param([string]$SecretName, [string]$Key)
     $encodedValue = (& kubectl get secret $SecretName -o "jsonpath={.data.$Key}")
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($encodedValue)) {
         throw "Could not read key $Key from Kubernetes secret $SecretName."
     }
-    return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encodedValue.Trim()))
+    return $encodedValue.Trim()
+}
+
+function Get-KubernetesSecretValue {
+    param([string]$SecretName, [string]$Key)
+    $encodedValue = Get-KubernetesSecretEncodedValue $SecretName $Key
+    return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encodedValue))
+}
+
+function Restore-LocalAnalyticsSecret {
+    param([string]$SecretName, [string]$Key, [string]$EncodedValue)
+    $secretJson = (& kubectl get secret $SecretName -o json)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not read Kubernetes secret $SecretName after Helm deployment."
+    }
+    $secret = $secretJson | ConvertFrom-Json
+    if ($null -eq $secret.data -or [string]::IsNullOrWhiteSpace($secret.metadata.resourceVersion)) {
+        throw "Kubernetes secret $SecretName is missing data or resourceVersion."
+    }
+    if ($secret.data.$Key -ceq $EncodedValue) {
+        return
+    }
+    $secret.data | Add-Member -MemberType NoteProperty -Name $Key -Value $EncodedValue -Force
+    $secret | ConvertTo-Json -Depth 100 -Compress | & kubectl replace -f -
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not restore key $Key in Kubernetes secret $SecretName."
+    }
 }
 
 function Write-HelmValueFile {
@@ -80,6 +106,10 @@ $primaryDbUri = (
     $primaryHost +
     $dbUriMatch.Groups["path"].Value
 ).Replace(",", "%2C")
+
+$analyticsSecretName = "transportation-forms-secrets"
+$analyticsKey = "ANALYTICS_DATABASE_URL"
+$analyticsEncodedValue = Get-KubernetesSecretEncodedValue $analyticsSecretName $analyticsKey
 
 Write-Host "==> Resolving JWT PEM keys..."
 $jwtPrivateKeyPem = [System.Environment]::GetEnvironmentVariable("JWT_PRIVATE_KEY_PEM")
@@ -161,13 +191,29 @@ try {
         "--timeout", "10m"
     )
 } finally {
-    foreach ($tempFile in $script:TempFiles) {
-        Remove-Item -Force -ErrorAction SilentlyContinue $tempFile
-    }
+    try {
+        # Helm owns this Secret and may remove keys added outside its chart.
+        Restore-LocalAnalyticsSecret $analyticsSecretName $analyticsKey $analyticsEncodedValue
+    } finally {
+        $analyticsEncodedValue = $null
+        foreach ($tempFile in $script:TempFiles) {
+            Remove-Item -Force -ErrorAction SilentlyContinue $tempFile
+        }
 
-    if ((Test-Path $tempDir -PathType Container) -and -not (Get-ChildItem -Force -Path $tempDir | Select-Object -First 1)) {
-        Remove-Item -Force -ErrorAction SilentlyContinue $tempDir
+        if ((Test-Path $tempDir -PathType Container) -and -not (Get-ChildItem -Force -Path $tempDir | Select-Object -First 1)) {
+            Remove-Item -Force -ErrorAction SilentlyContinue $tempDir
+        }
     }
+}
+
+Write-Host "==> Wiring local analytics Secret into backend deployments..."
+foreach ($component in @("backend", "public-backend")) {
+    Invoke-CheckedCommand "kubectl" @(
+        "set", "env", "deployment/$ReleaseName-$component",
+        "--containers=$component",
+        "--from=secret/$analyticsSecretName",
+        "--keys=$analyticsKey"
+    )
 }
 
 $deployments = @(

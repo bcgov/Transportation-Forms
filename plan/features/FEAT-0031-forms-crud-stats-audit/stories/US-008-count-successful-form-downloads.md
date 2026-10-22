@@ -3,7 +3,7 @@ feature_id: FEAT-0031
 story_id: US-008
 title: Count successful form downloads by serving file API
 owner: Business Analyst
-status: draft
+status: done
 created: 2026-10-16 13:30:00
 updated: 2026-10-22 13:40:00
 depends_on: [US-007]
@@ -23,6 +23,7 @@ As a Product Owner, I want authorized full-file GET handoffs counted under the S
 # Test Coverage
 
 - [TC-US-008 Count successful form downloads](../tests/TC-US-008-count-successful-form-downloads.md)
+- [Staff qualification regression tests](../../../../apps/backend/tests/test_feature_FEAT_0031_us008_download_qualification.py) and [Public qualification regression tests](../../../../apps/public-backend/tests/test_feature_FEAT_0031_us008_download_qualification.py) cover handoff, exclusion, failure, attribution, and audit behavior. Deployed UI handoffs have been exercised; aggregate-count acceptance still requires an unambiguous before/after comparison.
 
 # Acceptance Criteria
 
