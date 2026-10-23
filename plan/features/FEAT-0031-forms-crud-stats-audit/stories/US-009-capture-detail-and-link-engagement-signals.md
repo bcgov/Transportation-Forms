@@ -3,7 +3,7 @@ feature_id: FEAT-0031
 story_id: US-009
 title: Capture detail views and source-link activations through engagement signals
 owner: Business Analyst
-status: draft
+status: Partially Done
 created: 2026-10-16 13:30:00
 updated: 2026-10-22 13:40:00
 depends_on: [US-007, FEAT-0029, FEAT-0030-US-008]
@@ -31,6 +31,8 @@ As a Product Owner, I want form-detail displays and enabled source-link activati
 # Test Coverage
 
 - [TC-US-009 Capture detail and link engagement signals](../tests/TC-US-009-capture-detail-and-link-engagement-signals.md)
+- Application-level regression tests: [Staff endpoint and cache](../../../../apps/backend/tests/test_feature_FEAT_0031_us009_staff_signals.py), [Public endpoint and cache](../../../../apps/public-backend/tests/test_feature_FEAT_0031_us009_public_signals.py), and [Public POST guard](../../../../apps/public-backend/tests/test_feature_FEAT_0031_us009_signal_guard.py).
+- Controlled 2026-10-23 fixtures: [Staff failure, rollback and denied-detail boundaries](../../../../apps/backend/tests/test_feature_FEAT_0031_us009_controlled_staff.py) and [Public failure, external-change and numberless-form boundaries](../../../../apps/public-backend/tests/test_feature_FEAT_0031_us009_controlled_public.py). Local UI and edge behavior was exercised; controlled TEST multi-pod, real RBAC, database fault and statement-activity acceptance remain pending.
 
 # Acceptance Criteria
 

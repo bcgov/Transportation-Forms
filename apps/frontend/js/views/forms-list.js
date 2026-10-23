@@ -28,6 +28,7 @@ import {
 } from '../auth.js';
 import { getCurrentUser } from '../state.js';
 import { openFormDetailsDrawer, downloadFormAttachment } from '../shared/form-details-drawer.js';
+import { sendEngagementSignal } from '../api.js';
 
 // ── Module-private pagination state ──────────────────────────────────────────
 let _currentSkip = 0;
@@ -539,7 +540,7 @@ function _renderFormSourceButton(form) {
             const href = _escapeAttribute(form.form_source_url.trim());
             return `<a class="btn btn-sm btn-outline-primary forms-list__source-btn"
                 href="${href}" target="_blank" rel="noopener noreferrer"
-                data-action="open-form-link"
+                data-action="open-form-link" data-form-id="${id}"
                 aria-label="Open form link for ${_escapeAttribute(formLabel)}">
                 <i class="fas fa-external-link-alt" aria-hidden="true"></i> Online Form</a>`;
         }
@@ -580,6 +581,7 @@ function _initListViewEvents() {
     const formsList = document.getElementById('formsList');
     if (formsList) {
         formsList.addEventListener('click', _handleFormsListClick);
+        formsList.addEventListener('auxclick', _handleFormsListLinkActivation);
     }
 
     // Delegated click handler for search autocomplete suggestions
@@ -665,6 +667,7 @@ function _applyResultsLayout(layout) {
 }
 
 function _handleFormsListClick(e) {
+    _handleFormsListLinkActivation(e);
     const viewBtn = e.target.closest('[data-action="view-form"]');
     const downloadBtn = e.target.closest('[data-action="download-form-file"]');
     const workflowBtn = e.target.closest(
@@ -680,6 +683,14 @@ function _handleFormsListClick(e) {
         downloadFormAttachment(downloadBtn.dataset.formId, downloadBtn.dataset.formFilename);
     } else if (workflowBtn) {
         handleFormWorkflowAction(workflowBtn);
+    }
+}
+
+function _handleFormsListLinkActivation(event) {
+    if (event.defaultPrevented || (event.type === 'auxclick' ? event.button !== 1 : event.button !== 0)) return;
+    const link = event.target.closest('a[data-action="open-form-link"]');
+    if (link && isSafeHttpUrl(link.href) && UUID_PATTERN.test(link.dataset.formId || '')) {
+        sendEngagementSignal(link.dataset.formId, 'link_click');
     }
 }
 

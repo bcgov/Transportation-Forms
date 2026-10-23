@@ -3,9 +3,9 @@ feature_id: FEAT-0031
 story_id: US-010
 title: Retrieve authorized engagement statistics
 owner: Business Analyst
-status: draft
+status: done
 created: 2026-10-16 13:30:00
-updated: 2026-10-22 13:40:00
+updated: 2026-10-23 14:11:00
 depends_on: [US-007]
 ---
 
@@ -17,6 +17,7 @@ As a Staff user with `form:stats`, I want the statistics service to return a for
 
 - Split from former US-005 on 2026-10-16. This story owns the service contract: authorization, period calculation, aggregation, response metadata, and caching. Presentation is owned by [US-011](US-011-display-engagement-statistics-in-form-insights.md).
 - [US-007](US-007-persist-daily-engagement-counts.md) defines retained daily counts; [US-008](US-008-count-successful-form-downloads.md) and [US-009](US-009-capture-detail-and-link-engagement-signals.md) define qualified actions and trusted Staff/Public attribution.
+- Product Owner clarification (2026-10-23): no collection-start date is recorded or configured. All time sums every retained count for the form before today's cutoff and omits collection-start metadata. This supersedes the original collection-start disclosure requirement in this story; US-011's disclosure requirement will need alignment before its implementation.
 - `form:stats` is a new effective permission. It is granted to seeded `admin`, denied to seeded `staff_viewer`, and may be explicitly assigned to custom roles.
 - The permission independently authorizes statistics for every non-deleted form and does not require `form:read` or `form:edit`.
 - PCT is an approved fixed UTC-07:00 timezone with no daylight-saving offset change.
@@ -62,10 +63,10 @@ As a Staff user with `form:stats`, I want the statistics service to return a for
 
 **Given** All time is requested  
 **When** statistics are returned  
-**Then** totals include this environment's daily counts beginning when its collection started through the exclusive cutoff at the start of today in PCT  
+**Then** totals include all retained daily counts for that form through the exclusive cutoff at the start of today in PCT  
 **And** TEST counts are never included in PROD, and no pre-collection history is reconstructed  
-**And** daily counts from collection start remain available for the full lifetime of this All time reporting range  
-**And** the response includes this environment's collection start date for disclosure under US-011.
+**And** retained daily counts remain available for the full lifetime of this All time reporting range  
+**And** no unknown collection-start date is included in the response.
 
 ## AC6 - Each response returns exactly six correct totals
 
@@ -125,11 +126,11 @@ As a Staff user with `form:stats`, I want the statistics service to return a for
 - **BR-003:** The service independently denies retrieval to callers lacking `form:stats`, regardless of UI visibility. (Former US-005 BR-003, service portion.)
 - **BR-004:** Metrics and sources are limited to the three metrics and two sources defined by US-007. (Former US-005 BR-004.)
 - **BR-005:** Finite windows cover the previous 1, 7, 30, 90, 180, or 365 complete fixed UTC-07:00 PCT calendar days; they include the first day's start and exclude today's start. (Former US-005 BR-005.)
-- **BR-006:** All time begins at the current environment's collection start, ends before today's PCT start, requires no backfill, and returns its start date for disclosure; TEST counts never appear in PROD. (Former US-005 BR-006.)
+- **BR-006:** All time sums all retained counts in the current environment before today's PCT start, requires no backfill, and omits unknown collection-start metadata; TEST counts never appear in PROD. (Product Owner clarification 2026-10-23; former US-005 BR-006.)
 - **BR-007:** Each response uses one server-supplied PCT day cutoff for every returned total and boundary. (Former US-005 BR-008, service portion.)
 - **BR-008:** Valid no-activity results return six zeros; unavailable and error conditions remain distinct. (Former US-005 BR-009, service portion.)
 - **BR-009:** Known drops and uncertain write outcomes leave retained totals returned without completeness status or warnings; US-007 requires bounded operational summaries on standard output (former US-005 BR-010, service portion; revised 2026-10-22).
-- **BR-010:** Daily counts from each environment's collection start have no age-based expiration while All time reports from that start. A future retention limit requires a separately approved change to this reporting rule. (Former US-005 BR-011.)
+- **BR-010:** Daily counts have no age-based expiration while All time reports all retained counts. A future retention limit requires a separately approved change to this reporting rule. (Former US-005 BR-011.)
 - **BR-011:** Statistics results may be cached per environment, form, and period, keyed to the PCT day cutoff, and expire at the next PCT midnight (Product Owner approved option 6 on 2026-10-15). Because every period ends before today, today's increments never change a cached result. The cache never stores or skips authorization decisions. It is an in-memory, per-pod cache with a fixed maximum entry count and least-recently-used eviction; engineering sets the starting cap. Cache loss or eviction only causes recalculation, never different totals. (Former US-005 BR-012.)
 
 # RBAC / Permissions
@@ -153,10 +154,10 @@ As a Staff user with `form:stats`, I want the statistics service to return a for
 
 # Data & Validation Rules
 
-- Responses contain six non-negative integer totals, selected period, one PCT day cutoff, and collection start when applicable; no completeness status is returned.
+- Responses contain six non-negative integer totals, selected period, one PCT day cutoff, and data-through date; no unknown collection start or completeness status is returned.
 - Period input accepts only the seven approved values; unsupported values are rejected safely.
 - PCT means fixed UTC-07:00 year-round.
-- Daily aggregate counts are retained from each environment's collection start for the full lifetime of the current All time reporting range.
+- Daily aggregate counts have no age-based expiration for the full lifetime of the current All time reporting range.
 - Aggregate responses contain no event-level visitor identity or unnecessary personal information.
 - Statistics retrieval reads daily counts with read-only database access and never uses the US-007 writer account (US-007 BR-013, Product Owner direction 2026-10-16).
 

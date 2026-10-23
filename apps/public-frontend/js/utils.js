@@ -129,7 +129,11 @@ export function el(tag, attrs = {}, ...children) {
 export function safeHttpUrl(url) {
   if (!url || typeof url !== 'string') return '';
   const trimmed = url.trim();
-  return /^https?:\/\//i.test(trimmed) ? trimmed : '';
+  if (!/^https?:\/\//i.test(trimmed)) return '';
+  try {
+    const parsed = new URL(trimmed);
+    return ['http:', 'https:'].includes(parsed.protocol) && parsed.hostname ? trimmed : '';
+  } catch { return ''; }
 }
 
 /* ─── Inline SVG icons (Bootstrap Icons path data; no icon-font dependency) ── */

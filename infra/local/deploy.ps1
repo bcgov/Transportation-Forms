@@ -13,6 +13,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "engagement-nginx.ps1")
+
+$currentContext = (& kubectl config current-context)
+if ($LASTEXITCODE -ne 0 -or $currentContext.Trim() -ne "rancher-desktop") {
+    throw "Local deployment requires the rancher-desktop kubectl context."
+}
 
 function Invoke-CheckedCommand {
     param([string]$FilePath, [string[]]$Arguments)
@@ -158,6 +164,33 @@ try {
     $s3BucketRaw   = $s3BucketEnv.Trim('/')
     $s3InternalUpstreamFile = Write-HelmValueFile "s3-internal-upstream.txt" "$s3EndpointRaw/$s3BucketRaw"
 
+    $nginxConfigName = "$ReleaseName-public-frontend-nginx"
+    $existingNginxJson = (& kubectl get configmap $nginxConfigName -o json --ignore-not-found --show-managed-fields)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not inspect local Public NGINX ConfigMap ownership."
+    }
+    if (-not [string]::IsNullOrWhiteSpace($existingNginxJson)) {
+        $existingNginx = $existingNginxJson | ConvertFrom-Json
+        $needsOwnershipHandoff = @($existingNginx.metadata.managedFields | Where-Object {
+            $_.manager -eq "kubectl-replace" -and
+            $null -ne $_.fieldsV1.'f:data'.'f:default.conf.template'
+        }).Count -gt 0
+        if ($needsOwnershipHandoff) {
+            if (-not $existingNginx.data.'default.conf.template'.Contains('zone=engagement_signals:1m')) {
+                throw "Unexpected ownership of local Public NGINX ConfigMap."
+            }
+            Write-Host "==> Restoring Helm ownership of local Public engagement edge..."
+            $currentNginxJson = (& kubectl get configmap $nginxConfigName -o json)
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not read local Public NGINX ConfigMap."
+            }
+            $currentNginxJson | & kubectl apply --server-side --field-manager=helm --force-conflicts -f -
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not restore Helm ownership of local Public NGINX ConfigMap."
+            }
+        }
+    }
+
     Write-Host "==> Deploying application with Helm..."
     Invoke-CheckedCommand "helm" @(
         "upgrade", "--install", $ReleaseName, $Chart,
@@ -214,6 +247,56 @@ foreach ($component in @("backend", "public-backend")) {
         "--from=secret/$analyticsSecretName",
         "--keys=$analyticsKey"
     )
+}
+
+$staffOrigin = [System.Environment]::GetEnvironmentVariable("STAFF_ENGAGEMENT_ORIGIN")
+if ([string]::IsNullOrWhiteSpace($staffOrigin)) {
+    $staffOrigin = "http://localhost"
+}
+$staffInterval = [System.Environment]::GetEnvironmentVariable("STAFF_ENGAGEMENT_CACHE_CHECK_MINUTES")
+$publicInterval = [System.Environment]::GetEnvironmentVariable("PUBLIC_ENGAGEMENT_CACHE_CHECK_MINUTES")
+if ([string]::IsNullOrWhiteSpace($staffInterval)) { $staffInterval = "5" }
+if ([string]::IsNullOrWhiteSpace($publicInterval)) { $publicInterval = "5" }
+
+Write-Host "==> Configuring local engagement origins and cache intervals..."
+Invoke-CheckedCommand "kubectl" @(
+    "set", "env", "deployment/$ReleaseName-backend", "--containers=backend",
+    "STAFF_ENGAGEMENT_ORIGIN=$staffOrigin",
+    "STAFF_ENGAGEMENT_CACHE_CHECK_MINUTES=$staffInterval"
+)
+Invoke-CheckedCommand "kubectl" @(
+    "set", "env", "deployment/$ReleaseName-public-backend", "--containers=public-backend",
+    "PUBLIC_ENGAGEMENT_CACHE_CHECK_MINUTES=$publicInterval"
+)
+
+Write-Host "==> Installing local-only Public engagement edge configuration..."
+$traefikJson = (& kubectl get pods -n kube-system -l "app.kubernetes.io/name=traefik" -o json)
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not list local Traefik pods."
+}
+$traefikPods = ($traefikJson | ConvertFrom-Json).items
+$trustedProxyAddresses = @($traefikPods | Where-Object {
+    $_.status.phase -eq "Running" -and -not [string]::IsNullOrWhiteSpace($_.status.podIP)
+} | ForEach-Object { $_.status.podIP })
+
+$nginxConfigJson = (& kubectl get configmap $nginxConfigName -o json)
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not read local Public NGINX ConfigMap."
+}
+$nginxConfig = $nginxConfigJson | ConvertFrom-Json
+if ([string]::IsNullOrWhiteSpace($nginxConfig.data.'default.conf.template')) {
+    throw "Local Public NGINX ConfigMap has no default template."
+}
+$engagementTemplate = Get-LocalEngagementNginxTemplate `
+    $nginxConfig.data.'default.conf.template' $trustedProxyAddresses
+if ($engagementTemplate -cne $nginxConfig.data.'default.conf.template') {
+    $nginxConfig.data.'default.conf.template' = $engagementTemplate
+    $nginxConfig | ConvertTo-Json -Depth 100 -Compress | & kubectl apply --server-side --field-manager=helm --force-conflicts -f -
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not apply local Public engagement edge configuration."
+    }
+} else {
+    Write-Host "Local Public engagement edge configuration is already current."
 }
 
 $deployments = @(

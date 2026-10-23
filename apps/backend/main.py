@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from botocore.exceptions import BotoCoreError, ClientError
 from contextlib import asynccontextmanager
+import asyncio
 import structlog
 import os
 
@@ -30,6 +31,8 @@ from backend.routes.stats import router as stats_router
 from backend.routes.cms_pages import admin_router as cms_pages_admin_router
 from backend.routes.cms_redirects import admin_router as cms_redirects_admin_router
 from backend.routes.form_audit import router as form_audit_router
+from backend.routes.engagement import router as engagement_router
+from backend.services.engagement_cache import run_checks as run_engagement_checks
 
 # Configure logging
 logger = structlog.get_logger()
@@ -73,7 +76,15 @@ async def lifespan(_app: FastAPI):
             "s3_bucket_initialisation_skipped",
             error_type=type(exc).__name__,
         )
-    yield
+    cache_task = asyncio.create_task(run_engagement_checks())
+    try:
+        yield
+    finally:
+        cache_task.cancel()
+        try:
+            await cache_task
+        except asyncio.CancelledError:
+            pass
 
 
 # Create FastAPI app
@@ -150,6 +161,7 @@ app.include_router(prefixes_public_router, prefix="/api/v1")
 app.include_router(prefixes_admin_router, prefix="/api/v1")
 app.include_router(reservations_router, prefix="/api/v1")
 app.include_router(stats_router, prefix="/api/v1")
+app.include_router(engagement_router, prefix="/api/v1")
 app.include_router(cms_pages_admin_router, prefix="/api/v1")
 app.include_router(cms_redirects_admin_router, prefix="/api/v1")
 

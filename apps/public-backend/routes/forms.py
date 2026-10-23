@@ -24,7 +24,7 @@ from enum import Enum
 
 import pytz
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
@@ -147,6 +147,16 @@ def _safe_link_url(
         return None
     candidate = form_source_url.strip()
     if not candidate or not _SAFE_URL_RE.match(candidate):
+        return None
+    try:
+        parsed = urlsplit(candidate)
+        if (
+            not parsed.hostname
+            or parsed.port == 0
+            or any(character.isspace() for character in parsed.netloc)
+        ):
+            return None
+    except ValueError:
         return None
     return candidate
 
