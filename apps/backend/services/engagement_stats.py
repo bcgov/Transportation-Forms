@@ -37,11 +37,18 @@ def pct_today() -> date:
     return datetime.now(PCT).date()
 
 
-def aggregate(db: Session, form_id: UUID, period: str, cutoff: date) -> dict:
-    """Sum retained complete days with the ordinary database session."""
+def aggregate(
+    db: Session,
+    form_id: UUID,
+    period: str,
+    cutoff: date,
+    refresh: bool = False,
+) -> dict:
+    """Read today's live count for 1d; cache completed-day aggregates."""
     with _lock:
         key = (form_id, period, cutoff)
-        if key in _cache:
+        live_day = period == "1d"
+        if not live_day and not refresh and key in _cache:
             _cache.move_to_end(key)
             return _cache[key]
 
@@ -50,18 +57,19 @@ def aggregate(db: Session, form_id: UUID, period: str, cutoff: date) -> dict:
             if old_key[2] != cutoff:
                 del _cache[old_key]
 
+        end_day = cutoff + timedelta(days=1) if live_day else cutoff
         query = db.query(
             DailyEngagementCount.metric,
             DailyEngagementCount.source,
             func.sum(DailyEngagementCount.count),
         ).filter(
             DailyEngagementCount.form_id == form_id,
-            DailyEngagementCount.pct_day < cutoff,
+            DailyEngagementCount.pct_day < end_day,
         )
         days = PERIOD_DAYS[period]
         if days is not None:
             query = query.filter(
-                DailyEngagementCount.pct_day >= cutoff - timedelta(days=days)
+                DailyEngagementCount.pct_day >= end_day - timedelta(days=days)
             )
         rows = query.group_by(
             DailyEngagementCount.metric, DailyEngagementCount.source
@@ -76,13 +84,14 @@ def aggregate(db: Session, form_id: UUID, period: str, cutoff: date) -> dict:
         result = {
             "period": period,
             "pct_day_cutoff": datetime.combine(
-                cutoff, datetime.min.time(), PCT
+                end_day, datetime.min.time(), PCT
             ).isoformat(),
-            "data_through": (cutoff - timedelta(days=1)).isoformat(),
+            "data_through": (end_day - timedelta(days=1)).isoformat(),
             "totals": totals,
         }
-        _cache[key] = result
-        _cache.move_to_end(key)
-        if len(_cache) > CACHE_CAP:
-            _cache.popitem(last=False)
+        if not live_day:
+            _cache[key] = result
+            _cache.move_to_end(key)
+            if len(_cache) > CACHE_CAP:
+                _cache.popitem(last=False)
         return result

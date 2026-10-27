@@ -34,6 +34,7 @@ def get_form_engagement_stats(
     form_id: str,
     response: Response,
     period: str = "30d",
+    refresh: bool = False,
     _user: TokenData = Depends(require_permission("forms", "stats")),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -61,6 +62,10 @@ def get_form_engagement_stats(
             )
         cutoff = engagement_stats.pct_today()
         engagement_stats.mark_transaction_read_only(db)
+        if refresh:
+            return engagement_stats.aggregate(
+                db, form_uuid, period, cutoff, refresh=True
+            )
         return engagement_stats.aggregate(db, form_uuid, period, cutoff)
     except SQLAlchemyError as exc:
         db.rollback()
