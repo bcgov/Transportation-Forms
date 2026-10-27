@@ -77,6 +77,20 @@ jobs:
           diff_branch: 'HEAD^'
           triggers: ${{ steps.triggers.outputs.value }}
 
+      - name: Compute image ref
+        id: image
+        run: |
+          echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}/${{ matrix.package }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Sysdig image scan
+        id: scan
+        uses: sysdiglabs/scan-action@v6
+        with:
+          image-tag: ${{ steps.image.outputs.ref }}
+          sysdig-secure-token: ${{ secrets.SYSDIG_SECURE_TOKEN }}
+          stop-on-failed-policy-eval: false   # report-only at first
+          skip-summary: true
+          
   deploy-dev:
     name: Deploy to DEV
     needs: build
