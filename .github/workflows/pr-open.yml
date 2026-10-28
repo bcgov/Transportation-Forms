@@ -28,7 +28,7 @@ jobs:
           package: backend
           tags: ${{ github.event.number }}
           tag_fallback: latest
-          triggers: ('apps/backend/' 'requirements.txt' 'entrypoint.sh')
+          triggers: ('apps/backend/' 'apps/shared/' 'requirements.txt' 'entrypoint.sh')
           build_file: apps/backend/Dockerfile
           build_context: .
         env:
@@ -97,7 +97,7 @@ jobs:
           package: public-backend
           tags: ${{ github.event.number }}
           tag_fallback: latest
-          triggers: ('apps/public-backend/' 'infra/charts/public-backend/')
+          triggers: ('apps/public-backend/' 'apps/shared/' 'infra/charts/public-backend/')
           build_file: apps/public-backend/Dockerfile
           build_context: .
         env:

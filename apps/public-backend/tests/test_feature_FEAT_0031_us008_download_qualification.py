@@ -1,6 +1,6 @@
 """US-008: Public file-API handoffs, not edge delivery, qualify downloads."""
 
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -39,6 +39,16 @@ def download(db, public_client, monkeypatch):
     audit = MagicMock()
     monkeypatch.setattr(forms_route, "record_daily_engagement", record)
     monkeypatch.setattr(forms_route, "log_form_download", audit)
+    futures = []
+    original_submit = forms_route.dispatcher.submit
+
+    def submit(*args):
+        future = original_submit(*args)
+        if future is not None:
+            futures.append(future)
+        return future
+
+    monkeypatch.setattr(forms_route.dispatcher, "submit", submit)
     return {
         "form_id": form_id,
         "form_number": form_number,
@@ -47,6 +57,8 @@ def download(db, public_client, monkeypatch):
         "db": db,
         "record": record,
         "audit": audit,
+        "futures": futures,
+        "wait_writes": lambda: [future.result(timeout=3) for future in futures],
     }
 
 
@@ -55,13 +67,16 @@ def test_full_get_handoff_counts_once_from_serving_api_and_preserves_audit(downl
         download["path"],
         headers={"X-Portal-Source": "Staff", "User-Agent": "AutomatedTestBot"},
     )
+    download["wait_writes"]()
 
     assert response.status_code == 200
     assert response.content == b""
     assert response.headers["x-accel-redirect"] == "/internal-s3/uploads/us008.pdf"
-    download["record"].assert_called_once_with(
+    download["record"].assert_called_once()
+    assert download["record"].call_args.args[:3] == (
         download["form_id"], "download", "Public"
     )
+    assert isinstance(download["record"].call_args.args[3], date)
     download["audit"].assert_called_once()
     args, kwargs = download["audit"].call_args
     assert args[0].headers["user-agent"] == "AutomatedTestBot"
@@ -89,6 +104,7 @@ def test_head_and_range_are_excluded_even_when_range_is_ignored(
     else:
         assert response.status_code == 200
     download["record"].assert_not_called()
+    assert not download["futures"]
     if response.status_code == 200:
         assert response.headers["x-accel-redirect"].startswith("/internal-s3/")
         download["audit"].assert_called_once()
@@ -99,11 +115,13 @@ def test_head_and_range_are_excluded_even_when_range_is_ignored(
 def test_repeated_full_get_retries_count_per_handoff_without_session_dedup(download):
     for _ in range(4):
         assert download["client"].get(download["path"]).status_code == 200
+    download["wait_writes"]()
 
     assert download["record"].call_count == 4
     assert download["audit"].call_count == 4
     assert all(
-        call.args == (download["form_id"], "download", "Public")
+        call.args[:3] == (download["form_id"], "download", "Public")
+        and isinstance(call.args[3], date)
         for call in download["record"].call_args_list
     )
 
@@ -150,6 +168,7 @@ def test_pre_handoff_failure_does_not_count(download, monkeypatch, failure):
     )
     assert "x-accel-redirect" not in response.headers
     download["record"].assert_not_called()
+    assert not download["futures"]
     if failure in ("audit", "response"):
         download["audit"].assert_called_once()
     else:
@@ -158,14 +177,17 @@ def test_pre_handoff_failure_does_not_count(download, monkeypatch, failure):
 
 def test_api_handoff_count_is_not_reversed_or_repeated_by_later_edge_fetch(download):
     response = download["client"].get(download["path"])
+    download["wait_writes"]()
     assert response.status_code == 200
     assert response.headers["x-accel-redirect"]
     # The API returns a redirect header; TestClient does not fetch the edge
     # object, and observing the response must not trigger a second increment.
     assert response.content == b""
-    download["record"].assert_called_once_with(
+    download["record"].assert_called_once()
+    assert download["record"].call_args.args[:3] == (
         download["form_id"], "download", "Public"
     )
+    assert isinstance(download["record"].call_args.args[3], date)
 
 
 def test_known_writer_drop_leaves_response_and_audit_intact(download, monkeypatch):
@@ -181,6 +203,7 @@ def test_known_writer_drop_leaves_response_and_audit_intact(download, monkeypatc
     monkeypatch.setattr(daily_engagement.summary, "record", summary)
 
     response = download["client"].get(download["path"])
+    download["wait_writes"]()
 
     assert response.status_code == 200
     assert response.headers["x-accel-redirect"].startswith("/internal-s3/")

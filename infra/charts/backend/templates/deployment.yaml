@@ -109,6 +109,14 @@ spec:
               value: {{ .Values.env.sqlalchemyEcho | quote }}
             - name: LOG_LEVEL
               value: {{ .Values.env.logLevel | quote }}
+            {{- if or .Values.deployment.vault.enabled .Values.env.staffEngagementOrigin }}
+            - name: STAFF_ENGAGEMENT_ORIGIN
+              {{ if .Values.deployment.vault.enabled }}
+              value: {{ required "backend.env.staffEngagementOrigin is required when Vault is enabled" .Values.env.staffEngagementOrigin | quote }}
+              {{ else }}
+              value: {{ .Values.env.staffEngagementOrigin | quote }}
+              {{ end }}
+            {{- end }}
             {{- if not .Values.deployment.vault.enabled }}
             - name: CORS_ORIGINS
               value: {{ .Values.env.corsOrigins | quote }}

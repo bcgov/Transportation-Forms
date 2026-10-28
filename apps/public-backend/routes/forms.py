@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 from audit import log_form_download
 from config import settings
 from database import get_db
-from daily_engagement import record_daily_engagement
+from daily_engagement import dispatcher, record_daily_engagement
 from http_cache import compute_etag, etag_matches
 from models import PublicForm
 from problem import problem_response
@@ -426,7 +426,9 @@ def download_public_form(
     }
     response = Response(status_code=200, headers=headers, content=b"")
     if request.method == "GET" and "range" not in request.headers:
-        record_daily_engagement(row.form_id, "download", "Public")
+        dispatcher.submit(
+            record_daily_engagement, row.form_id, "download", "Public"
+        )
     return response
 
 

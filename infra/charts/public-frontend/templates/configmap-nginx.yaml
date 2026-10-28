@@ -19,6 +19,19 @@ data:
         keepalive 32;
     }
 
+    {{ if .Values.engagementSignals.edgeEnabled }}
+    # Trusted proxy configuration restores the client IP before these limits.
+    limit_req_zone $binary_remote_addr zone=engagement_signals:1m rate=100r/m;
+    limit_conn_zone $binary_remote_addr zone=engagement_connections:1m;
+
+    # Route all methods on the exact signal path through the isolated limiter.
+    map "$request_method:$uri" $engagement_method_allowed {
+        default 0;
+        ~^(GET|HEAD|OPTIONS): 1;
+        ~^.+:/api/public/v1/engagement/signal$ 1;
+    }
+    {{ end }}
+
     # The shared X-Internal-Auth token is injected on every proxied request.
     # Held in a map so the secret value is not re-evaluated per request.
     map $request_method $internal_auth_value {
@@ -32,10 +45,16 @@ data:
 
         include /etc/nginx/conf.d/access/*.conf;
 
-        # Method allow-list (defence-in-depth — read-only public API).
+        # All methods on the exact signal path reach its separate rate limit.
+        {{ if .Values.engagementSignals.edgeEnabled }}
+        if ($engagement_method_allowed = 0) {
+            return 405;
+        }
+        {{ else }}
         if ($request_method !~ ^(GET|HEAD|OPTIONS)$) {
             return 405;
         }
+        {{ end }}
 
         # SPA static root — assets baked into the image.
         root /usr/share/nginx/html;
@@ -190,6 +209,81 @@ data:
             proxy_http_version 1.1;
             proxy_pass http://upstream_public_backend;
         }
+
+        {{ if .Values.engagementSignals.edgeEnabled }}
+        location = /api/public/v1/engagement/signal {
+            recursive_error_pages on;
+            client_max_body_size 1k;
+            error_page 413 = @engagement_oversized;
+            error_page 429 = @engagement_rate_rejected;
+            limit_req zone=engagement_signals burst=20 nodelay;
+            limit_conn engagement_connections 20;
+            limit_req_status 429;
+            limit_conn_status 429;
+            limit_req_log_level info;
+            limit_conn_log_level info;
+            access_log off;
+            error_log /dev/null crit;
+            proxy_request_buffering off;
+
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Request-ID $request_id;
+            proxy_set_header X-Internal-Auth $internal_auth_value;
+
+            proxy_hide_header Set-Cookie;
+            proxy_hide_header X-Powered-By;
+            proxy_hide_header Server;
+
+            proxy_http_version 1.1;
+            proxy_pass http://upstream_public_backend;
+        }
+
+        location @engagement_oversized {
+            recursive_error_pages on;
+            client_max_body_size 0;
+            error_page 429 = @engagement_rate_rejected;
+            limit_req zone=engagement_signals burst=20 nodelay;
+            limit_conn engagement_connections 20;
+            limit_req_status 429;
+            limit_conn_status 429;
+            limit_req_log_level info;
+            limit_conn_log_level info;
+            access_log off;
+            error_log /dev/null crit;
+            try_files /__engagement_oversized__ @engagement_body_rejected;
+        }
+
+        location @engagement_body_rejected {
+            access_log off;
+            error_log /dev/null crit;
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+            add_header X-Frame-Options "DENY" always;
+            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+            add_header Permissions-Policy "geolocation=(), camera=(), microphone=(), payment=()" always;
+            add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+            return 413 '{"accepted":false}';
+        }
+
+        location @engagement_rate_rejected {
+            access_log off;
+            error_log /dev/null crit;
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+            add_header X-Frame-Options "DENY" always;
+            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+            add_header Permissions-Policy "geolocation=(), camera=(), microphone=(), payment=()" always;
+            add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+            return 429 '{"accepted":false}';
+        }
+        {{ end }}
 
         # ── Public read-only API — proxied to FastAPI ────────────────────────────
         location /api/public/v1/ {

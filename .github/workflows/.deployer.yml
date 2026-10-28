@@ -370,6 +370,7 @@ jobs:
               --set-string global.registry=ghcr.io \
               --set-string global.repository=bcgov/transportation-forms \
               --set-string backend.env.corsOrigins="${FRONTEND_BASE_URL}" \
+              --set-string backend.env.staffEngagementOrigin="${FRONTEND_BASE_URL}" \
               --set-string public-backend.env.publicCorsOrigins="${PUBLIC_FORMS_BASE_URL}" \
               --set-string global.crunchyCluster="${CLUSTER}" \
               --set-string backend.deployment.vault.enabled=true \
