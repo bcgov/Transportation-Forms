@@ -55,7 +55,7 @@ function displayDates(result, receivedAt) {
     if (days === undefined) throw new Error('Invalid statistics period');
     if (result.period === '1d') {
         return {
-            caption: `Today so far (${receivedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()} ${dateLabel(through)})`,//`Today so far (${dateLabel(through)} PCT; as of ${formatDateTime(receivedAt.toISOString())} local time)`,
+            caption: `Today so far (${dateLabel(through)} PCT; as of ${formatDateTime(receivedAt.toISOString())} local time)`,
         };
     }
     if (days === null) {

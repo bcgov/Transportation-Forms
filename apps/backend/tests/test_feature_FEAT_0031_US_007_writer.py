@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pytest
 from backend.services import daily_engagement as staff_writer
+from shared import engagement_writer as shared_writer
 from sqlalchemy.exc import DBAPIError, TimeoutError
 
 
@@ -68,7 +69,7 @@ def test_single_atomic_statement_and_received_day(
         def now(cls, tz=None):
             return instant
 
-    monkeypatch.setattr(writer_module, "datetime", ReceiptTime)
+    monkeypatch.setattr(shared_writer, "datetime", ReceiptTime)
     form_id = uuid4()
     target.increment(form_id, "detail_view", "Public")
 

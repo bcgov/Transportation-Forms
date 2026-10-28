@@ -1,6 +1,7 @@
 """US-008: Staff attachment handoff qualifies one daily download increment."""
 
 import asyncio
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -43,6 +44,16 @@ def download(monkeypatch):
     monkeypatch.setattr(forms_route.s3_service, "stream_object", stream)
     record = MagicMock()
     monkeypatch.setattr(forms_route, "record_daily_engagement", record)
+    futures = []
+    original_submit = forms_route.dispatcher.submit
+
+    def submit(*args):
+        future = original_submit(*args)
+        if future is not None:
+            futures.append(future)
+        return future
+
+    monkeypatch.setattr(forms_route.dispatcher, "submit", submit)
 
     def request(method="GET", headers=None):
         raw_headers = [
@@ -70,6 +81,7 @@ def download(monkeypatch):
         form=form,
         db=db,
         record=record,
+        wait_writes=lambda: [future.result(timeout=3) for future in futures],
         stream=stream,
         handoff=handoff,
         user=user,
@@ -81,6 +93,7 @@ def test_full_get_handoff_counts_once_and_preserves_audit(download):
     response = download.handoff(
         headers={"X-Portal-Source": "Public", "User-Agent": "AutomatedTestBot"}
     )
+    download.wait_writes()
 
     assert response.status_code == 200
     assert response.headers["content-disposition"].startswith("attachment;")
@@ -91,9 +104,10 @@ def test_full_get_handoff_counts_once_and_preserves_audit(download):
     assert audit.entity_id == str(download.form.id)
     assert audit.new_values["filename"] == "us008.pdf"
     assert audit.user_agent == "AutomatedTestBot"
-    download.record.assert_called_once_with(download.form.id, "download", "Staff")
+    assert download.record.call_args.args[:3] == (download.form.id, "download", "Staff")
+    assert isinstance(download.record.call_args.args[3], date)
     assert asyncio.run(_body(response)) == [b"first", b"second"]
-    download.record.assert_called_once_with(download.form.id, "download", "Staff")
+    assert download.record.call_args.args[:3] == (download.form.id, "download", "Staff")
 
 
 @pytest.mark.parametrize(
@@ -117,11 +131,13 @@ def test_same_caller_full_file_retries_are_each_counted(download):
     for _ in range(3):
         response = download.handoff()
         assert response.status_code == 200
+    download.wait_writes()
 
     assert download.record.call_count == 3
     assert download.db.commit.call_count == 3
     assert all(
-        call.args == (download.form.id, "download", "Staff")
+        call.args[:3] == (download.form.id, "download", "Staff")
+        and isinstance(call.args[3], date)
         for call in download.record.call_args_list
     )
 
@@ -185,7 +201,8 @@ def test_later_stream_failure_does_not_reverse_or_repeat_handoff(download):
         return chunks
 
     assert asyncio.run(consume()) == [b"first"]
-    download.record.assert_called_once_with(download.form.id, "download", "Staff")
+    download.wait_writes()
+    assert download.record.call_args.args[:3] == (download.form.id, "download", "Staff")
     download.db.commit.assert_called_once_with()
 
 
@@ -202,6 +219,7 @@ def test_known_writer_drop_does_not_block_file_or_audit(download, monkeypatch):
     monkeypatch.setattr(daily_engagement.summary, "record", summary)
 
     response = download.handoff()
+    download.wait_writes()
 
     assert response.status_code == 200
     assert asyncio.run(_body(response)) == [b"first", b"second"]

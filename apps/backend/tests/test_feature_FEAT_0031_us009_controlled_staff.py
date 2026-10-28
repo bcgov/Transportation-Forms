@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 from uuid import uuid4
@@ -204,4 +204,5 @@ def test_denied_staff_detail_does_not_block_independent_cached_signal(monkeypatc
         )
 
     assert response.status_code == 202
-    writer.assert_called_once_with(form_id, "detail_view", "Staff")
+    assert writer.call_args.args[:3] == (form_id, "detail_view", "Staff")
+    assert isinstance(writer.call_args.args[3], date)

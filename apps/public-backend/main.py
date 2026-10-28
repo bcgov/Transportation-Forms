@@ -56,10 +56,11 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         cache_task.cancel()
-        try:
-            await cache_task
-        except asyncio.CancelledError:
-            pass
+        outcome = (await asyncio.gather(cache_task, return_exceptions=True))[0]
+        if isinstance(outcome, BaseException) and not isinstance(
+            outcome, asyncio.CancelledError
+        ):
+            raise outcome
     logger.info("public_backend_stopped")
 
 

@@ -36,6 +36,7 @@ def refresh_setup(db, user_factory, role_factory, monkeypatch):
         engagement_stats, "mark_transaction_read_only", lambda _db: None
     )
     engagement_stats._cache.clear()
+    monkeypatch.setattr(engagement_stats, "_cache_day", None)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: TokenData(
         sub=str(user.id),

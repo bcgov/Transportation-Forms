@@ -36,7 +36,11 @@ export async function showDetailView(formNumber) {
     article.setAttribute('aria-busy', 'false');
     sendEngagementSignal(formNumber, 'detail_view');
     // We still hydrate any missing fields (e.g., full keywords) in the background.
-    _fetchFresh(formNumber, article, generation, true);
+    _fetchFresh(formNumber, article, generation, true).catch(() => {
+      if (generation !== _detailGeneration || document.getElementById('detailView')?.hidden) return;
+      article.setAttribute('aria-busy', 'false');
+      showAlert('Unable to update form details.', 'danger', { dismissMs: ALERT_DISMISS_MS.ERROR });
+    });
     return;
   }
 

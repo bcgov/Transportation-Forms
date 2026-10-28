@@ -2,6 +2,7 @@
 
 import json
 from threading import Event
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 from uuid import uuid4
@@ -72,11 +73,12 @@ def test_accepted_signals_write_once_per_request_from_staff(signal_client):
         assert response.headers["x-content-type-options"] == "nosniff"
 
     assert writer.call_count == 3
-    assert [call.args for call in writer.call_args_list] == [
+    assert [call.args[:3] for call in writer.call_args_list] == [
         (form_id, "detail_view", "Staff"),
         (form_id, "link_click", "Staff"),
         (form_id, "detail_view", "Staff"),
     ]
+    assert all(isinstance(call.args[3], date) for call in writer.call_args_list)
 
 
 def test_staff_cache_rejects_whitespace_host_link(signal_client):
@@ -195,7 +197,8 @@ def test_staff_referrer_fallback_and_cache_rejects_unknown_or_disabled_link(
         ).status_code
         == 404
     )
-    writer.assert_called_once_with(form_id, "detail_view", "Staff")
+    assert writer.call_args.args[:3] == (form_id, "detail_view", "Staff")
+    assert isinstance(writer.call_args.args[3], date)
 
 
 def test_staff_cache_fail_closed_then_keeps_last_good_and_warns_once(monkeypatch):

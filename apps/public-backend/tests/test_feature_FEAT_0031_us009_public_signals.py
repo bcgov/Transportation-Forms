@@ -1,6 +1,7 @@
 """US-009 Public signal validation and per-pod cache contracts."""
 
 import json
+from datetime import date
 from threading import Event
 from unittest.mock import MagicMock, Mock
 from uuid import uuid4
@@ -61,11 +62,12 @@ def test_public_signals_resolve_number_and_write_once_per_request(signal_client)
         assert response.headers["cache-control"] == "no-store"
         assert response.headers["x-content-type-options"] == "nosniff"
 
-    assert [call.args for call in writer.call_args_list] == [
+    assert [call.args[:3] for call in writer.call_args_list] == [
         (form_id, "detail_view", "Public"),
         (form_id, "link_click", "Public"),
         (form_id, "detail_view", "Public"),
     ]
+    assert all(isinstance(call.args[3], date) for call in writer.call_args_list)
     assert str(form_id) not in str(response.json())
 
 
@@ -80,7 +82,8 @@ def test_escaped_unicode_public_form_number_fits_signal_limit(signal_client):
     response = _post(client, body)
 
     assert response.status_code == 202
-    writer.assert_called_once_with(form_id, "detail_view", "Public")
+    assert writer.call_args.args[:3] == (form_id, "detail_view", "Public")
+    assert isinstance(writer.call_args.args[3], date)
 
 
 @pytest.mark.parametrize(
@@ -158,7 +161,8 @@ def test_public_referrer_fallback_and_cache_rejects_unknown_or_disabled_link(
         ).status_code
         == 404
     )
-    writer.assert_called_once_with(form_id, "detail_view", "Public")
+    assert writer.call_args.args[:3] == (form_id, "detail_view", "Public")
+    assert isinstance(writer.call_args.args[3], date)
 
 
 def test_public_cache_fails_closed_then_keeps_last_good_and_warns_once(monkeypatch):

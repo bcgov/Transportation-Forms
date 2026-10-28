@@ -26,6 +26,8 @@ CACHE_CAP = 1024
 
 _cache: OrderedDict[tuple[UUID, str, date], dict] = OrderedDict()
 _lock = Lock()
+_pending: dict[tuple[UUID, str, date], object] = {}
+_cache_day: date | None = None
 
 
 def mark_transaction_read_only(db: Session) -> None:
@@ -45,18 +47,29 @@ def aggregate(
     refresh: bool = False,
 ) -> dict:
     """Read today's live count for 1d; cache completed-day aggregates."""
+    global _cache_day
+    key = (form_id, period, cutoff)
+    live_day = period == "1d"
+    token = None
     with _lock:
-        key = (form_id, period, cutoff)
-        live_day = period == "1d"
-        if not live_day and not refresh and key in _cache:
+        if _cache_day is None or cutoff > _cache_day:
+            if _cache_day != cutoff:
+                _cache.clear()
+            _cache_day = cutoff
+        if (
+            not live_day
+            and not refresh
+            and cutoff == _cache_day
+            and key in _cache
+        ):
             _cache.move_to_end(key)
             return _cache[key]
+        if not live_day and cutoff == _cache_day:
+            token = object()
+            _pending[key] = token
 
-        # Old entries must never be returned on or after the next PCT midnight.
-        for old_key in list(_cache):
-            if old_key[2] != cutoff:
-                del _cache[old_key]
-
+    result: dict | None = None
+    try:
         end_day = cutoff + timedelta(days=1) if live_day else cutoff
         query = db.query(
             DailyEngagementCount.metric,
@@ -89,9 +102,15 @@ def aggregate(
             "data_through": (end_day - timedelta(days=1)).isoformat(),
             "totals": totals,
         }
-        if not live_day:
-            _cache[key] = result
-            _cache.move_to_end(key)
-            if len(_cache) > CACHE_CAP:
-                _cache.popitem(last=False)
-        return result
+    finally:
+        if token is not None:
+            with _lock:
+                if _pending.get(key) is token:
+                    del _pending[key]
+                    if result is not None and _cache_day == cutoff:
+                        _cache[key] = result
+                        _cache.move_to_end(key)
+                        if len(_cache) > CACHE_CAP:
+                            _cache.popitem(last=False)
+    assert result is not None
+    return result
