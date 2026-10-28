@@ -98,6 +98,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "backend.crunchySecretName" . }}
                   key: uri
+            {{- if .Values.deployment.vault.enabled }}
+            - name: ANALYTICS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-pguser-analytics-count-login" (required "global.crunchyCluster is required for analytics" .Values.global.crunchyCluster) | quote }}
+                  key: uri
+            {{- end }}
             - name: SQLALCHEMY_ECHO
               value: {{ .Values.env.sqlalchemyEcho | quote }}
             - name: LOG_LEVEL

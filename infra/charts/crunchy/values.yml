@@ -39,6 +39,10 @@ crunchy:
     - name: publicreadonly
       databases:
         - transportation_forms
+    - name: analytics-count-login
+      databases:
+        - transportation_forms
+      options: "INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
     - name: pgbouncer
 
   # ── Monitoring — disabled for DEV ─────────────────────────────────────────────
