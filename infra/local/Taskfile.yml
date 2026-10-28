@@ -9,9 +9,25 @@
 #   - Helm 3.x installed and kubectl context set to rancher-desktop
 #   - PowerShell 7+ installed (pwsh on macOS/Linux)
 #   - Root .env file populated with valid credentials
+#   - The Kubernetes Secret transportation-forms-secrets has the
+#     ANALYTICS_DATABASE_URL key for the dedicated non-superuser writer.
+#     Local deploy preserves this Helm-managed Secret key and wires only
+#     backend and public-backend pods to it; OpenShift charts are unchanged.
 #   - git available in PATH (for cloning the action-crunchy chart on first run)
 #   - On Windows: C:\Program Files\Git\bin must be in PATH (provides sh.exe for Task)
 #   - hosts file entry "127.0.0.1 forms-public.localhost" to reach the public portal
+#   - US-009: Staff signals default to http://localhost. Set
+#     STAFF_ENGAGEMENT_ORIGIN in .env if using another Staff browser origin.
+#     STAFF_ENGAGEMENT_CACHE_CHECK_MINUTES and
+#     PUBLIC_ENGAGEMENT_CACHE_CHECK_MINUTES default to 5 independently.
+#     deploy.ps1 applies a local-only Public NGINX overlay using the running
+#     kube-system Traefik pod IPs as trusted proxies. The signal path has its
+#     own 100 requests/minute per client IP per edge pod, burst 20, with no
+#     signal-path access or rejection logs containing visitor identity.
+#     Signal bodies are capped at 1024 bytes at this edge and both backends.
+#     Oversized attempts pass through a rate-limited 413 handler so they
+#     consume the signal budget; 20 concurrent signal connections are allowed.
+#     OpenShift charts and workflows are unchanged.
 #   - The local cluster serves over plain HTTP. The backend chart sets
 #     AUTH_COOKIE_SECURE=false in values-local.yaml so the refresh-token
 #     cookie works locally; do NOT carry that override to staging/prod.

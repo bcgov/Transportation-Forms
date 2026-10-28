@@ -11,17 +11,19 @@
  * the Share control.
  */
 
-import { fetchJson, ApiError, downloadFormFile } from '../api.js';
+import { fetchJson, ApiError, downloadFormFile, sendEngagementSignal } from '../api.js';
 import { escapeHtml, formatDate, formatDateTime, formatFileType, truncate,
          icon, fileTypeIcon, safeHttpUrl } from '../utils.js';
 import { SITE_NAME, ALERT_DISMISS_MS } from '../constants.js';
 import { showApiAlert, showAlert } from '../ui-states.js';
 
 let _delegated = false;
+let _detailGeneration = 0;
 
 export async function showDetailView(formNumber) {
   const article = document.getElementById('detailContent');
   if (!article) return;
+  const generation = ++_detailGeneration;
   _wireOnce(article);
   article.setAttribute('aria-busy', 'true');
   article.innerHTML = _skeleton();
@@ -32,12 +34,17 @@ export async function showDetailView(formNumber) {
   if (cached && cached.form_number === formNumber) {
     _render(article, cached);
     article.setAttribute('aria-busy', 'false');
+    sendEngagementSignal(formNumber, 'detail_view');
     // We still hydrate any missing fields (e.g., full keywords) in the background.
-    _fetchFresh(formNumber, article);
+    _fetchFresh(formNumber, article, generation, true).catch(() => {
+      if (generation !== _detailGeneration || document.getElementById('detailView')?.hidden) return;
+      article.setAttribute('aria-busy', 'false');
+      showAlert('Unable to update form details.', 'danger', { dismissMs: ALERT_DISMISS_MS.ERROR });
+    });
     return;
   }
 
-  await _fetchFresh(formNumber, article);
+  await _fetchFresh(formNumber, article, generation, false);
 }
 
 // Delegated once on the static container so a re-render (cache-first then
@@ -46,6 +53,7 @@ function _wireOnce(article) {
   if (_delegated) return;
   _delegated = true;
   article.addEventListener('click', e => {
+    _handleLinkActivation(e);
     const trigger = e.target.closest('[data-action]');
     if (!trigger) return;
     const num = trigger.dataset.formNumber || '';
@@ -53,6 +61,15 @@ function _wireOnce(article) {
     if (trigger.dataset.action === 'download') downloadFormFile(num);
     else if (trigger.dataset.action === 'share') _handleShare(num);
   });
+  article.addEventListener('auxclick', _handleLinkActivation);
+}
+
+function _handleLinkActivation(event) {
+  if (event.defaultPrevented || (event.type === 'auxclick' ? event.button !== 1 : event.button !== 0)) return;
+  const link = event.target.closest('a[data-action="open-form-link"]');
+  if (link && safeHttpUrl(link.href) && link.dataset.formNumber) {
+    sendEngagementSignal(link.dataset.formNumber, 'link_click');
+  }
 }
 
 /* ─── Share (US-006 AC27/AC28) ─────────────────────────────────────────────
@@ -89,20 +106,25 @@ function _readState() {
   return s;
 }
 
-async function _fetchFresh(formNumber, article) {
+async function _fetchFresh(formNumber, article, generation, alreadyDisplayed) {
   try {
     const { data } = await fetchJson(`/forms/${encodeURIComponent(formNumber)}`);
+    if (generation !== _detailGeneration || document.getElementById('detailView')?.hidden) return;
     _render(article, data);
     article.setAttribute('aria-busy', 'false');
+    if (!alreadyDisplayed && data?.form_number === formNumber) {
+      sendEngagementSignal(formNumber, 'detail_view');
+    }
     // Cache for future back-nav
     window.history.replaceState(data, '', window.location.pathname + window.location.search);
   } catch (err) {
+    if (generation !== _detailGeneration || document.getElementById('detailView')?.hidden) return;
     article.setAttribute('aria-busy', 'false');
     if (err instanceof ApiError && err.status === 404) {
       _render404(article, formNumber);
       return;
     }
-    showApiAlert(err, () => _fetchFresh(formNumber, article));
+    showApiAlert(err, () => _fetchFresh(formNumber, article, generation, alreadyDisplayed));
   }
 }
 
@@ -177,7 +199,8 @@ function _render(article, f) {
   let action = '';
   if (linkUrl) {
     action = `<a class="btn-download btn-download--block" href="${escapeHtml(linkUrl)}" target="_blank"
-                 rel="noopener noreferrer" data-no-router="1"
+                 rel="noopener noreferrer" data-no-router="1" data-action="open-form-link"
+                 data-form-number="${escapeHtml(num)}"
                  aria-label="Open link for ${escapeHtml(num)} (opens in new tab)">${icon('externalLink')} Form Link</a>`;
   } else if (hasFileEvidence && num) {
     action = `<button type="button" class="btn-download btn-download--block" data-action="download"

@@ -25,6 +25,7 @@ from backend.models import (
     User,
 )
 from backend.services import s3_service
+from backend.services.engagement_cache import cache as engagement_cache
 
 logger = logging.getLogger(__name__)
 
@@ -341,6 +342,7 @@ class FormService:
             db.rollback()
             raise
         db.refresh(form)
+        engagement_cache.committed(form, db)
 
         return form
 
@@ -702,6 +704,7 @@ class FormService:
             db.rollback()
             raise
         db.refresh(form)
+        engagement_cache.committed(form, db)
         # External cleanup cannot be part of the database transaction. Do not
         # delete the old object until both the form and required audit are durable.
         if "form_attachment_url" in changed_fields and old_values["form_attachment_url"]:
@@ -738,6 +741,8 @@ class FormService:
 
         form.deleted_at = _utc_naive_now()
         db.commit()
+        db.refresh(form)
+        engagement_cache.committed(form, db)
 
         # Audit log
         FormService._audit_log(
@@ -871,6 +876,7 @@ class FormService:
             db.rollback()
             raise
         db.refresh(form)
+        engagement_cache.committed(form, db)
         return form
 
     @staticmethod
@@ -1064,6 +1070,7 @@ class FormService:
             db.rollback()
             raise
         db.refresh(form)
+        engagement_cache.committed(form, db)
         return form
 
     @staticmethod

@@ -1,6 +1,7 @@
 // Shared responsive form-details drawer for Forms, deep links, and Approvals.
 
 import { API_BASE } from '../constants.js';
+import { sendEngagementSignal } from '../api.js';
 import {
     escapeHtml,
     formatDateTime,
@@ -41,6 +42,7 @@ const FOCUSABLE_SELECTOR = [
 
 let _openerElement = null;
 let _currentFormId = null;
+let _displayedFormId = null;
 let _currentMode = 'default';
 let _currentApprovalContext = null;
 let _openedFromDeepLink = false;
@@ -99,6 +101,8 @@ export async function openFormDetailsDrawer(options) {
         onNotFound = null,
     } = options || {};
 
+    const isNewView = _elements().drawer?.hidden !== false || _displayedFormId !== formId;
+
     _formRequestController?.abort();
     const requestController = new AbortController();
     _formRequestController = requestController;
@@ -137,6 +141,8 @@ export async function openFormDetailsDrawer(options) {
     if (_openedFromDeepLink) _showDrawer();
     _setLoadingState(false);
     document.getElementById('closeFormDetailsDrawer')?.focus();
+    if (isNewView) sendEngagementSignal(form.id, 'detail_view');
+    _displayedFormId = form.id;
 }
 
 export function closeFormDetailsDrawer() {
@@ -235,6 +241,8 @@ function _renderSourceActions(container, form) {
         link.href = form.form_source_url.trim();
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
+        link.dataset.action = 'open-form-link';
+        link.dataset.formId = form.id;
         link.innerHTML = '<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> Online Form';
         container.appendChild(link);
     }
@@ -353,6 +361,7 @@ function _closeDrawer({ updateUrl = true, restoreFocus = true } = {}) {
 
     _openerElement = null;
     _currentFormId = null;
+    _displayedFormId = null;
     _currentMode = 'default';
     _currentApprovalContext = null;
     _openedFromDeepLink = false;
@@ -430,11 +439,13 @@ function _ensureListeners() {
     _listenersAttached = true;
 
     drawer.addEventListener('click', _handleDrawerClick);
+    drawer.addEventListener('auxclick', _handleDrawerLinkActivation);
     scrim.addEventListener('click', () => _closeDrawer());
     document.addEventListener('keydown', _handleDrawerKeydown);
 }
 
 async function _handleDrawerClick(event) {
+    _handleDrawerLinkActivation(event);
     const closeButton = event.target.closest('[data-action="close-form-details"]');
     if (closeButton) {
         _closeDrawer();
@@ -474,6 +485,14 @@ async function _handleDrawerClick(event) {
         const succeeded = await handleFormWorkflowAction(workflowButton);
         if (succeeded && workflowButton.dataset.action !== 'navigate') _closeDrawer();
         else if (succeeded === false) _closeDrawer({ restoreFocus: false });
+    }
+}
+
+function _handleDrawerLinkActivation(event) {
+    if (event.defaultPrevented || (event.type === 'auxclick' ? event.button !== 1 : event.button !== 0)) return;
+    const link = event.target.closest('a[data-action="open-form-link"]');
+    if (link && link.dataset.formId === _currentFormId && isSafeHttpUrl(link.href)) {
+        sendEngagementSignal(_currentFormId, 'link_click');
     }
 }
 

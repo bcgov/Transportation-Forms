@@ -45,6 +45,16 @@ them through workload-specific Vault Agent annotations in the Helm deployments.
 `DATABASE_URL` is not stored in Vault: the backend and migrations reference the
 Crunchy-generated `${CLUSTER}-pguser-app` Secret, key `uri`. The public backend
 uses the `${CLUSTER}-pguser-publicreadonly` Secret when Vault mode is enabled.
+For engagement counts, pre-provision `${CLUSTER}-pguser-analytics-count-login`
+in each OpenShift namespace (including PR namespaces) before deploying Crunchy.
+Its `password` key must be supplied through the protected Secret process, with
+`postgres-operator.crunchydata.com/cluster: ${CLUSTER}` and
+`postgres-operator.crunchydata.com/pguser: analytics-count-login` labels.
+Crunchy adds the `uri` for `transportation_forms`; the Secret provisioner must
+preserve operator-populated keys. The deployer grants this non-superuser login
+membership in the restricted `daily_engagement_writer` role before migrations;
+both backend containers read `ANALYTICS_DATABASE_URL` from the Secret's `uri`.
+Neither the password nor connection URI belongs in Git or Helm values.
 
 The backend Vault path contains the application signing, JWT, Keycloak, S3, and
 initial-admin values. The public-backend path contains `INTERNAL_AUTH_SECRET`.

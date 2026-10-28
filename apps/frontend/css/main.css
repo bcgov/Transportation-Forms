@@ -1533,6 +1533,171 @@ body.form-details-drawer-open {
     outline-offset: 2px;
 }
 
+#createView .form-insights {
+    margin-top: 1.5rem;
+    border-top: 4px solid var(--bc-blue);
+}
+
+.form-insights__heading,
+.form-insights__section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+#createView .form-insights__heading h2 {
+    margin-bottom: 0.35rem;
+}
+
+.form-insights__heading p,
+.form-insights__section-heading p {
+    margin: 0;
+    color: #667085;
+    font-size: 0.875rem;
+}
+
+.form-insights__refresh {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
+}
+
+.form-insights__updated {
+    color: #667085;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}
+
+.form-insights__section {
+    margin-top: 1.25rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e4e7ec;
+}
+
+.form-insights__section-heading {
+    margin-bottom: 1rem;
+}
+
+.form-insights__section-heading h3 {
+    margin: 0 0 0.35rem;
+    color: #071f35;
+    font-size: 1.2rem;
+}
+
+.form-insights__periods {
+    display: flex;
+    max-width: 100%;
+    gap: 0.25rem;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+}
+
+.form-insights__periods button {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #d0d5dd;
+    border-radius: 0.25rem;
+    background: #fff;
+    color: #475467;
+    font-size: 0.8125rem;
+    font-weight: 700;
+}
+
+.form-insights__periods button:hover {
+    border-color: var(--bc-blue);
+    color: var(--bc-blue);
+}
+
+.form-insights__periods button[aria-pressed="true"] {
+    border-color: var(--bc-blue);
+    background: var(--bc-blue);
+    color: #fff;
+}
+
+#formInsightsStatus:empty,
+#formInsightsError:empty {
+    display: none;
+}
+
+#formInsightsError:not(:empty) {
+    color: #b42318;
+}
+
+.form-insights__table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid #e4e7ec;
+    border-radius: 0.375rem;
+}
+
+.form-insights__table {
+    width: 100%;
+    min-width: 510px;
+    border-collapse: collapse;
+    background: #fff;
+}
+
+.form-insights__table caption {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #e4e7ec;
+    background: #f6f7f9;
+    color: #475467;
+    font-size: 0.8125rem;
+    text-align: left;
+    caption-side: top;
+}
+
+.form-insights__table th,
+.form-insights__table td {
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid #e4e7ec;
+    text-align: left;
+}
+
+.form-insights__table tbody tr:last-child th,
+.form-insights__table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.form-insights__table thead th {
+    background: #f6f7f9;
+    color: #475467;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.form-insights__table tbody th {
+    width: 45%;
+    color: #344054;
+    font-size: 0.9rem;
+}
+
+.form-insights__table td {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.form-insights__source {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.form-insights__source::before {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #155b91;
+    content: "";
+}
+
+.form-insights__source--public::before {
+    background: #277a45;
+}
+
 #createView .form-audit {
     margin-top: 1.5rem;
 }
@@ -1724,12 +1889,20 @@ body.form-details-drawer-open {
     #createView .form-page__surface { padding: 1.25rem; }
     #formCreate { grid-template-columns: minmax(0, 1fr); }
     #formCreate .form-page__full { grid-column: auto; }
+    .form-insights__heading,
+    .form-insights__section-heading { flex-direction: column; }
+    .form-insights__refresh { align-items: flex-start; }
+    .form-insights__updated { white-space: normal; }
 }
 
 @media (max-width: 620px) {
     #createView .form-page { padding: 1.25rem 0.75rem 3rem; }
     #createView .form-page__header h1 { font-size: 1.65rem; }
     #formCreate .form-page__actions > button { width: 100%; }
+    .form-insights__table { min-width: 0; table-layout: fixed; }
+    .form-insights__table th,
+    .form-insights__table td { padding: 0.7rem 0.5rem; overflow-wrap: anywhere; }
+    .form-insights__table tbody th { width: 40%; font-size: 0.8125rem; }
     .form-audit__event {
         --audit-time-column: 82px;
         --audit-gap: 0.55rem;

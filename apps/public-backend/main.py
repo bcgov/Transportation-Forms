@@ -12,6 +12,7 @@ FEAT-0005 hardening (vs FEAT-0004):
 """
 
 import structlog
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -32,6 +33,8 @@ from routes.forms import router as forms_router
 from routes.business_areas import router as business_areas_router
 from routes.sitemap import router as sitemap_router
 from routes.cms import router as cms_router
+from routes.engagement import router as engagement_router
+from engagement_cache import run_checks as run_engagement_checks
 
 # ---------- Logging ----------
 configure_logging()
@@ -48,7 +51,16 @@ async def lifespan(app: FastAPI):
         # Never log the secret value — only whether it's configured.
         internal_auth_configured=bool(settings.INTERNAL_AUTH_SECRET),
     )
-    yield
+    cache_task = asyncio.create_task(run_engagement_checks())
+    try:
+        yield
+    finally:
+        cache_task.cancel()
+        outcome = (await asyncio.gather(cache_task, return_exceptions=True))[0]
+        if isinstance(outcome, BaseException) and not isinstance(
+            outcome, asyncio.CancelledError
+        ):
+            raise outcome
     logger.info("public_backend_stopped")
 
 
@@ -168,3 +180,4 @@ app.include_router(forms_router)
 app.include_router(business_areas_router)
 app.include_router(sitemap_router)
 app.include_router(cms_router)
+app.include_router(engagement_router)

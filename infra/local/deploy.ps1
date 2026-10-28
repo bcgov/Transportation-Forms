@@ -13,6 +13,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "engagement-nginx.ps1")
+
+$currentContext = (& kubectl config current-context)
+if ($LASTEXITCODE -ne 0 -or $currentContext.Trim() -ne "rancher-desktop") {
+    throw "Local deployment requires the rancher-desktop kubectl context."
+}
 
 function Invoke-CheckedCommand {
     param([string]$FilePath, [string[]]$Arguments)
@@ -22,13 +28,39 @@ function Invoke-CheckedCommand {
     }
 }
 
-function Get-KubernetesSecretValue {
+function Get-KubernetesSecretEncodedValue {
     param([string]$SecretName, [string]$Key)
     $encodedValue = (& kubectl get secret $SecretName -o "jsonpath={.data.$Key}")
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($encodedValue)) {
         throw "Could not read key $Key from Kubernetes secret $SecretName."
     }
-    return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encodedValue.Trim()))
+    return $encodedValue.Trim()
+}
+
+function Get-KubernetesSecretValue {
+    param([string]$SecretName, [string]$Key)
+    $encodedValue = Get-KubernetesSecretEncodedValue $SecretName $Key
+    return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encodedValue))
+}
+
+function Restore-LocalAnalyticsSecret {
+    param([string]$SecretName, [string]$Key, [string]$EncodedValue)
+    $secretJson = (& kubectl get secret $SecretName -o json)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not read Kubernetes secret $SecretName after Helm deployment."
+    }
+    $secret = $secretJson | ConvertFrom-Json
+    if ($null -eq $secret.data -or [string]::IsNullOrWhiteSpace($secret.metadata.resourceVersion)) {
+        throw "Kubernetes secret $SecretName is missing data or resourceVersion."
+    }
+    if ($secret.data.$Key -ceq $EncodedValue) {
+        return
+    }
+    $secret.data | Add-Member -MemberType NoteProperty -Name $Key -Value $EncodedValue -Force
+    $secret | ConvertTo-Json -Depth 100 -Compress | & kubectl replace -f -
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not restore key $Key in Kubernetes secret $SecretName."
+    }
 }
 
 function Write-HelmValueFile {
@@ -81,6 +113,10 @@ $primaryDbUri = (
     $dbUriMatch.Groups["path"].Value
 ).Replace(",", "%2C")
 
+$analyticsSecretName = "transportation-forms-secrets"
+$analyticsKey = "ANALYTICS_DATABASE_URL"
+$analyticsEncodedValue = Get-KubernetesSecretEncodedValue $analyticsSecretName $analyticsKey
+
 Write-Host "==> Resolving JWT PEM keys..."
 $jwtPrivateKeyPem = [System.Environment]::GetEnvironmentVariable("JWT_PRIVATE_KEY_PEM")
 $jwtPublicKeyPem = [System.Environment]::GetEnvironmentVariable("JWT_PUBLIC_KEY_PEM")
@@ -128,6 +164,33 @@ try {
     $s3BucketRaw   = $s3BucketEnv.Trim('/')
     $s3InternalUpstreamFile = Write-HelmValueFile "s3-internal-upstream.txt" "$s3EndpointRaw/$s3BucketRaw"
 
+    $nginxConfigName = "$ReleaseName-public-frontend-nginx"
+    $existingNginxJson = (& kubectl get configmap $nginxConfigName -o json --ignore-not-found --show-managed-fields)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not inspect local Public NGINX ConfigMap ownership."
+    }
+    if (-not [string]::IsNullOrWhiteSpace($existingNginxJson)) {
+        $existingNginx = $existingNginxJson | ConvertFrom-Json
+        $needsOwnershipHandoff = @($existingNginx.metadata.managedFields | Where-Object {
+            $_.manager -eq "kubectl-replace" -and
+            $null -ne $_.fieldsV1.'f:data'.'f:default.conf.template'
+        }).Count -gt 0
+        if ($needsOwnershipHandoff) {
+            if (-not $existingNginx.data.'default.conf.template'.Contains('zone=engagement_signals:1m')) {
+                throw "Unexpected ownership of local Public NGINX ConfigMap."
+            }
+            Write-Host "==> Restoring Helm ownership of local Public engagement edge..."
+            $currentNginxJson = (& kubectl get configmap $nginxConfigName -o json)
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not read local Public NGINX ConfigMap."
+            }
+            $currentNginxJson | & kubectl apply --server-side --field-manager=helm --force-conflicts -f -
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not restore Helm ownership of local Public NGINX ConfigMap."
+            }
+        }
+    }
+
     Write-Host "==> Deploying application with Helm..."
     Invoke-CheckedCommand "helm" @(
         "upgrade", "--install", $ReleaseName, $Chart,
@@ -161,13 +224,79 @@ try {
         "--timeout", "10m"
     )
 } finally {
-    foreach ($tempFile in $script:TempFiles) {
-        Remove-Item -Force -ErrorAction SilentlyContinue $tempFile
-    }
+    try {
+        # Helm owns this Secret and may remove keys added outside its chart.
+        Restore-LocalAnalyticsSecret $analyticsSecretName $analyticsKey $analyticsEncodedValue
+    } finally {
+        $analyticsEncodedValue = $null
+        foreach ($tempFile in $script:TempFiles) {
+            Remove-Item -Force -ErrorAction SilentlyContinue $tempFile
+        }
 
-    if ((Test-Path $tempDir -PathType Container) -and -not (Get-ChildItem -Force -Path $tempDir | Select-Object -First 1)) {
-        Remove-Item -Force -ErrorAction SilentlyContinue $tempDir
+        if ((Test-Path $tempDir -PathType Container) -and -not (Get-ChildItem -Force -Path $tempDir | Select-Object -First 1)) {
+            Remove-Item -Force -ErrorAction SilentlyContinue $tempDir
+        }
     }
+}
+
+Write-Host "==> Wiring local analytics Secret into backend deployments..."
+foreach ($component in @("backend", "public-backend")) {
+    Invoke-CheckedCommand "kubectl" @(
+        "set", "env", "deployment/$ReleaseName-$component",
+        "--containers=$component",
+        "--from=secret/$analyticsSecretName",
+        "--keys=$analyticsKey"
+    )
+}
+
+$staffOrigin = [System.Environment]::GetEnvironmentVariable("STAFF_ENGAGEMENT_ORIGIN")
+if ([string]::IsNullOrWhiteSpace($staffOrigin)) {
+    $staffOrigin = "http://localhost"
+}
+$staffInterval = [System.Environment]::GetEnvironmentVariable("STAFF_ENGAGEMENT_CACHE_CHECK_MINUTES")
+$publicInterval = [System.Environment]::GetEnvironmentVariable("PUBLIC_ENGAGEMENT_CACHE_CHECK_MINUTES")
+if ([string]::IsNullOrWhiteSpace($staffInterval)) { $staffInterval = "5" }
+if ([string]::IsNullOrWhiteSpace($publicInterval)) { $publicInterval = "5" }
+
+Write-Host "==> Configuring local engagement origins and cache intervals..."
+Invoke-CheckedCommand "kubectl" @(
+    "set", "env", "deployment/$ReleaseName-backend", "--containers=backend",
+    "STAFF_ENGAGEMENT_ORIGIN=$staffOrigin",
+    "STAFF_ENGAGEMENT_CACHE_CHECK_MINUTES=$staffInterval"
+)
+Invoke-CheckedCommand "kubectl" @(
+    "set", "env", "deployment/$ReleaseName-public-backend", "--containers=public-backend",
+    "PUBLIC_ENGAGEMENT_CACHE_CHECK_MINUTES=$publicInterval"
+)
+
+Write-Host "==> Installing local-only Public engagement edge configuration..."
+$traefikJson = (& kubectl get pods -n kube-system -l "app.kubernetes.io/name=traefik" -o json)
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not list local Traefik pods."
+}
+$traefikPods = ($traefikJson | ConvertFrom-Json).items
+$trustedProxyAddresses = @($traefikPods | Where-Object {
+    $_.status.phase -eq "Running" -and -not [string]::IsNullOrWhiteSpace($_.status.podIP)
+} | ForEach-Object { $_.status.podIP })
+
+$nginxConfigJson = (& kubectl get configmap $nginxConfigName -o json)
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not read local Public NGINX ConfigMap."
+}
+$nginxConfig = $nginxConfigJson | ConvertFrom-Json
+if ([string]::IsNullOrWhiteSpace($nginxConfig.data.'default.conf.template')) {
+    throw "Local Public NGINX ConfigMap has no default template."
+}
+$engagementTemplate = Get-LocalEngagementNginxTemplate `
+    $nginxConfig.data.'default.conf.template' $trustedProxyAddresses
+if ($engagementTemplate -cne $nginxConfig.data.'default.conf.template') {
+    $nginxConfig.data.'default.conf.template' = $engagementTemplate
+    $nginxConfig | ConvertTo-Json -Depth 100 -Compress | & kubectl apply --server-side --field-manager=helm --force-conflicts -f -
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not apply local Public engagement edge configuration."
+    }
+} else {
+    Write-Host "Local Public engagement edge configuration is already current."
 }
 
 $deployments = @(

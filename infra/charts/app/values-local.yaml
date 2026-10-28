@@ -137,6 +137,10 @@ public-frontend:
     tag: local
     pullPolicy: IfNotPresent
 
+  # The local deploy script applies its own signal edge and trusted-proxy overlay.
+  engagementSignals:
+    edgeEnabled: false
+
   deployment:
     vault:
       enabled: false

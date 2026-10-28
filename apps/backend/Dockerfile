@@ -36,6 +36,9 @@ COPY --from=build /install /usr/local
 COPY apps/backend/ ./backend/
 COPY entrypoint.sh .
 
+# Copy Form Insights shared code
+COPY apps/shared/ ./shared/
+
 # OpenShift compatibility: UID 1001, root group (GID 0)
 RUN chmod +x /app/entrypoint.sh && \
     chown -R 1001:0 /app && \

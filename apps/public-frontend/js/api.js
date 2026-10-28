@@ -88,6 +88,19 @@ export async function fetchJson(path, opts = {}) {
   return { data, etag, fromCache: false };
 }
 
+export function sendEngagementSignal(formNumber, metric) {
+  if (!formNumber) return;
+  try {
+    void fetch(`${API_BASE}/engagement/signal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'omit',
+      body: JSON.stringify({ form_number: formNumber, metric }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+}
+
 /**
  * Fire-and-forget download. Browser handles the binary; we just navigate.
  * Implemented via a hidden anchor so middle/Cmd-click and keyboard activation

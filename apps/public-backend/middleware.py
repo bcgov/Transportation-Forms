@@ -30,7 +30,11 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         raw = request.headers.get("X-Request-ID", "")
 
         # Sanitise: allow only alphanumerics, hyphens, underscores, dots.
-        if raw and _REQUEST_ID_SAFE.match(raw):
+        if (
+            request.url.path != MethodRestrictionMiddleware._SIGNAL_PATH
+            and raw
+            and _REQUEST_ID_SAFE.match(raw)
+        ):
             request_id = raw[:_REQUEST_ID_MAX_LEN]
         else:
             request_id = uuid.uuid4().hex
@@ -47,11 +51,14 @@ class MethodRestrictionMiddleware(BaseHTTPMiddleware):
     """Return 405 for any HTTP method other than GET, HEAD, OPTIONS."""
 
     _ALLOWED = {"GET", "HEAD", "OPTIONS"}
+    _SIGNAL_PATH = "/api/public/v1/engagement/signal"
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        if request.method not in self._ALLOWED:
+        if request.method not in self._ALLOWED and not (
+            request.method == "POST" and request.url.path == self._SIGNAL_PATH
+        ):
             return JSONResponse(
                 status_code=405,
                 content={"detail": "Method Not Allowed"},
@@ -125,6 +132,16 @@ class XInternalAuthMiddleware(BaseHTTPMiddleware):
 
         supplied = request.headers.get("X-Internal-Auth", "").encode("utf-8")
         if not hmac.compare_digest(supplied, self._expected):
+            if request.url.path == MethodRestrictionMiddleware._SIGNAL_PATH:
+                self._log.warning("internal_auth_rejected", reason="signal_auth_failed")
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Forbidden"},
+                    headers={
+                        "Cache-Control": "no-store",
+                        "X-Content-Type-Options": "nosniff",
+                    },
+                )
             # Generic body — never disclose expected/supplied value, never
             # echo header in logs.  Real client IP is structurally safe to
             # log (no PII) and useful for ops.

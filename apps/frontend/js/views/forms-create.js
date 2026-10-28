@@ -24,6 +24,7 @@ import { loadBusinessAreas, initBusinessAreaCombobox, getBusinessAreaOptions, re
 import { getAuthToken, hasPermission, isAdminUser } from '../auth.js';
 import { getCurrentUser } from '../state.js';
 import { loadAuditHistory, clearAuditHistory } from './form-audit-history.js';
+import { loadFormInsights, clearFormInsights } from './form-insights.js';
 
 // ─── Module-private state ─────────────────────────────────────────────────────
 
@@ -699,6 +700,7 @@ async function _loadFormForEdit(formId) {
         document.getElementById('listView').style.display = 'none';
         document.getElementById('createView').style.display = 'block';
         window.scrollTo(0, 0);
+        loadFormInsights(formId);
         loadAuditHistory(formId);
         await _loadFormBusinessAreas(form.business_area);
         _loadedFormSnapshot = JSON.stringify(_collectFormData());
@@ -881,6 +883,7 @@ export async function handleFormSubmit(event) {
  * Called at the start of both showCreateView() and showEditView().
  */
 export function resetFormState() {
+    clearFormInsights();
     clearAuditHistory();
     const form = document.getElementById('formCreate');
     if (form) form.reset();

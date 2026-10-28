@@ -122,6 +122,26 @@ jobs:
           echo "tag=${{ inputs.backend_tag }}" >> "$GITHUB_OUTPUT"
           echo "triggered=true"       >> "$GITHUB_OUTPUT"
 
+      - name: Verify predefined analytics password
+        uses: bcgov/action-oc-runner@v1.4.1
+        with:
+          oc_namespace: ${{ vars.LICENSE_PLATE }}-${{ inputs.environment }}
+          oc_token: ${{ secrets.oc_token }}
+          oc_server: ${{ vars.OC_SERVER }}
+          commands: |
+            set -euo pipefail
+            MATCHES="$(oc get secret -l 'postgres-operator.crunchydata.com/pguser=analytics-count-login' -o name)"
+            if [[ -z "${MATCHES}" || "${MATCHES}" == *$'\n'* ]]; then
+              echo "Expected exactly one pre-provisioned analytics login Secret." >&2
+              exit 1
+            fi
+            SECRET_NAME="${MATCHES#secret/}"
+            if [[ "${SECRET_NAME}" != *-pguser-analytics-count-login ||
+                  -z "$(oc get secret "${SECRET_NAME}" -o jsonpath='{.data.password}')" ]]; then
+              echo "The pre-provisioned analytics login Secret needs a password." >&2
+              exit 1
+            fi
+
       # ── Deploy Crunchy PostgreSQL ─────────────────────────────────────────
       - name: Deploy Crunchy PostgreSQL
         id: crunchy
@@ -149,6 +169,12 @@ jobs:
             DATABASE="transportation_forms"
             DATABASE_USER="${{ inputs.db_user }}"
             READONLY_USER="publicreadonly"
+            ANALYTICS_USER="analytics-count-login"
+            ANALYTICS_SECRET="${CLUSTER}-pguser-${ANALYTICS_USER}"
+            if [[ "$(oc get secret -l "postgres-operator.crunchydata.com/cluster=${CLUSTER},postgres-operator.crunchydata.com/pguser=${ANALYTICS_USER}" -o name)" != "secret/${ANALYTICS_SECRET}" ]]; then
+              echo "Pre-provisioned analytics Secret does not match the deployed cluster." >&2
+              exit 1
+            fi
             PRIMARY_POD="$(oc get pods \
               -l "postgres-operator.crunchydata.com/cluster=${CLUSTER},postgres-operator.crunchydata.com/role=master" \
               -o jsonpath='{.items[0].metadata.name}')"
@@ -164,7 +190,8 @@ jobs:
             oc exec "${PRIMARY_POD}" -c database -- \
               psql -U postgres -d "${DATABASE}" -v ON_ERROR_STOP=1 \
               -c "ALTER ROLE \"${DATABASE_USER}\" IN DATABASE \"${DATABASE}\" SET search_path TO public; \
-                  GRANT USAGE, CREATE ON SCHEMA public TO \"${DATABASE_USER}\""
+                  GRANT USAGE ON SCHEMA public TO \"${DATABASE_USER}\" WITH GRANT OPTION; \
+                  GRANT CREATE ON SCHEMA public TO \"${DATABASE_USER}\""
 
             for ATTEMPT in $(seq 1 30); do
               if oc exec "${PRIMARY_POD}" -c database -- \
@@ -190,6 +217,80 @@ jobs:
                   GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"${READONLY_USER}\"; \
                   REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM \"${READONLY_USER}\"; \
                   ALTER DEFAULT PRIVILEGES FOR ROLE \"${DATABASE_USER}\" IN SCHEMA public GRANT SELECT ON TABLES TO \"${READONLY_USER}\";"
+
+            for ATTEMPT in $(seq 1 30); do
+              if oc exec "${PRIMARY_POD}" -c database -- \
+                psql -U postgres -d "${DATABASE}" -Atqc \
+                "SELECT 1 FROM pg_roles WHERE rolname = '${ANALYTICS_USER}'" | grep -qx 1 &&
+                [[ -n "$(oc get secret "${ANALYTICS_SECRET}" -o jsonpath='{.data.password}' 2>/dev/null)" ]] &&
+                [[ -n "$(oc get secret "${ANALYTICS_SECRET}" -o jsonpath='{.data.uri}' 2>/dev/null)" ]]; then
+                break
+              fi
+
+              if [[ "${ATTEMPT}" -eq 30 ]]; then
+                echo "Crunchy did not provision the analytics login and connection Secret." >&2
+                exit 1
+              fi
+              echo "Waiting for analytics database login and Secret (${ATTEMPT}/30)..."
+              sleep 2
+            done
+
+            # Migration 026 creates this role if needed and owns its table grants.
+            # Pre-create it here so membership is ready before the migrated pods start.
+            oc exec -i "${PRIMARY_POD}" -c database -- \
+              psql -U postgres -d "${DATABASE}" -v ON_ERROR_STOP=1 <<'SQL'
+            DO $role$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_roles WHERE rolname = 'daily_engagement_writer'
+                ) THEN
+                    CREATE ROLE daily_engagement_writer
+                        NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE
+                        NOREPLICATION NOBYPASSRLS;
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_roles
+                    WHERE rolname = 'daily_engagement_writer'
+                      AND NOT rolcanlogin AND NOT rolinherit AND NOT rolsuper
+                      AND NOT rolcreatedb AND NOT rolcreaterole
+                      AND NOT rolreplication AND NOT rolbypassrls
+                ) OR EXISTS (
+                    SELECT 1 FROM pg_auth_members AS membership
+                    JOIN pg_roles AS writer ON writer.oid = membership.member
+                    WHERE writer.rolname = 'daily_engagement_writer'
+                ) THEN
+                    RAISE EXCEPTION 'Unsafe daily_engagement_writer role';
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_roles
+                    WHERE rolname = 'analytics-count-login'
+                      AND rolcanlogin AND rolinherit AND NOT rolsuper
+                      AND NOT rolcreatedb AND NOT rolcreaterole
+                      AND NOT rolreplication AND NOT rolbypassrls
+                ) OR EXISTS (
+                    SELECT 1 FROM pg_database
+                    WHERE datname = current_database()
+                      AND datdba = '"analytics-count-login"'::regrole
+                ) OR EXISTS (
+                    SELECT 1 FROM pg_auth_members AS membership
+                    JOIN pg_roles AS login ON login.oid = membership.member
+                    JOIN pg_roles AS parent ON parent.oid = membership.roleid
+                    WHERE login.rolname = 'analytics-count-login'
+                      AND parent.rolname <> 'daily_engagement_writer'
+                ) THEN
+                    RAISE EXCEPTION 'Unsafe analytics-count-login account';
+                END IF;
+            END
+            $role$;
+
+            REVOKE ALL ON DATABASE transportation_forms FROM "analytics-count-login";
+            GRANT CONNECT ON DATABASE transportation_forms TO "analytics-count-login";
+            REVOKE ALL ON SCHEMA public FROM "analytics-count-login";
+            GRANT daily_engagement_writer TO "analytics-count-login"
+                WITH INHERIT TRUE, SET FALSE;
+            SQL
 
       # ── Deploy application via Helm ───────────────────────────────────────
       - name: Update Helm dependencies
@@ -269,6 +370,7 @@ jobs:
               --set-string global.registry=ghcr.io \
               --set-string global.repository=bcgov/transportation-forms \
               --set-string backend.env.corsOrigins="${FRONTEND_BASE_URL}" \
+              --set-string backend.env.staffEngagementOrigin="${FRONTEND_BASE_URL}" \
               --set-string public-backend.env.publicCorsOrigins="${PUBLIC_FORMS_BASE_URL}" \
               --set-string global.crunchyCluster="${CLUSTER}" \
               --set-string backend.deployment.vault.enabled=true \

@@ -40,6 +40,7 @@ from backend.services.forms import (
     FormWorkflowValidationError,
 )
 from backend.services import s3_service
+from backend.services.daily_engagement import dispatcher, record_daily_engagement
 from backend.services.s3_service import S3ObjectNotFound, MIME_TYPE_MAP
 
 logger = logging.getLogger(__name__)
@@ -643,11 +644,14 @@ async def download_form_attachment(
         "X-Content-Type-Options": "nosniff",
     }
 
-    return StreamingResponse(
+    response = StreamingResponse(
         _chunks(),
         media_type=content_type,
         headers=headers,
     )
+    if request.method == "GET" and "range" not in request.headers:
+        dispatcher.submit(record_daily_engagement, form.id, "download", "Staff")
+    return response
 
 
 @router.get("/{form_id}", response_model=FormDetailResponse)

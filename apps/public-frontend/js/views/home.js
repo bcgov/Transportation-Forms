@@ -3,7 +3,7 @@
  *           + US-006 (loading/empty/error/rate-limit states).
  */
 
-import { fetchJson, ApiError, downloadFormFile } from '../api.js';
+import { fetchJson, ApiError, downloadFormFile, sendEngagementSignal } from '../api.js';
 import {
   PAGE_SIZE, VIEW_ALL_CAP, SEARCH_DEBOUNCE_MS, Q_MAX_LENGTH,
   DEFAULT_SORT_FIELD, DEFAULT_SORT_ORDER, HISTORY_STATE_CAP_BYTES,
@@ -131,12 +131,22 @@ function _wireOnce() {
   // anchors handled by the global SPA router; only the Download <button>
   // (which is not an anchor) is intercepted here.
   document.getElementById('resultsList')?.addEventListener('click', (e) => {
+    _handleLinkActivation(e);
     const dl = e.target.closest('button[data-action="download"]');
     if (!dl || dl.disabled) return;
     e.preventDefault();
     const num = dl.dataset.formNumber;
     if (num) downloadFormFile(num);
   });
+  document.getElementById('resultsList')?.addEventListener('auxclick', _handleLinkActivation);
+}
+
+function _handleLinkActivation(event) {
+  if (event.defaultPrevented || (event.type === 'auxclick' ? event.button !== 1 : event.button !== 0)) return;
+  const link = event.target.closest('a[data-action="open-form-link"]');
+  if (link && _safeUrl(link.href) && link.dataset.formNumber) {
+    sendEngagementSignal(link.dataset.formNumber, 'link_click');
+  }
 }
 
 /**
@@ -442,7 +452,8 @@ function _cardHtml(item, index) {
   let action = '';
   if (url) {
     action = `<a class="btn-download" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
-                 data-no-router="1" aria-label="Open link for ${escapeHtml(num)} (opens in new tab)">${_icon('externalLink')} Form Link</a>`;
+                 data-no-router="1" data-action="open-form-link" data-form-number="${hasNumber ? escapeHtml(f.form_number) : ''}"
+                 aria-label="Open link for ${escapeHtml(num)} (opens in new tab)">${_icon('externalLink')} Form Link</a>`;
   } else if (hasFileEvidence) {
     if (hasNumber) {
       action = `<button type="button" class="btn-download" data-action="download"

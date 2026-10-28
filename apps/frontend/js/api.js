@@ -35,6 +35,7 @@ export function installAuthFetchInterceptor() {
     const requestUrl = typeof input === 'string' ? input : input.url;
     const isApiRequest = requestUrl.includes('/api/v1/');
     const isAuthRequest = requestUrl.includes('/api/v1/auth/');
+    const isEngagementRequest = requestUrl === `${API_BASE}/engagement/signal`;
 
     const headers = new Headers(init.headers || {});
     if (isApiRequest && !isAuthRequest && !headers.has('Authorization') && _getAccessToken()) {
@@ -44,7 +45,7 @@ export function installAuthFetchInterceptor() {
     const requestInit = { ...init, headers };
     let response = await originalFetch(input, requestInit);
 
-    if (isApiRequest && response.status === 401 && !isAuthRequest && !requestInit.__retried) {
+    if (isApiRequest && response.status === 401 && !isAuthRequest && !isEngagementRequest && !requestInit.__retried) {
       const refreshed = await tryRefreshToken();
       if (refreshed) {
         const retryHeaders = new Headers(requestInit.headers || {});
@@ -70,4 +71,17 @@ export function installAuthFetchInterceptor() {
   };
 
   _authInterceptorInstalled = true;
+}
+
+export function sendEngagementSignal(formId, metric) {
+  const token = _getAccessToken();
+  if (!token || !formId) return;
+  try {
+    void fetch(`${API_BASE}/engagement/signal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ form_id: formId, metric }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
 }

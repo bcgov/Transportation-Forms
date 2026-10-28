@@ -14,6 +14,10 @@ global:
 cache:
   enabled: true
 
+engagementSignals:
+  # Local values disable this so the trusted-proxy post-deploy overlay can own it.
+  edgeEnabled: true
+
 # ── Image (single-NGINX edge with SPA assets) ────────────────────
 image:
   repository: ghcr.io/bcgov/transportation-forms/public-frontend

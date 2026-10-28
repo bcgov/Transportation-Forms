@@ -24,7 +24,7 @@ from enum import Enum
 
 import pytz
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 from audit import log_form_download
 from config import settings
 from database import get_db
+from daily_engagement import dispatcher, record_daily_engagement
 from http_cache import compute_etag, etag_matches
 from models import PublicForm
 from problem import problem_response
@@ -146,6 +147,16 @@ def _safe_link_url(
         return None
     candidate = form_source_url.strip()
     if not candidate or not _SAFE_URL_RE.match(candidate):
+        return None
+    try:
+        parsed = urlsplit(candidate)
+        if (
+            not parsed.hostname
+            or parsed.port == 0
+            or any(character.isspace() for character in parsed.netloc)
+        ):
+            return None
+    except ValueError:
         return None
     return candidate
 
@@ -413,7 +424,12 @@ def download_public_form(
         # Defence-in-depth: clients must never cache the redirect itself.
         "Cache-Control": "private, no-store",
     }
-    return Response(status_code=200, headers=headers, content=b"")
+    response = Response(status_code=200, headers=headers, content=b"")
+    if request.method == "GET" and "range" not in request.headers:
+        dispatcher.submit(
+            record_daily_engagement, row.form_id, "download", "Public"
+        )
+    return response
 
 
 # ------------------------------------------------------------------
