@@ -1,6 +1,6 @@
 // frontend/js/views/admin/users.js
 // Admin user management view — list with search/pagination and detail with role assignment.
-import { API_BASE, ROUTES } from '../../constants.js';
+import { API_BASE, ROLE_DISPLAY_NAMES, ROUTES } from '../../constants.js';
 import { escapeHtml, formatDateTime, showAlert, getErrorDetail } from '../../utils.js';
 import { getCurrentUser } from '../../state.js';
 import { getAllRolesCache, ensureRolesCache } from './roles.js';
@@ -124,7 +124,9 @@ export async function loadUsersPage(skip = _usersPageSkip) {
                                 <td>${escapeHtml(user.email)}</td>
                                 <td>${formatDateTime(user.first_sign_in_at)}</td>
                                 <td>${(user.roles || []).map(role =>
-                                    `<span class="badge bg-light text-dark me-1">${escapeHtml(role.name)}</span>`
+                                    `<span class="badge bg-light text-dark me-1">${escapeHtml(
+                                        ROLE_DISPLAY_NAMES.get(role.name) || role.name
+                                    )}</span>`
                                 ).join('') || '<span class="text-muted">None</span>'}</td>
                                 <td class="text-end">
                                     <button class="btn btn-sm btn-outline-primary"
@@ -224,7 +226,9 @@ export async function loadUserDetail(userId) {
                                         value="${escapeHtml(role.id)}"
                                         ${assignedRoleIds.has(role.id) ? 'checked' : ''}>
                                     <span class="form-check-label">
-                                        <strong>${escapeHtml(role.name)}</strong>
+                                        <strong>${escapeHtml(
+                                            ROLE_DISPLAY_NAMES.get(role.name) || role.name
+                                        )}</strong>
                                         ${role.description
                                             ? `<small class="text-muted d-block">${escapeHtml(role.description)}</small>`
                                             : ''}

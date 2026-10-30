@@ -85,6 +85,7 @@ class TestFormWorkflowService:
         """FEAT-0001: approve_form transitions directly to published."""
         creator = _create_user(user_factory, "creator-happy@example.com")
         reviewer = _create_user(user_factory, "reviewer-happy@example.com")
+        approver = _create_user(user_factory, "approver-happy@example.com")
         form = _create_form(db, creator.id, status="draft")
         form_id = uuid.UUID(str(form.id))
 
@@ -92,10 +93,10 @@ class TestFormWorkflowService:
         assert str(submitted.status) == "pending_review"
 
         # FEAT-0001: approve now goes directly to published
-        published = FormService.approve_form(db, form_id, reviewer.id)
+        published = FormService.approve_form(db, form_id, approver.id)
         assert str(published.status) == "published"
 
-        archived = FormService.archive_form(db, form_id, user_id=reviewer.id)
+        archived = FormService.archive_form(db, form_id, user_id=approver.id)
         assert archived is not None
         assert str(archived.status) == "archived"
 
@@ -317,7 +318,10 @@ class TestFormWorkflowApi:
         form = _create_form(db, creator.id, status="draft")
         # staff_viewer has no form:submit_for_review
         no_submit_client = client_factory(creator, ["staff_viewer"])
-        resp = no_submit_client.post(f"/api/v1/staff/forms/{form.id}/submit")
+        resp = no_submit_client.post(
+            f"/api/v1/staff/forms/{form.id}/submit",
+            json={"expected_version": form.current_version},
+        )
         assert resp.status_code == 403
 
     @pytest.mark.integration

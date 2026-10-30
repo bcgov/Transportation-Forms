@@ -209,7 +209,10 @@ export function hasPermission(permission) {
  * Returns true only when workflow metadata may be presented in the Forms UI.
  */
 export function canPresentFormWorkflowMetadata() {
-  return hasPermission('form:edit');
+  return (
+    hasPermission('form:view_workflow_state') ||
+    hasPermission('form:edit')
+  );
 }
 
 /**

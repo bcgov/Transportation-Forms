@@ -21,15 +21,14 @@ import {
     restoreUploadState,
 } from './file-upload.js';
 import { loadBusinessAreas, initBusinessAreaCombobox, getBusinessAreaOptions, resetBusinessAreas, closeBusinessAreaDropdown } from './business-areas.js';
-import { getAuthToken, hasPermission, isAdminUser } from '../auth.js';
-import { getCurrentUser } from '../state.js';
+import { getAuthToken, hasPermission } from '../auth.js';
 import { loadAuditHistory, clearAuditHistory } from './form-audit-history.js';
 
 // ─── Module-private state ─────────────────────────────────────────────────────
 
 let _currentFormId = null;
 let _currentFormStatus = null;
-let _currentFormCreatedById = null;  // FEAT-0013: track form creator for ownership checks
+let _currentFormAvailableActions = [];
 let _formNumberReservationId = null;
 let _formNumberReservations = [];
 let _workflowListenersAttached = false;
@@ -212,7 +211,7 @@ function _initWorkflowButtonListeners() {
  * Show/hide and label workflow action buttons based on form status and user permissions.
  * @param {string|null} status  Current form status, or null for create mode.
  */
-function _updateWorkflowButtons(status) {
+function _updateWorkflowButtons(status, availableActions = _currentFormAvailableActions) {
     const saveDraftBtn = document.getElementById('submitBtn');
     const submitForReviewBtn = document.getElementById('submitForReviewBtn');
     const archiveFormBtn = document.getElementById('archiveFormBtn');
@@ -231,36 +230,29 @@ function _updateWorkflowButtons(status) {
         return;
     }
 
-    // FEAT-0013: Determine ownership for submit button
-    const user = getCurrentUser();
-    const userId = user?.id || '';
-    const isOwner = _currentFormCreatedById === userId;
+    const actions = new Set(Array.isArray(availableActions) ? availableActions : []);
 
     if (status === 'draft') {
-        if (saveDraftBtn) saveDraftBtn.style.display = isOwner && hasPermission('form:edit') ? '' : 'none';
-        if (submitForReviewBtn && isOwner && hasPermission('form:edit') && hasPermission('form:submit_for_review')) {
+        if (saveDraftBtn) saveDraftBtn.style.display = actions.has('edit') ? '' : 'none';
+        if (submitForReviewBtn && actions.has('submit_for_review')) {
             submitForReviewBtn.style.display = '';
         }
-        // FEAT-0013: Delete button for draft forms (owner or admin only)
-        if (deleteFormBtn && hasPermission('form:delete') && (isOwner || isAdminUser())) {
+        if (deleteFormBtn && actions.has('delete')) {
             deleteFormBtn.style.display = '';
         }
     } else if (status === 'pending_review') {
-        // Locked — no save/edit actions available to creators
         if (saveDraftBtn) saveDraftBtn.style.display = 'none';
     } else if (status === 'published') {
         if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-        if (archiveFormBtn && hasPermission('form:archive')) {
+        if (archiveFormBtn && actions.has('archive')) {
             archiveFormBtn.style.display = '';
         }
-        // FEAT-0016: Unpublish button — requires both form:create and form:edit
-        if (unpublishFormBtn && hasPermission('form:create') && hasPermission('form:edit')) {
+        if (unpublishFormBtn && actions.has('revert')) {
             unpublishFormBtn.style.display = '';
         }
     } else if (status === 'archived') {
         if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-        // FEAT-0013: Restore button for archived forms
-        if (restoreFormBtn && hasPermission('form:approve')) {
+        if (restoreFormBtn && actions.has('restore')) {
             restoreFormBtn.style.display = '';
         }
     } else {
@@ -311,6 +303,7 @@ function _showSubmitMessage(message, type = 'info') {
 
 function _markSubmitted() {
     _currentFormStatus = 'pending_review';
+    _currentFormAvailableActions = [];
     _updateWorkflowButtons(_currentFormStatus);
     _setFormFieldsLocked(true);
     document.getElementById('formStatusBadge').textContent = 'Pending Review';
@@ -349,8 +342,7 @@ function _showSubmitError(message) {
 
 async function _submitFormForReview() {
     if (!_currentFormId || _currentFormStatus !== 'draft' || _submitInProgress || _submitNeedsReload
-        || _currentFormCreatedById !== getCurrentUser()?.id
-        || !hasPermission('form:edit') || !hasPermission('form:submit_for_review')) return;
+        || !_currentFormAvailableActions.includes('submit_for_review')) return;
 
     clearAllFieldErrors();
     const { firstInvalidField, formData } = _validatedFormData();
@@ -636,7 +628,9 @@ async function _loadFormForEdit(formId) {
         const form = await response.json();
 
         _currentFormId = formId;
-        _currentFormCreatedById = form.created_by?.id || null;  // FEAT-0013
+        _currentFormAvailableActions = Array.isArray(form.available_actions)
+            ? form.available_actions
+            : [];
         _currentFormVersion = form.current_version;
 
         // Scalar fields
@@ -673,9 +667,8 @@ async function _loadFormForEdit(formId) {
         // Workflow button state and field locking (FEAT-0001)
         _currentFormStatus = form.status;
         _savedBusinessAreaId = form.business_area?.id || null;
-        _updateWorkflowButtons(form.status);
-        const isLocked = form.status !== 'draft' || !hasPermission('form:edit')
-            || _currentFormCreatedById !== getCurrentUser()?.id;
+        _updateWorkflowButtons(form.status, _currentFormAvailableActions);
+        const isLocked = !_currentFormAvailableActions.includes('edit');
         _setFormFieldsLocked(isLocked);
 
         // Label the submit button based on status
@@ -897,7 +890,7 @@ export function resetFormState() {
     _submitNeedsReload = false;
     _currentFormId = null;
     _currentFormStatus = null;
-    _currentFormCreatedById = null;  // FEAT-0013
+    _currentFormAvailableActions = [];
     clearUploadState();
     _formNumberReservationId = null;
 

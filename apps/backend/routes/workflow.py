@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.auth.authorization import has_permission, require_all_permissions
+from backend.auth.dependencies import get_current_user
+from backend.auth.form_authorization import load_form_authorization_context
 from backend.auth.jwt_handler import TokenData
 from backend.database import get_db
 from backend.models import AuditLog, Form, FormWorkflow, User
@@ -22,7 +24,6 @@ router = APIRouter(prefix="/staff/forms", tags=["Form Workflow"])
 
 # ─── Granular permission constants (BR-006) ───────────────────────────────────
 
-_PERM_SUBMIT = "form:submit_for_review"
 _PERM_APPROVE = "form:approve"
 _PERM_APPROVE_SELF = "form:approve-self"  # FEAT-0007
 _PERM_REVIEW = "form:review"
@@ -209,26 +210,35 @@ async def list_pending_approvals(
 async def submit_form_for_review(
     form_id: str,
     request: SubmitRequest,
-    current_user: TokenData = Depends(require_all_permissions(_PERM_EDIT, _PERM_SUBMIT)),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
-    # FEAT-0013 / US-004: Only the form creator may submit for review (no admin bypass).
     try:
         form_uuid = UUID(form_id)
     except ValueError as exc:
         _handle_workflow_error(exc)
 
-    form_check = db.query(Form).filter(
-        Form.id == form_uuid, Form.deleted_at.is_(None)
-    ).first()
+    authorization = await load_form_authorization_context(current_user.sub, db)
+    if not (
+        authorization.has_any_scoped_permission("form:edit")
+        and authorization.has_any_scoped_permission("form:submit_for_review")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
+
+    form_check = (
+        db.query(Form).filter(Form.id == form_uuid, Form.deleted_at.is_(None)).first()
+    )
     if not form_check:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
         )
-    if str(form_check.created_by_id) != current_user.sub:
+    if not authorization.can_submit(form_check):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the form creator can submit for review",
+            detail="Insufficient permissions for this action",
         )
 
     try:
@@ -370,7 +380,7 @@ async def archive_form(
 @router.post("/{form_id}/restore", response_model=WorkflowStatusResponse)
 async def restore_form(
     form_id: str,
-    current_user: TokenData = Depends(require_all_permissions(_PERM_APPROVE)),
+    current_user: TokenData = Depends(require_all_permissions(_PERM_ARCHIVE)),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
     try:

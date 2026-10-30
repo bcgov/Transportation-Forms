@@ -390,7 +390,7 @@ class TestRegressionAuthenticatedWorkflows:
                 "form_attachment_filename", "file_type",
                 "form_number_reservation_id", "form_number",
                 "full_form_number", "collects_personal_info",
-                "created_at", "updated_at",
+                "created_at", "updated_at", "available_actions",
             }
             assert expected_keys == set(item.keys())
 

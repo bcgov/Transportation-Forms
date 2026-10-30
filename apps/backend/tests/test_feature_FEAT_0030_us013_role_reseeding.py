@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-from backend.auth.permissions import Permission
+from backend.auth.permissions import DEFAULT_ROLES, Permission
 from backend.models import Role
 from backend.seeds.default_roles import seed_default_roles
 from sqlalchemy.exc import IntegrityError
@@ -28,7 +28,7 @@ def test_reseeding_preserves_existing_retained_role_configuration(db):
     assert admin_role.permissions == configured_permissions
     assert result["created"] == 0
     assert result["updated"] == 0
-    assert result["existing"] == 2
+    assert result["existing"] == 3
 
 
 @pytest.mark.parametrize(
@@ -66,8 +66,19 @@ def test_concurrent_retained_role_insert_is_treated_as_existing():
     db.query.return_value.filter.return_value.first.side_effect = [
         None,
         None,
+        None,
         SimpleNamespace(id=uuid4(), is_system=True, is_active=True),
         SimpleNamespace(id=uuid4(), is_system=True, is_active=True),
+        SimpleNamespace(
+            id=uuid4(),
+            is_system=True,
+            is_active=True,
+            description=DEFAULT_ROLES["business_area_manager"]["description"],
+            permissions=[
+                permission.value
+                for permission in DEFAULT_ROLES["business_area_manager"]["permissions"]
+            ],
+        ),
     ]
     db.commit.side_effect = [
         IntegrityError("INSERT INTO roles", {}, Exception("duplicate"))
@@ -77,7 +88,7 @@ def test_concurrent_retained_role_insert_is_treated_as_existing():
 
     assert result["created"] == 0
     assert result["updated"] == 0
-    assert result["existing"] == 2
+    assert result["existing"] == 3
     assert result["failed"] == 0
     assert db.rollback.call_count == 1
 
@@ -85,6 +96,7 @@ def test_concurrent_retained_role_insert_is_treated_as_existing():
 def test_concurrent_invalid_retained_role_insert_fails():
     db = MagicMock()
     db.query.return_value.filter.return_value.first.side_effect = [
+        None,
         None,
         None,
         SimpleNamespace(id=uuid4(), is_system=False, is_active=True),

@@ -10,13 +10,14 @@ def _source(relative_path: str) -> str:
     return (FRONTEND_DIR / relative_path).read_text(encoding="utf-8")
 
 
-def test_one_fail_closed_effective_permission_decision_is_shared() -> None:
+def test_workflow_state_visibility_is_separate_from_mutation_permissions() -> None:
     auth = _source("js/auth.js")
     forms = _source("js/views/forms-list.js")
     drawer = _source("js/shared/form-details-drawer.js")
 
     assert "export function canPresentFormWorkflowMetadata()" in auth
-    assert "return hasPermission('form:edit');" in auth
+    assert "hasPermission('form:view_workflow_state')" in auth
+    assert "hasPermission('form:edit')" in auth
     assert "canPresentFormWorkflowMetadata" in forms
     assert "canPresentFormWorkflowMetadata" in drawer
     assert "isStaffViewerOnly" not in forms

@@ -107,6 +107,28 @@ async def get_user_permissions(user_id: str, db: Session) -> Set[str]:
                     return set()
                 all_permissions.update(permissions)
 
+                role_permissions = set(permissions)
+                if normalized_role_name == "admin":
+                    if "form:read" in role_permissions:
+                        all_permissions.add("form:read_unpublished:any")
+                    if "form:edit" in role_permissions:
+                        all_permissions.add("form:edit:any")
+                    if "form:submit_for_review" in role_permissions:
+                        all_permissions.add("form:submit_for_review:any")
+                elif normalized_role_name not in {
+                    "staff_viewer",
+                    "business_area_manager",
+                }:
+                    effective_role_permissions = get_inherited_permissions(
+                        permissions
+                    )
+                    if "form:read" in role_permissions:
+                        all_permissions.add("form:read_unpublished:any")
+                    if "form:edit" in effective_role_permissions:
+                        all_permissions.add("form:edit:own")
+                    if "form:submit_for_review" in role_permissions:
+                        all_permissions.add("form:submit_for_review:own")
+
         return get_inherited_permissions(list(all_permissions))
     except SQLAlchemyError:
         db.rollback()

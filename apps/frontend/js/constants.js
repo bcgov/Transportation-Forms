@@ -16,6 +16,10 @@ export const FORMS_SORT_OPTIONS = Object.freeze([
   'form_number:desc',
 ]);
 
+export const ROLE_DISPLAY_NAMES = new Map([
+  ['business_area_manager', 'Business Area Manager'],
+]);
+
 export const ROUTES = {
   HOME: '/',
   CALLBACK: '/callback',

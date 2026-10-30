@@ -11,7 +11,7 @@ from urllib.parse import urlsplit, urlunsplit
 import logging
 import re
 from sqlalchemy.orm import Session
-from sqlalchemy import asc, case, desc, text, func as sa_func
+from sqlalchemy import and_, asc, case, desc, or_, text, func as sa_func
 from sqlalchemy.exc import OperationalError
 
 from backend.models import (
@@ -385,6 +385,8 @@ class FormService:
         is_public: Optional[bool] = None,
         sort_order: str = "desc",
         sort_field: str = "suggested",
+        unpublished_area_ids: Optional[set[UUID]] = None,
+        allow_unpublished_any: bool = False,
     ) -> tuple[List[Form], int]:
         """
         List forms with filters and pagination.
@@ -400,6 +402,8 @@ class FormService:
             is_public: Filter by public status
             sort_order: asc or desc
             sort_field: suggested, title, or form_number
+            unpublished_area_ids: Active areas allowed for scoped unpublished reads.
+            allow_unpublished_any: Whether all unpublished forms are readable.
 
         Returns:
             Tuple of (list of Form objects, total count)
@@ -461,6 +465,21 @@ class FormService:
         # Apply filters
         if status:
             query = query.filter(Form.status.in_(status))
+
+        if unpublished_area_ids is not None or allow_unpublished_any:
+            visibility_filters = [Form.status == "published"]
+            if allow_unpublished_any:
+                visibility_filters.append(
+                    Form.status.in_(["draft", "pending_review", "archived"])
+                )
+            elif unpublished_area_ids:
+                visibility_filters.append(
+                    and_(
+                        Form.status.in_(["draft", "pending_review"]),
+                        Form.business_area_id.in_(unpublished_area_ids),
+                    )
+                )
+            query = query.filter(or_(*visibility_filters))
 
         if business_area_ids:
             query = query.filter(Form.business_area_id.in_(business_area_ids))
@@ -583,8 +602,12 @@ class FormService:
 
     @staticmethod
     def update_form(
-        db: Session, form_id: UUID, updated_by_id: UUID,
-        expected_version: Optional[int] = None, **kwargs
+        db: Session,
+        form_id: UUID,
+        updated_by_id: UUID,
+        expected_version: Optional[int] = None,
+        allow_non_owner_draft: bool = False,
+        **kwargs,
     ) -> Optional[Form]:
         """
         Update a form's content and advance its version without changing status.
@@ -605,7 +628,9 @@ class FormService:
         if not form:
             return None
 
-        if form.status == "draft" and form.created_by_id != updated_by_id:
+        if form.status == "draft" and (
+            form.created_by_id != updated_by_id and not allow_non_owner_draft
+        ):
             raise PermissionError("Only the form creator can edit this draft")
         if form.status == "pending_review":
             raise PermissionError(
@@ -918,9 +943,28 @@ class FormService:
 
         # BR-002: Separation of duties.
         # Bypassed only when the caller explicitly holds form:approve-self (FEAT-0007).
-        if str(form.created_by_id) == str(approver_id) and not allow_self_approve:
+        is_creator = str(form.created_by_id) == str(approver_id)
+        if is_creator and not allow_self_approve:
             raise FormWorkflowValidationError(
                 "You cannot approve your own form submission."
+            )
+
+        latest_submit = (
+            db.query(FormWorkflow)
+            .filter(
+                FormWorkflow.form_id == form.id,
+                FormWorkflow.action == "submit",
+                FormWorkflow.deleted_at.is_(None),
+            )
+            .order_by(desc(FormWorkflow.created_at))
+            .first()
+        )
+        is_latest_submitter = latest_submit is not None and str(
+            latest_submit.triggered_by_id
+        ) == str(approver_id)
+        if is_latest_submitter and not allow_self_approve:
+            raise FormWorkflowValidationError(
+                "You cannot approve a form you most recently submitted."
             )
 
         return FormService._transition_form_status(

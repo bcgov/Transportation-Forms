@@ -200,13 +200,19 @@ class TestAuthorizedUserSucceeds:
         finally:
             _cleanup()
 
-    def test_update_with_permission(self, db, test_user, seed_form):
-        """TC1.5: User with form:edit PUT /forms/{id} → 200."""
+    def test_published_update_denied_with_edit_permission(
+        self, db, test_user, seed_form
+    ):
+        """Published forms remain read-only through the update API."""
         client = _make_client(db, test_user, permissions=["form:read", "form:edit"])
         try:
-            resp = client.put(f"/api/v1/forms/{seed_form.id}", json=_FORM_UPDATE_PAYLOAD)
-            assert resp.status_code == 200
-            assert resp.json()["title"] == _FORM_UPDATE_PAYLOAD["title"]
+            resp = client.put(
+                f"/api/v1/forms/{seed_form.id}", json=_FORM_UPDATE_PAYLOAD
+            )
+            assert resp.status_code == 403
+            db.refresh(seed_form)
+            assert seed_form.title == "FEAT-0019 Existing Form"
+            assert seed_form.status == "published"
         finally:
             _cleanup()
 

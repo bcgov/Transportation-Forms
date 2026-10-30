@@ -30,6 +30,10 @@ from pydantic import (
 from sqlalchemy.orm import Session
 
 from backend.auth.authorization import require_permission
+from backend.auth.form_authorization import (
+    allowed_unpublished_area_ids,
+    load_form_authorization_context,
+)
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
@@ -252,6 +256,7 @@ class FormResponse(BaseModel):
     collects_personal_info: str
     created_at: str
     updated_at: str
+    available_actions: List[str] = Field(default_factory=list)
 
 
 class FormDetailResponse(FormResponse):
@@ -482,7 +487,10 @@ async def create_form(
             collects_personal_info=request.collects_personal_info,
         )
 
-        return FormResponse(**FormService.get_form_with_details(db, form.id))
+        authorization = await load_form_authorization_context(current_user.sub, db)
+        form_data = FormService.get_form_with_details(db, form.id)
+        form_data["available_actions"] = authorization.available_actions(form)
+        return FormResponse(**form_data)
 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -659,21 +667,26 @@ async def get_form(
     """Get a form by ID."""
     try:
         form_uuid = UUID(form_id)
+        form = FormService.get_form_by_id(db, form_uuid)
         form_data = FormService.get_form_with_details(db, form_uuid)
 
-        if not form_data:
+        if not form or not form_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
 
-        if (
-            _is_staff_viewer_only(current_user, db)
-            and form_data.get("status") != "published"
-        ):
+        authorization = await load_form_authorization_context(current_user.sub, db)
+        if not authorization.can_read(form):
+            if form.status == "archived" or _is_staff_viewer_only(current_user, db):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+                )
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions for this action",
             )
 
+        form_data["available_actions"] = authorization.available_actions(form)
         return FormDetailResponse(**form_data)
 
     except ValueError:
@@ -686,7 +699,7 @@ async def get_form(
 async def update_form(
     form_id: str,
     request: FormUpdateRequest,
-    current_user: TokenData = Depends(require_permission("forms", "update")),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """
@@ -699,19 +712,38 @@ async def update_form(
 
         # BR-003: Prevent structural edits while form is in Pending Review state
         form_check = FormService.get_form_by_id(db, form_uuid)
-        if form_check and str(form_check.status) == "pending_review":
+        authorization = await load_form_authorization_context(current_user.sub, db)
+        if form_check and form_check.status in {"published", "archived"}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Published and Archived forms cannot be updated",
+            )
+        if form_check and form_check.status == "pending_review":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Form cannot be edited while it is in Pending Review state",
             )
+        if form_check and not authorization.can_edit(form_check):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions for this action",
+            )
+        requested_business_area_id = (
+            UUID(request.business_area_id)
+            if request.business_area_id
+            else None
+        )
         if (
             form_check
-            and form_check.status == "draft"
+            and "business_area_id" in request.model_fields_set
+            and "form:edit:business_area" in authorization.permissions
             and str(form_check.created_by_id) != current_user.sub
+            and not authorization.is_admin()
+            and requested_business_area_id != form_check.business_area_id
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the form creator can edit this draft",
+                detail="Only the form owner can change its business area",
             )
 
         # Build update kwargs
@@ -749,6 +781,9 @@ async def update_form(
                 form_id=form_uuid,
                 updated_by_id=UUID(current_user.sub),
                 expected_version=request.expected_version,
+                allow_non_owner_draft=bool(
+                    form_check and authorization.can_edit(form_check)
+                ),
                 **update_data,
             )
         except FormWorkflowConflictError as exc:
@@ -775,7 +810,9 @@ async def update_form(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
 
-        return FormResponse(**FormService.get_form_with_details(db, form.id))
+        form_data = FormService.get_form_with_details(db, form.id)
+        form_data["available_actions"] = authorization.available_actions(form)
+        return FormResponse(**form_data)
 
     except ValueError as e:
         if "invalid literal" in str(e).lower():
@@ -928,6 +965,12 @@ async def list_forms(
                 detail="Invalid business area ID format",
             )
 
+    authorization = await load_form_authorization_context(current_user.sub, db)
+    unpublished_access = authorization.has_unpublished_any_access()
+    scoped_unpublished_areas = (
+        None if unpublished_access else allowed_unpublished_area_ids(authorization)
+    )
+
     forms, total = FormService.list_forms(
         db=db,
         skip=skip,
@@ -943,11 +986,15 @@ async def list_forms(
         is_public=is_public,
         sort_order=sort_order,
         sort_field=sort_field,
+        unpublished_area_ids=scoped_unpublished_areas,
+        allow_unpublished_any=unpublished_access,
     )
 
-    items = [
-        FormResponse(**FormService.get_form_with_details(db, form.id)) for form in forms
-    ]
+    items = []
+    for form in forms:
+        form_data = FormService.get_form_with_details(db, form.id)
+        form_data["available_actions"] = authorization.available_actions(form)
+        items.append(FormResponse(**form_data))
 
     return FormListResponse(
         total=total,

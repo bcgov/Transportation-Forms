@@ -34,7 +34,11 @@ def _db_with_custom_role(permissions):
 
 
 def test_default_role_catalogue_contains_only_retained_roles():
-    assert set(DEFAULT_ROLES) == {"admin", "staff_viewer"}
+    assert set(DEFAULT_ROLES) == {
+        "admin",
+        "staff_viewer",
+        "business_area_manager",
+    }
 
 
 def test_retained_role_permissions_match_pre_us013_contract():
@@ -214,7 +218,11 @@ def test_custom_role_permission_does_not_bypass_self_approval(monkeypatch):
 
 
 def test_retired_names_are_not_reserved_system_role_names():
-    assert RoleService.SYSTEM_ROLE_NAMES == {"admin", "staff_viewer"}
+    assert RoleService.SYSTEM_ROLE_NAMES == {
+        "admin",
+        "staff_viewer",
+        "business_area_manager",
+    }
     assert RETIRED_ROLE_NAMES.isdisjoint(RoleService.SYSTEM_ROLE_NAMES)
 
 
