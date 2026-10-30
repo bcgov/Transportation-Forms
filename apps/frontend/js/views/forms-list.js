@@ -50,6 +50,9 @@ const DEFAULT_RESULTS_LAYOUT = 'list';
 const RESULTS_LAYOUTS = new Set(['list', 'grid']);
 const RESULTS_LAYOUT_STORAGE_PREFIX = 'transportation-forms:forms-layout:v1:';
 const FORM_WORKFLOW_STATES = new Set(['draft', 'pending_review', 'published', 'archived']);
+const KNOWN_FORM_ACTIONS = new Set([
+    'edit', 'submit_for_review', 'archive', 'restore', 'delete', 'unpublish', 'revert',
+]);
 
 // ── Module-private setup flag & navigate callback ─────────────────────────────
 let _initialized = false;
@@ -162,7 +165,12 @@ function _boundedString(value, maxLength) {
     return typeof value === 'string' ? value.slice(0, maxLength) : '';
 }
 
-function _normalizeFormItem(item) {
+function _normalizeAvailableActions(actions) {
+    if (!Array.isArray(actions)) return [];
+    return actions.filter(action => typeof action === 'string' && KNOWN_FORM_ACTIONS.has(action));
+}
+
+export function _normalizeFormItem(item) {
     const reservation = item.form_number_reservation;
     const createdBy = item.created_by;
     const businessArea = item.business_area;
@@ -199,6 +207,7 @@ function _normalizeFormItem(item) {
         created_by: createdBy && typeof createdBy === 'object' ? {
             id: _boundedString(createdBy.id, MAX_FORM_ID_LENGTH),
         } : null,
+        available_actions: _normalizeAvailableActions(item.available_actions),
     };
 }
 
@@ -440,7 +449,10 @@ export function _renderFormActionButtons(form) {
     if (!isKnownStatus || !Array.isArray(form.available_actions)) return '';
     const availableActions = new Set(form.available_actions);
 
-    if (availableActions.has('edit')) {
+    // Published forms are read-only via the API; Edit opens the editor for its Unpublish control.
+    const canOpenEditor = availableActions.has('edit')
+        || (status === 'published' && availableActions.has('revert'));
+    if (canOpenEditor) {
         buttons.push(`<button class="forms-result-card__action" type="button"
             data-action="navigate" data-route="/edit/${id}"
             aria-label="Edit form ${formLabel}">
