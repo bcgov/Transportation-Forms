@@ -7,7 +7,18 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from backend.auth.authorization import get_user_permissions
-from backend.models import BusinessArea, BusinessAreaContact, Role, UserRole
+from backend.auth.business_area_scope import qualifying_contact_area_ids
+from backend.models import Role, UserRole
+
+_BUSINESS_AREA_SCOPE = ":business_area"
+
+
+def _needs_business_area_scope(permissions: Set[str]) -> bool:
+    return any(
+        permission.endswith(_BUSINESS_AREA_SCOPE)
+        and f"{permission.removesuffix(_BUSINESS_AREA_SCOPE)}:any" not in permissions
+        for permission in permissions
+    )
 
 
 @dataclass(frozen=True)
@@ -36,20 +47,13 @@ class FormAuthorizationContext:
             )
             if isinstance(name, str) and name.strip()
         )
-        active_business_area_ids = frozenset(
-            area_id
-            for (area_id,) in (
-                db.query(BusinessAreaContact.business_area_id)
-                .join(
-                    BusinessArea,
-                    BusinessArea.id == BusinessAreaContact.business_area_id,
-                )
-                .filter(
-                    BusinessAreaContact.contact_user_id == normalized_user_id,
-                    BusinessArea.deleted_at.is_(None),
-                )
-                .all()
-            )
+        # Area membership is only consulted for a ``:business_area`` permission
+        # not already covered by its ``:any`` form, so admin, staff_viewer and
+        # legacy roles skip the contact lookup entirely.
+        active_business_area_ids = (
+            qualifying_contact_area_ids(db, normalized_user_id)
+            if _needs_business_area_scope(permissions)
+            else frozenset()
         )
         return cls(
             user_id=normalized_user_id,

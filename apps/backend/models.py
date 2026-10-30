@@ -287,6 +287,12 @@ class BusinessAreaContact(Base):
         UniqueConstraint(
             "business_area_id", "email", name="uq_ba_contact_email"
         ),
+        # FEAT-0032 US-003: normalized email lookup for contact-based scope.
+        Index(
+            "ix_business_area_contacts_email_normalized",
+            func.lower(func.btrim(email)),
+            postgresql_where=email.isnot(None),
+        ),
     )
 
 

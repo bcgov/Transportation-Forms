@@ -18,6 +18,7 @@ from backend.models import User, Role, UserRole, AuditLog
 from backend.auth.keycloak_service import keycloak_service
 from backend.auth.jwt_handler import jwt_handler
 from backend.auth.dependencies import get_current_user
+from backend.auth.business_area_scope import sync_business_area_manager_role
 from backend.auth.jwt_handler import TokenData
 from backend.config import settings
 
@@ -340,6 +341,9 @@ async def auth_callback(
             if default_role:
                 db.add(UserRole(user_id=user.id, role_id=default_role.id))
                 logger.info("Assigned default staff_viewer role to authenticated user")
+
+        # FEAT-0032 US-003: contact-managed role follows active contact records.
+        sync_business_area_manager_role(db, user.id)
 
         ip_address, user_agent = _get_request_metadata(http_request)
         _create_auth_audit_log(
