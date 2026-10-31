@@ -1,5 +1,5 @@
 # ── Stage 1: Build custom Caddy with Coraza WAF plugin ───────────────────────
-FROM caddy:2.11.3-builder AS caddy-build
+FROM caddy:2.11.6-builder AS caddy-build
 
 RUN apk add --no-cache ca-certificates libcap
 # FEAT-0015: pin Coraza-Caddy plugin to a tagged release for reproducibility.
@@ -10,7 +10,7 @@ RUN setcap -r /usr/bin/caddy
 
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
-FROM caddy:2.11.3-alpine AS runtime
+FROM caddy:2.11.6-alpine AS runtime
 
 # Replace the default Caddy binary with our custom build (includes Coraza WAF)
 COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
