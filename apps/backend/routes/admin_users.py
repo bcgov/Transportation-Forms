@@ -12,9 +12,16 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from backend.auth.authorization import require_permission
+from backend.auth.business_area_scope import (
+    BUSINESS_AREA_MANAGER_ROLE,
+    add_linked_contacts,
+    qualifying_contact_area_ids,
+)
 from backend.auth.jwt_handler import TokenData
 from backend.database import get_db
-from backend.models import AuditLog, Role, User, UserRole
+from backend.models import AuditLog, BusinessArea, Role, User, UserRole
+
+MAX_BUSINESS_AREA_SELECTIONS = 500
 
 
 def _utc_naive_now() -> datetime:
@@ -46,9 +53,18 @@ class AdminUserSummaryResponse(BaseModel):
     roles: List[UserRoleSummaryResponse]
 
 
+class ContactBusinessAreaResponse(BaseModel):
+    id: str
+    name: str
+
+
 class AdminUserDetailResponse(AdminUserSummaryResponse):
     created_at: str
     updated_at: str
+    # FEAT-0032 US-005: active areas where the user is already a qualifying contact.
+    contact_business_areas: List[ContactBusinessAreaResponse] = Field(
+        default_factory=list
+    )
 
 
 class AdminUserListResponse(BaseModel):
@@ -60,6 +76,10 @@ class AdminUserListResponse(BaseModel):
 
 class UserRoleUpdateRequest(BaseModel):
     role_ids: List[str] = Field(default_factory=list)
+    # FEAT-0032 US-005: required (non-empty) when Business Area Manager is selected.
+    business_area_ids: List[str] = Field(
+        default_factory=list, max_length=MAX_BUSINESS_AREA_SELECTIONS
+    )
 
 
 def _active_user_roles(user: User) -> list[UserRole]:
@@ -101,13 +121,96 @@ def _to_user_summary(user: User) -> AdminUserSummaryResponse:
     )
 
 
-def _to_user_detail(user: User) -> AdminUserDetailResponse:
+def _contact_business_areas(
+    db: Session, user_id: UUID
+) -> list[ContactBusinessAreaResponse]:
+    area_ids = qualifying_contact_area_ids(db, user_id)
+    if not area_ids:
+        return []
+    areas = (
+        db.query(BusinessArea.id, BusinessArea.name)
+        .filter(BusinessArea.id.in_(area_ids), BusinessArea.deleted_at.is_(None))
+        .order_by(BusinessArea.name)
+        .all()
+    )
+    return [ContactBusinessAreaResponse(id=str(a.id), name=a.name) for a in areas]
+
+
+def _to_user_detail(db: Session, user: User) -> AdminUserDetailResponse:
     summary = _to_user_summary(user)
     return AdminUserDetailResponse(
         **summary.model_dump(),
         created_at=user.created_at.isoformat() if user.created_at else "",
         updated_at=user.updated_at.isoformat() if user.updated_at else "",
+        contact_business_areas=_contact_business_areas(db, user.id),
     )
+
+
+def _parse_uuids(values: List[str], detail: str) -> set[UUID]:
+    parsed: set[UUID] = set()
+    for value in values:
+        try:
+            parsed.add(UUID(value))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=detail
+            ) from exc
+    return parsed
+
+
+def _validate_business_area_selection(
+    db: Session, target_role_ids: set[UUID], area_ids: set[UUID]
+) -> bool:
+    """Validate US-005 area rules before any change; return whether BAM is selected.
+
+    Selected areas are locked ``FOR SHARE`` so a concurrent business-area delete
+    cannot commit between this check and the contact insert.
+    """
+    manager_role_id = (
+        db.query(Role.id)
+        .filter(
+            Role.name == BUSINESS_AREA_MANAGER_ROLE,
+            Role.deleted_at.is_(None),
+            Role.is_active.is_(True),
+        )
+        .scalar()
+    )
+    manager_selected = (
+        manager_role_id is not None and manager_role_id in target_role_ids
+    )
+
+    if not manager_selected:
+        if area_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Business areas can only be selected with the "
+                    "Business Area Manager role"
+                ),
+            )
+        return False
+
+    if not area_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Select at least one active business area for the "
+                "Business Area Manager role"
+            ),
+        )
+
+    active_count = len(
+        db.query(BusinessArea.id)
+        .filter(BusinessArea.id.in_(area_ids), BusinessArea.deleted_at.is_(None))
+        .with_for_update(read=True)
+        .all()
+    )
+    if active_count != len(area_ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="One or more business areas are invalid or inactive",
+        )
+    return True
 
 
 router = APIRouter(
@@ -177,7 +280,7 @@ async def get_user_detail(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    return _to_user_detail(user)
+    return _to_user_detail(db, user)
 
 
 @router.put("/{user_id}/roles", response_model=AdminUserDetailResponse)
@@ -198,14 +301,8 @@ async def update_user_roles(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    target_role_ids: set[UUID] = set()
-    for role_id_str in body.role_ids:
-        try:
-            target_role_ids.add(UUID(role_id_str))
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role ID"
-            ) from exc
+    target_role_ids = _parse_uuids(body.role_ids, "Invalid role ID")
+    target_area_ids = _parse_uuids(body.business_area_ids, "Invalid business area ID")
 
     if target_role_ids:
         role_count = (
@@ -222,6 +319,10 @@ async def update_user_roles(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="One or more role IDs are invalid",
             )
+
+    manager_selected = _validate_business_area_selection(
+        db, target_role_ids, target_area_ids
+    )
 
     now = _utc_naive_now()
     existing_memberships = db.query(UserRole).filter(UserRole.user_id == user.id).all()
@@ -253,6 +354,24 @@ async def update_user_roles(
             membership.assigned_by_id = UUID(admin_user.sub)
             membership.assigned_at = now
 
+    added_contact_area_ids: list[UUID] = []
+    if manager_selected:
+        added_contact_area_ids = add_linked_contacts(
+            db, user.id, frozenset(target_area_ids)
+        )
+
+    new_audit_values: dict = {
+        "role_ids": [str(role_id) for role_id in sorted(target_role_ids, key=str)]
+    }
+    if manager_selected:
+        # Contact additions ride on the existing UPDATE_ROLES event (US-005 AC8).
+        new_audit_values["business_area_ids"] = [
+            str(area_id) for area_id in sorted(target_area_ids, key=str)
+        ]
+        new_audit_values["added_contact_business_area_ids"] = [
+            str(area_id) for area_id in added_contact_area_ids
+        ]
+
     db.add(
         AuditLog(
             entity_type="users",
@@ -264,11 +383,7 @@ async def update_user_roles(
                     str(role_id) for role_id in sorted(current_active_role_ids, key=str)
                 ]
             },
-            new_values={
-                "role_ids": [
-                    str(role_id) for role_id in sorted(target_role_ids, key=str)
-                ]
-            },
+            new_values=new_audit_values,
             description=f"Updated role assignments for user '{user.email}'",
         )
     )
@@ -286,4 +401,4 @@ async def update_user_roles(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    return _to_user_detail(refreshed_user)
+    return _to_user_detail(db, refreshed_user)

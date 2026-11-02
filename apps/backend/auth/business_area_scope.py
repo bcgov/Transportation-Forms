@@ -57,6 +57,28 @@ def qualifying_contact_area_ids(db: Session, user_id: UUID) -> frozenset[UUID]:
     return frozenset(area_id for (area_id,) in rows)
 
 
+def add_linked_contacts(
+    db: Session, user_id: UUID, area_ids: frozenset[UUID]
+) -> list[UUID]:
+    """Make ``user_id`` a linked contact of each area in ``area_ids`` (US-005).
+
+    Areas where the user already qualifies (linked or email contact) are
+    skipped so memberships are never duplicated. Callers must have verified
+    that every area is active. Returns the areas that received a new contact.
+    """
+    existing = qualifying_contact_area_ids(db, user_id)
+    added: list[UUID] = []
+    for area_id in sorted(area_ids - existing, key=str):
+        result = db.execute(
+            insert(BusinessAreaContact)
+            .values(id=uuid4(), business_area_id=area_id, contact_user_id=user_id)
+            .on_conflict_do_nothing(constraint="uq_ba_contact_user")
+        )
+        if result.rowcount:
+            added.append(area_id)
+    return added
+
+
 def _utc_naive_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
