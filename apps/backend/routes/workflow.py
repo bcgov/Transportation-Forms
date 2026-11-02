@@ -122,6 +122,11 @@ def _handle_workflow_error(exc: Exception) -> NoReturn:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if isinstance(exc, FormWorkflowValidationError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    if isinstance(exc, PermissionError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
     if isinstance(exc, ValueError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
@@ -138,7 +143,7 @@ def _rollback_unexpected(db: Session, exc: Exception) -> None:
     if not isinstance(
         exc, (
             FormNotFoundError, FormWorkflowConflictError,
-            FormWorkflowValidationError, ValueError,
+            FormWorkflowValidationError, PermissionError, ValueError,
         ),
     ):
         db.rollback()
@@ -243,7 +248,11 @@ async def submit_form_for_review(
 
     try:
         form = FormService.submit_form_for_review(
-            db, form_uuid, UUID(current_user.sub), request.expected_version
+            db,
+            form_uuid,
+            UUID(current_user.sub),
+            request.expected_version,
+            authorization=authorization,
         )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001

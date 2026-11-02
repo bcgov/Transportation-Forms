@@ -17,6 +17,7 @@ import {
     getUploadedFileUrl,
     getUploadedFileFilename,
     getUploadedFileType,
+    setUploadFormId,
     clearUploadState,
     restoreUploadState,
 } from './file-upload.js';
@@ -606,6 +607,7 @@ export async function showCreateView() {
  */
 export async function showEditView(formId) {
     resetFormState();
+    setUploadFormId(formId);
 
     // Sub-module init
     initKeywords();
@@ -891,6 +893,7 @@ export function resetFormState() {
     _currentFormId = null;
     _currentFormStatus = null;
     _currentFormAvailableActions = [];
+    setUploadFormId(null);
     clearUploadState();
     _formNumberReservationId = null;
 

@@ -11,6 +11,8 @@ import { getAuthToken } from '../auth.js';
 let _uploadedFileUrl = null;
 let _uploadedFileFilename = null;
 let _uploadedFileType = null;
+let _uploadFormId = null;
+let _uploadContextVersion = 0;
 let _uploadListenerController = null;
 
 // ─── State accessors ─────────────────────────────────────────────────────────
@@ -18,8 +20,13 @@ let _uploadListenerController = null;
 export function getUploadedFileUrl() { return _uploadedFileUrl; }
 export function getUploadedFileFilename() { return _uploadedFileFilename; }
 export function getUploadedFileType() { return _uploadedFileType; }
+export function setUploadFormId(formId) {
+    _uploadFormId = formId;
+    _uploadContextVersion += 1;
+}
 
 export function clearUploadState() {
+    _uploadContextVersion += 1;
     _uploadedFileUrl = null;
     _uploadedFileFilename = null;
     _uploadedFileType = null;
@@ -107,11 +114,13 @@ export async function handleFileSelect(eventOrFile) {
 // ─── Upload ───────────────────────────────────────────────────────────────────
 
 /**
- * POST the file to `API_BASE/forms/upload`, update module state, and refresh the UI.
+ * POST the file to the create or form-scoped edit upload endpoint.
  * @param {File} file
  */
 export async function uploadFile(file) {
     if (document.getElementById('fileInput')?.disabled) return;
+    _uploadContextVersion += 1;
+    const contextVersion = _uploadContextVersion;
     document.getElementById('uploadProgress').style.display = 'block';
     document.getElementById('uploadProgressText').textContent = `Uploading ${file.name}\u2026`;
     document.getElementById('uploadedFileInfo').style.display = 'none';
@@ -122,7 +131,10 @@ export async function uploadFile(file) {
 
     try {
         const token = _getAuthToken();
-        const response = await fetch(`${API_BASE}/forms/upload`, {
+        const endpoint = _uploadFormId
+            ? `${API_BASE}/forms/${encodeURIComponent(_uploadFormId)}/upload`
+            : `${API_BASE}/forms/upload`;
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: token ? { 'Authorization': `Bearer ${token}` } : {},
             body: formData,
@@ -134,17 +146,22 @@ export async function uploadFile(file) {
         }
 
         const result = await response.json();
+        if (contextVersion !== _uploadContextVersion) return;
         _uploadedFileUrl = result.url;
         _uploadedFileFilename = result.filename;
         _uploadedFileType = result.file_type || null;
         showUploadedFile(result.url, result.filename);
     } catch (error) {
-        showFieldError('fileUpload', 'Upload failed: ' + error.message);
+        if (contextVersion === _uploadContextVersion) {
+            showFieldError('fileUpload', 'Upload failed: ' + error.message);
+        }
     } finally {
-        document.getElementById('uploadProgress').style.display = 'none';
-        // Reset the input so the same file can be re-selected if needed
-        const fileInput = document.getElementById('fileInput');
-        if (fileInput) fileInput.value = '';
+        if (contextVersion === _uploadContextVersion) {
+            document.getElementById('uploadProgress').style.display = 'none';
+            // Reset the input so the same file can be re-selected if needed
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput) fileInput.value = '';
+        }
     }
 }
 
@@ -163,9 +180,7 @@ export function showUploadedFile(url, filename) {
 
 /** Hide the uploaded-file indicator and reset module state. */
 export function clearUploadedFile() {
-    _uploadedFileUrl = null;
-    _uploadedFileFilename = null;
-    _uploadedFileType = null;
+    clearUploadState();
     document.getElementById('uploadedFileInfo').style.display = 'none';
 }
 

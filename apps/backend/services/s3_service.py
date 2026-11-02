@@ -120,6 +120,7 @@ def upload_file(
     file_bytes: bytes,
     original_filename: str,
     content_type: str = "application/octet-stream",
+    form_id: uuid.UUID | None = None,
 ) -> Tuple[str, str]:
     """Upload a file to S3 object storage and return (object_key, object_key).
 
@@ -139,7 +140,13 @@ def upload_file(
     if "." in original_filename:
         ext = "." + original_filename.rsplit(".", 1)[-1].lower()
 
-    object_key = f"uploads/{uuid.uuid4()}{ext}"
+    if form_id is not None:
+        extension = ext.removeprefix(".")
+        if not (1 <= len(extension) <= 10 and extension.isascii() and extension.isalnum()):
+            ext = ""
+        object_key = f"uploads/forms/{form_id}/{uuid.uuid4()}{ext}"
+    else:
+        object_key = f"uploads/{uuid.uuid4()}{ext}"
 
     client = _get_s3_client()
     

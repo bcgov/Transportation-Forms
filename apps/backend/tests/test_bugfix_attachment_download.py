@@ -340,9 +340,12 @@ class TestStreamFormAttachment:
         )
         assert resp.status_code == 404
 
-    def test_returns_403_without_form_read_permission(self, client, db, admin_user):
-        """Endpoint returns 403 when the token lacks form:read."""
+    def test_returns_403_without_form_read_permission(
+        self, client, db, admin_user, user_factory
+    ):
+        """Endpoint returns 403 when the user has no form:read role."""
         form = _make_download_form(db, admin_user.id)
+        unprivileged_user = user_factory()
 
         from fastapi import Request
         from backend.auth.dependencies import get_current_user
@@ -351,8 +354,8 @@ class TestStreamFormAttachment:
 
         def _noperm_user(request: Request) -> TokenData:
             return TokenData(
-                sub=str(admin_user.id),
-                email="noperm@example.com",
+                sub=str(unprivileged_user.id),
+                email=unprivileged_user.email,
                 name="No Perm",
                 roles=[],
                 token_type="access",

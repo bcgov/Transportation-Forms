@@ -205,6 +205,13 @@ class FormUpdateRequest(BaseModel):
         description="Short file-type label (e.g. 'pdf', 'docx', 'unknown')",
     )
 
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, description: Optional[str]) -> Optional[str]:
+        if description is not None and not description.strip():
+            raise ValueError("description is required")
+        return description
+
     @field_validator("keywords")
     @classmethod
     def validate_keywords(cls, keywords: Optional[List[str]]) -> Optional[List[str]]:
@@ -396,7 +403,7 @@ def _safe_attachment_filename(filename: str) -> str:
 )
 async def upload_form_attachment(
     file: UploadFile = File(..., description="Form attachment file to upload"),
-    current_user: TokenData = Depends(get_current_user),
+    _current_user: TokenData = Depends(require_permission("forms", "create")),
 ) -> FileUploadResponse:
     """
     Upload a form attachment file to S3 object storage and return its object key.
@@ -406,8 +413,61 @@ async def upload_form_attachment(
 
     - **file**: The file to upload (PDF, DOCX, etc.)
     """
+    return await _store_form_attachment(file)
+
+
+@router.post(
+    "/{form_id}/upload", response_model=FileUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_scoped_form_attachment(
+    form_id: str,
+    file: UploadFile = File(..., description="Form attachment file to upload"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FileUploadResponse:
+    try:
+        form_uuid = UUID(form_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+        ) from None
+
+    form = FormService.get_form_by_id(db, form_uuid)
+    if not form:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+        )
+
+    authorization = await load_form_authorization_context(current_user.sub, db)
+    if not authorization.can_edit(form):
+        if form.status == "archived" and not authorization.can_read(form):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
+        )
+
+    return await _store_form_attachment(file, form_id=form_uuid)
+
+
+_MAX_SCOPED_ATTACHMENT_BYTES = 25 * 1024 * 1024
+
+
+async def _store_form_attachment(
+    file: UploadFile, *, form_id: Optional[UUID] = None
+) -> FileUploadResponse:
     # Read file bytes
-    file_bytes = await file.read()
+    file_bytes = await file.read(
+        _MAX_SCOPED_ATTACHMENT_BYTES + 1 if form_id is not None else -1
+    )
+    if form_id is not None and len(file_bytes) > _MAX_SCOPED_ATTACHMENT_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="Attachment is too large",
+        )
     if not file_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty"
@@ -417,11 +477,19 @@ async def upload_form_attachment(
     original_filename = file.filename or "attachment"
 
     try:
-        object_key, object_key_ref = s3_service.upload_file(
-            file_bytes=file_bytes,
-            original_filename=original_filename,
-            content_type=content_type,
-        )
+        if form_id is None:
+            object_key, object_key_ref = s3_service.upload_file(
+                file_bytes=file_bytes,
+                original_filename=original_filename,
+                content_type=content_type,
+            )
+        else:
+            object_key, object_key_ref = s3_service.upload_file(
+                file_bytes=file_bytes,
+                original_filename=original_filename,
+                content_type=content_type,
+                form_id=form_id,
+            )
         # FEAT-0002: derive file type from MIME
         file_type = s3_service.derive_file_type(content_type)
         return FileUploadResponse(
@@ -513,11 +581,18 @@ async def autocomplete_forms(    q: str = Query(
     db: Session = Depends(get_db),
 ) -> FormAutocompleteResponse:
     """Return autocomplete suggestions for form titles/keywords."""
+    authorization = await load_form_authorization_context(current_user.sub, db)
+    scoped_areas = (
+        None
+        if authorization.has_unpublished_any_access()
+        else allowed_unpublished_area_ids(authorization)
+    )
     suggestions = FormService.get_autocomplete_suggestions(
         db=db,
         query_text=q,
         max_suggestions=max_suggestions,
         published_only=_is_staff_viewer_only(current_user, db),
+        unpublished_area_ids=scoped_areas,
     )
     return FormAutocompleteResponse(query=q, suggestions=suggestions)
 
@@ -554,12 +629,22 @@ async def download_form_attachment(
         )
 
     form = FormService.get_form_by_id(db, form_uuid)
-    if not form or (
-        _is_staff_viewer_only(current_user, db) and form.status != "published"
-    ):
+    if not form:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Form not found",
+        )
+
+    authorization = await load_form_authorization_context(current_user.sub, db)
+    if not authorization.can_read(form):
+        if form.status == "archived" or _is_staff_viewer_only(current_user, db):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Form not found",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for this action",
         )
 
     if form.form_source != "Download" or not form.form_attachment_url:
@@ -668,9 +753,8 @@ async def get_form(
     try:
         form_uuid = UUID(form_id)
         form = FormService.get_form_by_id(db, form_uuid)
-        form_data = FormService.get_form_with_details(db, form_uuid)
 
-        if not form or not form_data:
+        if not form:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
@@ -686,6 +770,11 @@ async def get_form(
                 detail="Insufficient permissions for this action",
             )
 
+        form_data = FormService.get_form_with_details(db, form_uuid)
+        if not form_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+            )
         form_data["available_actions"] = authorization.available_actions(form)
         return FormDetailResponse(**form_data)
 
@@ -713,17 +802,18 @@ async def update_form(
         # BR-003: Prevent structural edits while form is in Pending Review state
         form_check = FormService.get_form_by_id(db, form_uuid)
         authorization = await load_form_authorization_context(current_user.sub, db)
-        if form_check and form_check.status in {"published", "archived"}:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Published and Archived forms cannot be updated",
-            )
-        if form_check and form_check.status == "pending_review":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Form cannot be edited while it is in Pending Review state",
-            )
         if form_check and not authorization.can_edit(form_check):
+            if authorization.can_read(form_check):
+                if form_check.status in {"published", "archived"}:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Published and Archived forms cannot be updated",
+                    )
+                if form_check.status == "pending_review":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Form cannot be edited while it is in Pending Review state",
+                    )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient permissions for this action",
@@ -784,6 +874,7 @@ async def update_form(
                 allow_non_owner_draft=bool(
                     form_check and authorization.can_edit(form_check)
                 ),
+                authorization=authorization,
                 **update_data,
             )
         except FormWorkflowConflictError as exc:
