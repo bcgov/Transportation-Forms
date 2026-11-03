@@ -202,7 +202,7 @@ function _canAccessOperationalRoute(path) {
     return hasPermission('form:create');
   }
   if (path.startsWith('/edit/')) {
-    return hasPermission('form:edit');
+    return hasPermission('form:edit') || hasPermission('form:edit:business_area');
   }
   if (path === ROUTES.RESERVE) {
     return hasPermission('reservation:create');
@@ -548,7 +548,14 @@ export function initRouter() {
   // auth.js signals that the session has expired / user signed out → go home.
   window.addEventListener('auth:navigate-home', () => navigateTo(ROUTES.HOME));
   window.addEventListener('auth:authorization-refreshed', () => {
-    routeHandler(window.location.pathname);
+    const currentPath = window.location.pathname;
+    const editorOpen = currentPath.startsWith('/edit/')
+      && document.getElementById('createView')?.style.display === 'block';
+    if (editorOpen && _canAccessOperationalRoute(currentPath)) {
+      updateNavbar();
+      return;
+    }
+    routeHandler(currentPath);
   });
 
   // auth.js signals that the OIDC callback exchange completed → resume at

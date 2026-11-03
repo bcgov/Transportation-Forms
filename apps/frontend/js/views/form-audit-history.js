@@ -385,6 +385,7 @@ export function clearAuditHistory() {
 }
 
 window.addEventListener('auth:session-cleared', clearAuditHistory);
+window.addEventListener('auth:authorization-refreshed', clearAuditHistory);
 
 export function loadAuditHistory(id) {
     clearAuditHistory();

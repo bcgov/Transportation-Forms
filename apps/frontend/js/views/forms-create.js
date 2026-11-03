@@ -41,6 +41,60 @@ let _loadedFormSnapshot = null;
 let _currentFormVersion = null;
 let _submitInProgress = false;
 let _submitNeedsReload = false;
+let _formRequestController = null;
+
+async function _handleFormAuthorizationRefreshed() {
+    _currentFormAvailableActions = [];
+    clearAuditHistory();
+    _setFormFieldsLocked(true);
+    _updateWorkflowButtons(_currentFormStatus, []);
+    const formId = _currentFormId;
+    if (!window.location.pathname.startsWith('/edit/') || !formId) {
+        _formRequestController?.abort();
+        if (window.location.pathname === ROUTES.FORM_CREATE) {
+            _setFormFieldsLocked(!hasPermission('form:create'));
+        }
+        return;
+    }
+    if (_loadedFormSnapshot === null) {
+        await _loadFormForEdit(formId);
+        return;
+    }
+
+    _formRequestController?.abort();
+    const controller = new AbortController();
+    _formRequestController = controller;
+    try {
+        const response = await fetch(`${API_BASE}/forms/${formId}`, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (response.status === 403 || response.status === 404) {
+            resetFormState();
+            _navigate(ROUTES.FORMS_LIST);
+            return;
+        }
+        if (!response.ok) throw new Error('Unable to verify form access.');
+        const form = await response.json();
+        if (controller.signal.aborted || _currentFormId !== formId) return;
+        _currentFormAvailableActions = Array.isArray(form.available_actions)
+            ? form.available_actions
+            : [];
+        _currentFormStatus = form.status;
+        _updateWorkflowButtons(_currentFormStatus);
+        _setFormFieldsLocked(!_currentFormAvailableActions.includes('edit'));
+        loadAuditHistory(formId);
+    } catch (_error) {
+        if (controller.signal.aborted) return;
+        _submitNeedsReload = true;
+        _updateBusinessAreaActions();
+        _showSubmitMessage('Unable to verify form access.', 'warning');
+    }
+}
+
+window.addEventListener('auth:authorization-refreshed', _handleFormAuthorizationRefreshed);
+window.addEventListener('app:route-changing', event => {
+    const path = event.detail?.path || '';
+    if (!path.startsWith('/edit/')) _formRequestController?.abort();
+});
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
@@ -624,10 +678,16 @@ export async function showEditView(formId) {
  * @param {string} formId
  */
 async function _loadFormForEdit(formId) {
+    _formRequestController?.abort();
+    const controller = new AbortController();
+    _formRequestController = controller;
+    _currentFormId = formId;
+    _setFormFieldsLocked(true);
     try {
-        const response = await fetch(`${API_BASE}/forms/${formId}`);
+        const response = await fetch(`${API_BASE}/forms/${formId}`, { signal: controller.signal });
         if (!response.ok) throw new Error('Form not found');
         const form = await response.json();
+        if (controller.signal.aborted) return;
 
         _currentFormId = formId;
         _currentFormAvailableActions = Array.isArray(form.available_actions)
@@ -696,8 +756,10 @@ async function _loadFormForEdit(formId) {
         window.scrollTo(0, 0);
         loadAuditHistory(formId);
         await _loadFormBusinessAreas(form.business_area);
+        if (controller.signal.aborted) return;
         _loadedFormSnapshot = JSON.stringify(_collectFormData());
     } catch (error) {
+        if (controller.signal.aborted) return;
         showAlert('Error loading form: ' + error.message, 'danger');
         setTimeout(() => _navigate(ROUTES.FORMS_LIST), 2000);
     }
@@ -876,6 +938,8 @@ export async function handleFormSubmit(event) {
  * Called at the start of both showCreateView() and showEditView().
  */
 export function resetFormState() {
+    _formRequestController?.abort();
+    _formRequestController = null;
     clearAuditHistory();
     const form = document.getElementById('formCreate');
     if (form) form.reset();

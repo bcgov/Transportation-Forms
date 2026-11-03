@@ -25,6 +25,7 @@ import {
     hasPermission,
     hasPortalRoles,
     isAdminUser,
+    isBusinessAreaManager,
 } from '../auth.js';
 import { getCurrentUser } from '../state.js';
 import { openFormDetailsDrawer, downloadFormAttachment } from '../shared/form-details-drawer.js';
@@ -108,9 +109,9 @@ function _resetFormsListLifecycle() {
 }
 
 function _removeUnavailableWorkflowFilters() {
-    if (canPresentFormWorkflowMetadata()) return false;
+    const visibleFilterKeys = new Set(_getVisibleFilterOptions().map(option => option.key));
     const retainedFilters = _selectedFilterChips.filter(
-        chip => chip.category !== 'Workflow State'
+        chip => visibleFilterKeys.has(chip.key)
     );
     if (retainedFilters.length === _selectedFilterChips.length) return false;
     _selectedFilterChips = retainedFilters;
@@ -121,12 +122,16 @@ function _removeUnavailableWorkflowFilters() {
 }
 
 function _handleFormsAuthorizationRefreshed() {
+    _formsRequestController?.abort();
+    _autocompleteRequestController?.abort();
+    clearTimeout(_autocompleteDebounceTimer);
+    _dismissSearchSuggestions();
+    document.getElementById('formsList')?.replaceChildren();
     _removeUnavailableWorkflowFilters();
     _renderFiltersMenu();
-    if (!canPresentFormWorkflowMetadata()) {
-        document.querySelectorAll('#formsList .forms-result-card__status').forEach(
-            statusElement => statusElement.remove()
-        );
+    if (document.getElementById('listView')?.style.display === 'block'
+        && hasPortalRoles() && hasPermission('form:read')) {
+        void loadForms(0);
     }
 }
 
@@ -1024,6 +1029,9 @@ function _getVisibleFilterOptions() {
         return _FILTER_OPTIONS.filter(
             option => option.category !== 'Workflow State'
         );
+    }
+    if (isBusinessAreaManager() && !hasPermission('form:read_unpublished:any')) {
+        return _FILTER_OPTIONS.filter(option => option.apiValue !== 'archived');
     }
     return _FILTER_OPTIONS;
 }
