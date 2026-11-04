@@ -49,11 +49,22 @@ const EDITOR_ACTIONS_BY_STATUS = {
     published: ['archive', 'unpublish', 'revert'],
     archived: ['restore'],
 };
+// Editor workflow buttons per status, each revealed by any of its server actions.
+const WORKFLOW_BUTTONS_BY_STATUS = {
+    draft: { submitForReviewBtn: ['submit_for_review'], deleteFormBtn: ['delete'] },
+    published: { archiveFormBtn: ['archive'], unpublishFormBtn: ['unpublish', 'revert'] },
+    archived: { restoreFormBtn: ['restore'] },
+};
+const WORKFLOW_BUTTON_IDS = Object.values(WORKFLOW_BUTTONS_BY_STATUS).flatMap(Object.keys);
 const EDITOR_UNAVAILABLE_MESSAGE =
     'This form cannot be opened in the editor. Use View details on the Forms list to see it.';
 
+function _forStatus(table, status, fallback) {
+    return Object.hasOwn(table, status) ? table[status] : fallback;
+}
+
 function _canOpenInEditor(status, availableActions) {
-    const editorActions = EDITOR_ACTIONS_BY_STATUS[status] ?? [];
+    const editorActions = _forStatus(EDITOR_ACTIONS_BY_STATUS, status, []);
     return editorActions.some(action => availableActions.includes(action));
 }
 
@@ -110,7 +121,8 @@ async function _handleFormAuthorizationRefreshed() {
         );
         _setFormFieldsLocked(!canEdit, !canChangeBusinessArea);
         loadAuditHistory(formId);
-    } catch (_error) {
+    } catch {
+        // Keep the editor locked; the user must reload before saving or submitting.
         if (controller.signal.aborted) return;
         _submitNeedsReload = true;
         _updateBusinessAreaActions();
@@ -294,57 +306,29 @@ function _initWorkflowButtonListeners() {
  * Show/hide and label workflow action buttons based on form status and user permissions.
  * @param {string|null} status  Current form status, or null for create mode.
  */
+function _setDisplayed(element, visible) {
+    if (element) element.style.display = visible ? '' : 'none';
+}
+
 function _updateWorkflowButtons(status, availableActions = _currentFormAvailableActions) {
     const saveDraftBtn = document.getElementById('submitBtn');
-    const submitForReviewBtn = document.getElementById('submitForReviewBtn');
-    const archiveFormBtn = document.getElementById('archiveFormBtn');
-    const deleteFormBtn = document.getElementById('deleteFormBtn');
-    const restoreFormBtn = document.getElementById('restoreFormBtn');
-    const unpublishFormBtn = document.getElementById('unpublishFormBtn');
-
-    // Default: hide all workflow extras
-    [submitForReviewBtn, archiveFormBtn, deleteFormBtn, restoreFormBtn, unpublishFormBtn].forEach(el => {
-        if (el) el.style.display = 'none';
-    });
+    WORKFLOW_BUTTON_IDS.forEach(id => _setDisplayed(document.getElementById(id), false));
 
     if (!status) {
         // Create mode — just show "Save draft"
-        if (saveDraftBtn) saveDraftBtn.style.display = hasPermission('form:create') ? '' : 'none';
+        _setDisplayed(saveDraftBtn, hasPermission('form:create'));
         return;
     }
 
     const actions = new Set(Array.isArray(availableActions) ? availableActions : []);
-
-    if (status === 'draft') {
-        if (saveDraftBtn) saveDraftBtn.style.display = actions.has('edit') ? '' : 'none';
-        if (submitForReviewBtn && actions.has('submit_for_review')) {
-            submitForReviewBtn.style.display = '';
-        }
-        if (deleteFormBtn && actions.has('delete')) {
-            deleteFormBtn.style.display = '';
-        }
-    } else if (status === 'pending_review') {
-        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-    } else if (status === 'published') {
-        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-        if (archiveFormBtn && actions.has('archive')) {
-            archiveFormBtn.style.display = '';
-        }
-        if (
-            unpublishFormBtn
-            && (actions.has('unpublish') || actions.has('revert'))
-        ) {
-            unpublishFormBtn.style.display = '';
-        }
-    } else if (status === 'archived') {
-        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-        if (restoreFormBtn && actions.has('restore')) {
-            restoreFormBtn.style.display = '';
-        }
-    } else {
-        // unknown — no actions
-        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-    }
+    _setDisplayed(saveDraftBtn, status === 'draft' && actions.has('edit'));
+    const buttons = _forStatus(WORKFLOW_BUTTONS_BY_STATUS, status, {});
+    Object.entries(buttons).forEach(([id, revealingActions]) => {
+        _setDisplayed(
+            document.getElementById(id),
+            revealingActions.some(action => actions.has(action)),
+        );
+    });
 }
 
 /**
@@ -744,6 +728,58 @@ export async function showEditView(formId) {
     await _loadFormForEdit(formId);
 }
 
+/** Write a loaded form's stored values into the editor fields. */
+function _populateFormFields(form) {
+    document.getElementById('title').value = form.title;
+    document.getElementById('description').value = form.description || '';
+    document.getElementById('isPublic').checked = form.is_public;
+    document.getElementById('collectsPersonalInfo').value = form.collects_personal_info || 'No';
+    document.getElementById('effectiveDate').value = form.effective_date
+        ? form.effective_date.split('T')[0]
+        : '';
+    document.getElementById('formSource').value = form.form_source || '';
+    document.getElementById('formSourceUrl').value = form.form_source_url || '';
+
+    // TASK-415: Show read-only form number in edit mode
+    document.getElementById('formNumberSelectContainer').style.display = 'none';
+    document.getElementById('formNumberRequiredStar').style.display = 'none';
+    document.getElementById('formNumberReadonlyContainer').style.display = 'block';
+    document.getElementById('formNumberReadonly').textContent = getFormNumberDisplay(form) || 'N/A';
+    document.getElementById('formNumber').required = false;
+
+    // TASK-416: Restore attachment state when editing a Download-type form
+    if (form.form_source === 'Download' && form.form_attachment_url) {
+        restoreUploadState(
+            form.form_attachment_url,
+            form.form_attachment_filename || 'Attachment',
+            form.file_type || null,
+        );
+    }
+    _onFormSourceChange();
+
+    setKeywords(form.keywords || []);
+    _loadedKeywords = getKeywords();
+}
+
+/** Render the editor heading, breadcrumb, status badge and page title for a loaded form. */
+function _renderFormHeader(form) {
+    const submitBtn = document.getElementById('submitBtn');
+    if (form.status === 'draft') {
+        if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-save"></i> Save draft';
+        document.getElementById('formPageHeading').textContent = 'Edit Form';
+    } else {
+        if (submitBtn) submitBtn.style.display = 'none';
+        document.getElementById('formPageHeading').textContent = 'View Form';
+    }
+    const formNumber = getFormNumberDisplay(form);
+    document.getElementById('formBreadcrumbCurrent').textContent = formNumber || 'Edit Form';
+    document.getElementById('formPageSubtitle').textContent = `${formNumber || 'Form'}: ${form.title}`;
+    const badge = document.getElementById('formStatusBadge');
+    badge.textContent = form.status.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
+    badge.style.display = '';
+    document.getElementById('pageTitle').textContent = `Edit Form - ${form.title} - BC Gov`;
+}
+
 /**
  * Fetch an existing form from the API and populate all form fields.
  * @param {string} formId
@@ -771,37 +807,7 @@ async function _loadFormForEdit(formId) {
             return;
         }
         _currentFormVersion = form.current_version;
-
-        // Scalar fields
-        document.getElementById('title').value = form.title;
-        document.getElementById('description').value = form.description || '';
-        document.getElementById('isPublic').checked = form.is_public;
-        document.getElementById('collectsPersonalInfo').value = form.collects_personal_info || 'No';
-        document.getElementById('effectiveDate').value = form.effective_date
-            ? form.effective_date.split('T')[0]
-            : '';
-        document.getElementById('formSource').value = form.form_source || '';
-        document.getElementById('formSourceUrl').value = form.form_source_url || '';
-
-        // TASK-415: Show read-only form number in edit mode
-        document.getElementById('formNumberSelectContainer').style.display = 'none';
-        document.getElementById('formNumberRequiredStar').style.display = 'none';
-        document.getElementById('formNumberReadonlyContainer').style.display = 'block';
-        document.getElementById('formNumberReadonly').textContent = getFormNumberDisplay(form) || 'N/A';
-        document.getElementById('formNumber').required = false;
-
-        // TASK-416: Restore attachment state when editing a Download-type form
-        if (form.form_source === 'Download' && form.form_attachment_url) {
-            restoreUploadState(
-                form.form_attachment_url,
-                form.form_attachment_filename || 'Attachment',
-                form.file_type || null,
-            );
-        }
-        _onFormSourceChange();
-
-        setKeywords(form.keywords || []);
-        _loadedKeywords = getKeywords();
+        _populateFormFields(form);
 
         // Workflow button state and field locking (FEAT-0001)
         _currentFormStatus = form.status;
@@ -812,24 +818,7 @@ async function _loadFormForEdit(formId) {
             'change_business_area',
         );
         _setFormFieldsLocked(isLocked, isBusinessAreaLocked);
-
-        // Label the submit button based on status
-        const submitBtn = document.getElementById('submitBtn');
-        if (form.status === 'draft') {
-            if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-save"></i> Save draft';
-            document.getElementById('formPageHeading').textContent = 'Edit Form';
-        } else {
-            if (submitBtn) submitBtn.style.display = 'none';
-            document.getElementById('formPageHeading').textContent =
-                form.status === 'pending_review' ? 'Review Form' : 'View Form';
-        }
-        document.getElementById('formBreadcrumbCurrent').textContent = getFormNumberDisplay(form) || 'Edit Form';
-        document.getElementById('formPageSubtitle').textContent =
-            `${getFormNumberDisplay(form) || 'Form'}: ${form.title}`;
-        const badge = document.getElementById('formStatusBadge');
-        badge.textContent = form.status.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
-        badge.style.display = '';
-        document.getElementById('pageTitle').textContent = `Edit Form - ${form.title} - BC Gov`;
+        _renderFormHeader(form);
 
         document.getElementById('listView').style.display = 'none';
         document.getElementById('createView').style.display = 'block';

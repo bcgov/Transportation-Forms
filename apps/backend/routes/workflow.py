@@ -30,6 +30,7 @@ _PERM_REVIEW = "form:review"
 _PERM_ARCHIVE = "form:archive"
 _PERM_CREATE = "form:create"  # FEAT-0016
 _PERM_EDIT = "form:edit"  # FEAT-0016
+_INSUFFICIENT_PERMISSIONS = "Insufficient permissions for this action"
 
 
 # ─── Pydantic models ──────────────────────────────────────────────────────────
@@ -125,7 +126,7 @@ def _handle_workflow_error(exc: Exception) -> NoReturn:
     if isinstance(exc, PermissionError):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
     if isinstance(exc, ValueError):
         raise HTTPException(
@@ -230,7 +231,7 @@ async def submit_form_for_review(
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
 
     form_check = (
@@ -247,7 +248,7 @@ async def submit_form_for_review(
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
 
     try:

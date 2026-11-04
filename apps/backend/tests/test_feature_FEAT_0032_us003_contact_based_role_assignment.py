@@ -29,7 +29,7 @@ from backend.routes import auth as auth_routes
 from backend.seeds.default_roles import seed_default_roles
 
 
-@pytest.fixture()
+@pytest.fixture
 def login_client(db, monkeypatch):
     seed_default_roles(db)
     app.dependency_overrides[get_db] = lambda: db
@@ -213,7 +213,8 @@ async def test_tc_003_6_final_contact_removal_revokes_role_at_next_login(
     contact = _linked_contact(db, _area(db), user)
     _login(login_client, monkeypatch, user.email)
     granted = _manager_membership(db, user)
-    assert granted is not None and granted.deleted_at is None
+    assert granted is not None
+    assert granted.deleted_at is None
 
     db.delete(contact)
     db.flush()

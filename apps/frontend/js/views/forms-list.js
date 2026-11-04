@@ -24,7 +24,6 @@ import {
     getAuthToken,
     hasPermission,
     hasPortalRoles,
-    isAdminUser,
     isBusinessAreaManager,
 } from '../auth.js';
 import { getCurrentUser } from '../state.js';

@@ -15,8 +15,9 @@ def test_form_controls_use_server_authorized_actions():
     assert "availableActions.has('submit_for_review')" in forms_list
     assert "availableActions.has('restore')" in forms_list
     assert "actions.has('edit')" in forms_create
-    assert "actions.has('submit_for_review')" in forms_create
-    assert "actions.has('restore')" in forms_create
+    assert "submitForReviewBtn: ['submit_for_review']" in forms_create
+    assert "restoreFormBtn: ['restore']" in forms_create
+    assert "revealingActions.some(action => actions.has(action))" in forms_create
     assert "_currentFormAvailableActions.includes('edit')" in forms_create
 
 

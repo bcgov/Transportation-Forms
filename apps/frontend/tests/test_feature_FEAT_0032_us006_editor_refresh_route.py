@@ -28,10 +28,13 @@ def test_refresh_preserves_only_a_mounted_authorized_editor() -> None:
 
 def test_other_or_denied_routes_still_reenter_the_authorization_guards() -> None:
     body = _refresh_listener()
-    assert body.rstrip().endswith("routeHandler(currentPath);")
-    assert body.index("_canAccessOperationalRoute(currentPath)") < body.index(
-        "routeHandler(currentPath);"
-    )
+    reroute = "void routeHandler(currentPath).catch(() => {"
+    assert reroute in body
+    assert body.index("_canAccessOperationalRoute(currentPath)") < body.index(reroute)
+    assert (
+        "Unable to refresh this page after your access changed. "
+        "Refresh the page and try again."
+    ) in body.split(reroute, 1)[1]
     assert "resetFormState" not in body
     assert "showEditView" not in body
 

@@ -62,6 +62,7 @@ _SENSITIVE_PAIR = re.compile(
     r"\s*[:=]\s*[^\s,;&]+"
 )
 _EMBEDDED_URL = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
+_INSUFFICIENT_PERMISSIONS = "Insufficient permissions for this action"
 
 
 def _safe_text(value: str) -> str:
@@ -225,6 +226,26 @@ class FormService:
     # =====================================================================
 
     @staticmethod
+    def _require_unused_create_attachment(db: Session, form_attachment_url: str) -> None:
+        """Reject form-scoped or already-linked attachments on form creation."""
+        object_key = FormService._extract_s3_object_key(form_attachment_url)
+        if not object_key:
+            return
+        if object_key.startswith("uploads/forms/"):
+            raise ValueError("Form-scoped attachments cannot be used to create forms")
+        in_use = (
+            db.query(Form.id).filter(
+                Form.deleted_at.is_(None),
+                Form.form_attachment_url.contains(object_key, autoescape=True),
+            ).first()
+            or db.query(FormVersion.id).filter(
+                FormVersion.s3_key == object_key,
+            ).first()
+        )
+        if in_use:
+            raise ValueError("Attachment is already associated with another form")
+
+    @staticmethod
     def create_form(
         db: Session,
         title: str,
@@ -310,19 +331,7 @@ class FormService:
                 raise ValueError("Reservation is already used by another form")
 
         if form_attachment_url:
-            object_key = FormService._extract_s3_object_key(form_attachment_url)
-            if object_key and object_key.startswith("uploads/forms/"):
-                raise ValueError("Form-scoped attachments cannot be used to create forms")
-            if object_key and (
-                db.query(Form.id).filter(
-                    Form.deleted_at.is_(None),
-                    Form.form_attachment_url.contains(object_key, autoescape=True),
-                ).first()
-                or db.query(FormVersion.id).filter(
-                    FormVersion.s3_key == object_key,
-                ).first()
-            ):
-                raise ValueError("Attachment is already associated with another form")
+            FormService._require_unused_create_attachment(db, form_attachment_url)
 
         # Create the form
         form = Form(
@@ -661,7 +670,7 @@ class FormService:
 
         if authorization is not None:
             if authorization.user_id != updated_by_id or not authorization.can_edit(form):
-                raise PermissionError("Insufficient permissions for this action")
+                raise PermissionError(_INSUFFICIENT_PERMISSIONS)
             if (
                 "business_area_id" in kwargs
                 and kwargs["business_area_id"] != form.business_area_id
@@ -681,7 +690,7 @@ class FormService:
                     or not reference.startswith(prefix)
                     or not _FORM_BOUND_KEY_SUFFIX.fullmatch(reference[len(prefix):])
                 ):
-                    raise PermissionError("Insufficient permissions for this action")
+                    raise PermissionError(_INSUFFICIENT_PERMISSIONS)
 
         if form.status == "draft" and (
             form.created_by_id != updated_by_id and not allow_non_owner_draft
@@ -988,7 +997,7 @@ class FormService:
             authorization.user_id != user_id
             or not authorization.has_submit_scope(form)
         ):
-            raise PermissionError("Insufficient permissions for this action")
+            raise PermissionError(_INSUFFICIENT_PERMISSIONS)
         FormService._validate_workflow_transition(form.status, "pending_review")
         if expected_version is not None and form.current_version != expected_version:
             raise FormWorkflowConflictError(

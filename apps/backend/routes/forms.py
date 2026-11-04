@@ -53,6 +53,8 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 _KEYWORD_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+_INVALID_FORM_ID = "Invalid form ID format"
+_INSUFFICIENT_PERMISSIONS = "Insufficient permissions for this action"
 
 
 def _validate_keywords(keywords: Optional[List[str]]) -> Optional[List[str]]:
@@ -319,7 +321,7 @@ def _active_roles(user: TokenData, db: Session) -> list[Role]:
     except (AttributeError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
+            detail=_INSUFFICIENT_PERMISSIONS,
         ) from exc
 
     roles = (
@@ -338,13 +340,13 @@ def _active_roles(user: TokenData, db: Session) -> list[Role]:
         if not isinstance(role.name, str) or not role.name.strip():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions for this action",
+                detail=_INSUFFICIENT_PERMISSIONS,
             )
         normalized_names.append(role.name.strip().lower())
     if len(normalized_names) != len(set(normalized_names)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
     return roles
 
@@ -417,7 +419,7 @@ async def upload_form_attachment(
 
 
 @router.post(
-    "/{form_id}/upload", response_model=FileUploadResponse,
+    "/{form_id}/upload",
     status_code=status.HTTP_201_CREATED,
 )
 async def upload_scoped_form_attachment(
@@ -430,7 +432,7 @@ async def upload_scoped_form_attachment(
         form_uuid = UUID(form_id)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_FORM_ID
         ) from None
 
     form = FormService.get_form_by_id(db, form_uuid)
@@ -447,7 +449,7 @@ async def upload_scoped_form_attachment(
             )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
 
     return await _store_form_attachment(file, form_id=form_uuid)
@@ -625,7 +627,7 @@ async def download_form_attachment(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid form ID format",
+            detail=_INVALID_FORM_ID,
         )
 
     form = FormService.get_form_by_id(db, form_uuid)
@@ -644,7 +646,7 @@ async def download_form_attachment(
             )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
 
     if form.form_source != "Download" or not form.form_attachment_url:
@@ -767,7 +769,7 @@ async def get_form(
                 )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions for this action",
+                detail=_INSUFFICIENT_PERMISSIONS,
             )
 
         form_data = FormService.get_form_with_details(db, form_uuid)
@@ -780,7 +782,7 @@ async def get_form(
 
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_FORM_ID
         )
 
 
@@ -816,7 +818,7 @@ async def update_form(
                     )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions for this action",
+                detail=_INSUFFICIENT_PERMISSIONS,
             )
         requested_business_area_id = (
             UUID(request.business_area_id)
@@ -928,7 +930,7 @@ async def delete_form(
         form_uuid = UUID(form_id)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_FORM_ID
         )
 
     # ── Fetch form ───────────────────────────────────────────────────────
@@ -964,6 +966,56 @@ async def delete_form(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
         )
+
+
+_LIST_LIMITS = {24, 25, 48, 50, 96, 100}
+_LIST_STATUSES = {"draft", "pending_review", "published", "archived"}
+_LIST_SOURCES = {"Link", "Download"}
+
+
+def _reject_unknown_values(
+    name: str, values: Optional[List[str]], allowed: set[str]
+) -> None:
+    invalid = [value for value in values or [] if value not in allowed]
+    if invalid:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid {name} value(s): {', '.join(invalid)}. "
+            f"Allowed: {', '.join(sorted(allowed))}",
+        )
+
+
+def _validate_list_query(
+    limit: int,
+    sort_field: str,
+    sort_order: str,
+    status_filter: Optional[List[str]],
+    form_source: Optional[List[str]],
+) -> None:
+    if limit not in _LIST_LIMITS:
+        raise HTTPException(
+            status_code=422,
+            detail="limit must be one of: 24, 25, 48, 50, 96, 100",
+        )
+    if sort_field == "suggested" and sort_order != "desc":
+        raise HTTPException(
+            status_code=422,
+            detail="suggested sort supports descending order only",
+        )
+    _reject_unknown_values("status", status_filter, _LIST_STATUSES)
+    _reject_unknown_values("form_source", form_source, _LIST_SOURCES)
+
+
+def _parse_business_area_ids(values: Optional[List[str]]) -> Optional[List[UUID]]:
+    if not values:
+        return None
+    try:
+        return [UUID(value) for value in values]
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid business area ID format",
+        ) from None
 
 
 @router.get("", response_model=FormListResponse)
@@ -1010,49 +1062,8 @@ async def list_forms(
     - **sort_order**: Sort ascending (asc) or descending (desc)
     - **sort_field**: Sort by suggested (default), title, or form_number
     """
-    if limit not in {24, 25, 48, 50, 96, 100}:
-        raise HTTPException(
-            status_code=422,
-            detail="limit must be one of: 24, 25, 48, 50, 96, 100",
-        )
-
-    if sort_field == "suggested" and sort_order != "desc":
-        raise HTTPException(
-            status_code=422,
-            detail="suggested sort supports descending order only",
-        )
-
-    # Validate status values
-    VALID_STATUSES = {"draft", "pending_review", "published", "archived"}
-    if status_filter:
-        invalid = [s for s in status_filter if s not in VALID_STATUSES]
-        if invalid:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid status value(s): {', '.join(invalid)}. "
-                f"Allowed: {', '.join(sorted(VALID_STATUSES))}",
-            )
-
-    # Validate form_source values
-    VALID_SOURCES = {"Link", "Download"}
-    if form_source:
-        invalid_src = [s for s in form_source if s not in VALID_SOURCES]
-        if invalid_src:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid form_source value(s): {', '.join(invalid_src)}. "
-                f"Allowed: {', '.join(sorted(VALID_SOURCES))}",
-            )
-
-    business_area_uuid_list: Optional[List[UUID]] = None
-    if business_area_ids:
-        try:
-            business_area_uuid_list = [UUID(value) for value in business_area_ids]
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid business area ID format",
-            )
+    _validate_list_query(limit, sort_field, sort_order, status_filter, form_source)
+    business_area_uuid_list = _parse_business_area_ids(business_area_ids)
 
     authorization = await load_form_authorization_context(current_user.sub, db)
     unpublished_access = authorization.has_unpublished_any_access()
@@ -1120,7 +1131,7 @@ async def archive_form(
 
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_FORM_ID
         )
 
 
@@ -1147,5 +1158,5 @@ async def unarchive_form(
 
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_FORM_ID
         )

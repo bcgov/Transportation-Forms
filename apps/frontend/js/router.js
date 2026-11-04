@@ -566,7 +566,12 @@ export function initRouter() {
       updateNavbar();
       return;
     }
-    routeHandler(currentPath);
+    void routeHandler(currentPath).catch(() => {
+      showAlert(
+        'Unable to refresh this page after your access changed. Refresh the page and try again.',
+        'danger',
+      );
+    });
   });
 
   // auth.js signals that the OIDC callback exchange completed → resume at

@@ -11,6 +11,8 @@ from backend.auth.business_area_scope import qualifying_contact_area_ids
 from backend.models import Role, UserRole
 
 _BUSINESS_AREA_SCOPE = ":business_area"
+_PERM_READ_UNPUBLISHED_ANY = "form:read_unpublished:any"
+_PERM_EDIT = "form:edit"
 
 
 def _needs_business_area_scope(permissions: Set[str]) -> bool:
@@ -83,9 +85,9 @@ class FormAuthorizationContext:
         if form_status == "published":
             return "form:read" in self.permissions
         if form_status == "archived":
-            return "form:read_unpublished:any" in self.permissions
+            return _PERM_READ_UNPUBLISHED_ANY in self.permissions
         if form_status in {"draft", "pending_review"}:
-            return "form:read_unpublished:any" in self.permissions or (
+            return _PERM_READ_UNPUBLISHED_ANY in self.permissions or (
                 "form:read_unpublished:business_area" in self.permissions
                 and getattr(form, "business_area_id", None)
                 in self.active_business_area_ids
@@ -100,7 +102,7 @@ class FormAuthorizationContext:
 
     def can_edit(self, form: Any) -> bool:
         is_draft = getattr(form, "status", None) == "draft"
-        return is_draft and self._has_scoped_permission("form:edit", form)
+        return is_draft and self._has_scoped_permission(_PERM_EDIT, form)
 
     def can_change_business_area(self, form: Any) -> bool:
         return self.can_edit(form) and not (
@@ -112,7 +114,7 @@ class FormAuthorizationContext:
     def has_submit_scope(self, form: Any) -> bool:
         """Whether the user's edit and submit scopes cover this form, ignoring state."""
         return self._has_scoped_permission(
-            "form:edit", form
+            _PERM_EDIT, form
         ) and self._has_scoped_permission("form:submit_for_review", form)
 
     def can_submit(self, form: Any) -> bool:
@@ -123,7 +125,7 @@ class FormAuthorizationContext:
     def can_view_workflow_state(self) -> bool:
         return (
             "form:view_workflow_state" in self.permissions
-            or "form:edit" in self.permissions
+            or _PERM_EDIT in self.permissions
         )
 
     def available_actions(self, form: Any) -> list[str]:
@@ -153,13 +155,13 @@ class FormAuthorizationContext:
                 actions.append("unpublish")
             if {
                 "form:create",
-                "form:edit",
+                _PERM_EDIT,
             }.issubset(self.permissions):
                 actions.append("revert")
         return actions
 
     def has_unpublished_any_access(self) -> bool:
-        return "form:read_unpublished:any" in self.permissions
+        return _PERM_READ_UNPUBLISHED_ANY in self.permissions
 
     def is_admin(self) -> bool:
         return "admin" in self.role_names

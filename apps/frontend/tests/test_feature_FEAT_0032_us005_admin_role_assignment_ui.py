@@ -34,7 +34,8 @@ def test_selection_is_an_accessible_required_checkbox_group():
     body = _function_body(_source(), "function _renderBusinessAreaSelection(")
 
     assert '<fieldset id="userBusinessAreasFieldset"' in body
-    assert "<legend" in body and "(required)" in body
+    assert "<legend" in body
+    assert "(required)" in body
     assert 'aria-describedby="userBusinessAreasHelp userBusinessAreasError"' in body
     assert 'role="alert"' in body
     assert 'class="form-check-input user-business-area-checkbox"' in body

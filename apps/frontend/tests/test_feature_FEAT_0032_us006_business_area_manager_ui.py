@@ -126,8 +126,11 @@ def test_direct_editor_url_without_editor_action_redirects_with_toast():
     assert "pending_review" not in mapping
 
     can_open = _function_body(source, "function _canOpenInEditor(status, availableActions)")
-    assert "EDITOR_ACTIONS_BY_STATUS[status] ?? []" in can_open
+    assert "_forStatus(EDITOR_ACTIONS_BY_STATUS, status, [])" in can_open
     assert "availableActions.includes(action)" in can_open
+    lookup = _function_body(source, "function _forStatus(table, status, fallback)")
+    # Own-key lookup so unexpected statuses cannot resolve to prototype members.
+    assert "Object.hasOwn(table, status) ? table[status] : fallback" in lookup
 
     leave = _function_body(source, "function _leaveUnavailableEditor()")
     assert leave.index("resetFormState()") < leave.index("showAlert(")
@@ -137,8 +140,12 @@ def test_direct_editor_url_without_editor_action_redirects_with_toast():
     guard = "if (!_canOpenInEditor(form.status, _currentFormAvailableActions)) {"
     load = _function_body(source, "async function _loadFormForEdit(formId)")
     # The guard must run before any form content is written to the page.
-    assert load.index(guard) < load.index("document.getElementById('title').value")
-    assert load.index(guard) < load.index("restoreUploadState(")
+    assert load.index(guard) < load.index("_populateFormFields(form);")
+    assert load.index(guard) < load.index("_renderFormHeader(form);")
+    assert "document.getElementById('title').value" not in load
+    populate = _function_body(source, "function _populateFormFields(form)")
+    assert "document.getElementById('title').value = form.title;" in populate
+    assert "restoreUploadState(" in populate
     assert "_leaveUnavailableEditor();\n            return;" in load
     refresh = _function_body(source, "async function _handleFormAuthorizationRefreshed()")
     assert refresh.index(guard) < refresh.index("_currentFormStatus = form.status")
@@ -212,15 +219,22 @@ def test_published_card_status_and_actions_have_no_client_action_fallback():
     assert actions.rstrip().endswith("return buttons.join('\\n');")
 
 
+def _workflow_button_table(source: str) -> str:
+    return source.split("const WORKFLOW_BUTTONS_BY_STATUS = {", 1)[1].split("};", 1)[0]
+
+
 def test_unpublish_without_revert_uses_the_unpublish_endpoint():
     source = _source("js/views/forms-create.js")
+    assert (
+        "published: { archiveFormBtn: ['archive'], "
+        "unpublishFormBtn: ['unpublish', 'revert'] }"
+    ) in _workflow_button_table(source)
     buttons = _function_body(
         source,
         "function _updateWorkflowButtons(status, "
         "availableActions = _currentFormAvailableActions)",
     )
-    published = _function_body(buttons, "else if (status === 'published')")
-    assert "actions.has('unpublish') || actions.has('revert')" in published
+    assert "revealingActions.some(action => actions.has(action))" in buttons
 
     opener = _function_body(source, "function _openFormUnpublishModal()")
     assert "_currentFormAvailableActions.includes('unpublish')" in opener
@@ -234,8 +248,9 @@ def test_unpublish_without_revert_uses_the_unpublish_endpoint():
 
 
 def test_draft_save_and_submit_visibility_uses_server_actions():
+    source = _source("js/views/forms-create.js")
     buttons = _function_body(
-        _source("js/views/forms-create.js"),
+        source,
         "function _updateWorkflowButtons(status, "
         "availableActions = _currentFormAvailableActions)",
     )
@@ -243,16 +258,27 @@ def test_draft_save_and_submit_visibility_uses_server_actions():
         "const actions = new Set("
         "Array.isArray(availableActions) ? availableActions : []);"
     ) in buttons
-    assert buttons.index("el.style.display = 'none'") < buttons.index("const actions")
-    draft = _function_body(buttons, "if (status === 'draft')")
-    assert (
-        "if (saveDraftBtn) saveDraftBtn.style.display = "
-        "actions.has('edit') ? '' : 'none';"
-    ) in draft
-    submit = _function_body(
-        draft, "if (submitForReviewBtn && actions.has('submit_for_review'))"
+    hide_all = (
+        "WORKFLOW_BUTTON_IDS.forEach(id => "
+        "_setDisplayed(document.getElementById(id), false));"
     )
-    assert submit.strip() == "submitForReviewBtn.style.display = '';"
+    assert buttons.index(hide_all) < buttons.index("const actions")
+    assert (
+        "_setDisplayed(saveDraftBtn, status === 'draft' && actions.has('edit'));"
+    ) in buttons
+    assert "_forStatus(WORKFLOW_BUTTONS_BY_STATUS, status, {})" in buttons
+    table = _workflow_button_table(source)
+    assert (
+        "draft: { submitForReviewBtn: ['submit_for_review'], deleteFormBtn: ['delete'] }"
+    ) in table
+    assert "archived: { restoreFormBtn: ['restore'] }" in table
+    assert "pending_review" not in table
+    assert (
+        "const WORKFLOW_BUTTON_IDS = "
+        "Object.values(WORKFLOW_BUTTONS_BY_STATUS).flatMap(Object.keys);"
+    ) in source
+    display = _function_body(source, "function _setDisplayed(element, visible)")
+    assert "if (element) element.style.display = visible ? '' : 'none';" in display
 
 
 def test_loaded_draft_fields_unlock_only_from_server_edit_action():

@@ -20,6 +20,7 @@ from backend.models import (
     FormActivityEvent,
     FormNumberPrefix,
     FormNumberReservation,
+    FormVersion,
     FormWorkflow,
     Role,
     UserRole,
@@ -1084,3 +1085,89 @@ def test_manager_uploads_then_saves_file_on_scoped_draft(
         == 1
     )
     mock_delete.assert_not_called()
+
+
+def test_create_rejects_form_bound_or_already_linked_attachment(manager_context, db):
+    _, manager, owner, active_area, _, _ = manager_context
+    linked = _form(db, owner, active_area, status="published")
+    linked.form_attachment_url = "uploads/linked-form.pdf"
+    db.add(
+        FormVersion(
+            form_id=linked.id,
+            version_number=1,
+            s3_key="uploads/version-only.pdf",
+            file_name="version-only.pdf",
+            file_size=1,
+            file_type="pdf",
+            is_current=False,
+            uploaded_by_id=owner.id,
+        )
+    )
+    db.flush()
+    cases = {
+        f"uploads/forms/{linked.id}/{uuid.uuid4()}.pdf": (
+            "Form-scoped attachments cannot be used to create forms"
+        ),
+        "uploads/linked-form.pdf": "Attachment is already associated with another form",
+        "uploads/version-only.pdf": "Attachment is already associated with another form",
+    }
+    before = db.query(Form).count()
+
+    for attachment, message in cases.items():
+        with pytest.raises(ValueError) as error:
+            FormService.create_form(
+                db=db,
+                title="Rejected attachment",
+                description="Valid description",
+                is_public=False,
+                keywords=[],
+                business_area_id=active_area.id,
+                created_by_id=manager.id,
+                form_source="Download",
+                form_attachment_url=attachment,
+            )
+        assert str(error.value) == message
+    assert db.query(Form).count() == before
+
+    FormService._require_unused_create_attachment(db, "uploads/unused.pdf")
+    FormService._require_unused_create_attachment(db, "not-a-storage-reference")
+
+
+@pytest.mark.parametrize(
+    ("params", "status_code", "detail"),
+    [
+        ({"limit": 10}, 422, "limit must be one of: 24, 25, 48, 50, 96, 100"),
+        (
+            {"sort_order": "asc"},
+            422,
+            "suggested sort supports descending order only",
+        ),
+        (
+            {"status": ["draft", "deleted"]},
+            422,
+            "Invalid status value(s): deleted. "
+            "Allowed: archived, draft, pending_review, published",
+        ),
+        (
+            {"form_source": ["URL"]},
+            422,
+            "Invalid form_source value(s): URL. Allowed: Download, Link",
+        ),
+        (
+            {"business_area_ids": ["not-a-uuid"]},
+            400,
+            "Invalid business area ID format",
+        ),
+    ],
+)
+def test_list_rejects_invalid_query_before_reading_forms(
+    params, status_code, detail, manager_context
+):
+    client = manager_context[0]
+
+    with patch.object(FormService, "list_forms") as list_forms:
+        response = client.get("/api/v1/forms", params=params)
+
+    assert response.status_code == status_code
+    assert response.json() == {"detail": detail}
+    list_forms.assert_not_called()

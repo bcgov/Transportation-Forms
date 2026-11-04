@@ -103,7 +103,7 @@ def _put_roles(client, user, role_names, db, area_ids=None):
     return client.put(f"/api/v1/admin/users/{user.id}/roles", json=body)
 
 
-@pytest.fixture()
+@pytest.fixture
 def ctx(db):
     seed_default_roles(db)
     admin = _user(db, f"admin-{uuid.uuid4().hex}@example.test")
