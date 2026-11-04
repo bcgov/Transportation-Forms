@@ -338,7 +338,7 @@ class TestSubmitOwnershipEnforcement:
     def test_tc004_2_noncreator_with_perm_gets_403(
         self, db, user_factory, client_factory,
     ):
-        """TC-004.2: Non-creator with form:submit_for_review gets 403."""
+        """TC-004.2: Non-creator with owner-scoped submit permission gets 403."""
         creator = user_factory(email="tc004-2-creator@example.com")
         other = user_factory(email="tc004-2-other@example.com")
         form = _create_form(db, creator.id, status="draft")
@@ -346,20 +346,26 @@ class TestSubmitOwnershipEnforcement:
         client = client_factory(other, ["staff_manager"])
         resp = client.post(f"/api/v1/staff/forms/{form.id}/submit", json={"expected_version": form.current_version})
         assert resp.status_code == 403
-        assert "creator" in resp.json()["detail"].lower()
+        assert resp.json() == {"detail": "Insufficient permissions for this action"}
+        db.refresh(form)
+        assert form.status == "draft"
 
     @pytest.mark.integration
-    def test_tc004_3_admin_noncreator_gets_403(
+    def test_tc004_3_admin_noncreator_can_submit_draft(
         self, db, user_factory, client_factory,
     ):
-        """TC-004.3: Admin non-creator gets 403; no submit bypass."""
+        """TC-004.3 (superseded by FEAT-0032 US-002): admin submits another user's Draft."""
         creator = user_factory(email="tc004-3-creator@example.com")
         admin = user_factory(email="tc004-3-admin@example.com")
         form = _create_form(db, creator.id, status="draft")
 
         client = client_factory(admin, ["admin"])
         resp = client.post(f"/api/v1/staff/forms/{form.id}/submit", json={"expected_version": form.current_version})
-        assert resp.status_code == 403
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["status"] == "pending_review"
+        db.refresh(form)
+        assert form.status == "pending_review"
+        assert form.created_by_id == creator.id
 
     @pytest.mark.integration
     def test_tc004_4_creator_without_perm_gets_403(

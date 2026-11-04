@@ -664,10 +664,8 @@ class FormService:
                 raise PermissionError("Insufficient permissions for this action")
             if (
                 "business_area_id" in kwargs
-                and "form:edit:business_area" in authorization.permissions
-                and form.created_by_id != updated_by_id
-                and not authorization.is_admin()
                 and kwargs["business_area_id"] != form.business_area_id
+                and not authorization.can_change_business_area(form)
             ):
                 raise PermissionError("Only the form owner can change its business area")
             if (
@@ -987,9 +985,11 @@ class FormService:
     ) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
         if authorization is not None and (
-            authorization.user_id != user_id or not authorization.can_submit(form)
+            authorization.user_id != user_id
+            or not authorization.has_submit_scope(form)
         ):
             raise PermissionError("Insufficient permissions for this action")
+        FormService._validate_workflow_transition(form.status, "pending_review")
         if expected_version is not None and form.current_version != expected_version:
             raise FormWorkflowConflictError(
                 "Form version changed; reload and reconcile before submitting"
@@ -1031,11 +1031,30 @@ class FormService:
         allow_self_approve: bool = False,
     ) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
+        FormService._validate_approval_separation_of_duties(
+            db, form, approver_id, allow_self_approve
+        )
 
-        # BR-002: Separation of duties.
-        # Bypassed only when the caller explicitly holds form:approve-self (FEAT-0007).
+        return FormService._transition_form_status(
+            db,
+            form,
+            action="approve",
+            to_status="published",
+            triggered_by_id=approver_id,
+        )
+
+    @staticmethod
+    def _validate_approval_separation_of_duties(
+        db: Session,
+        form: Form,
+        approver_id: UUID,
+        allow_self_approve: bool,
+    ) -> None:
+        if allow_self_approve:
+            return
+
         is_creator = str(form.created_by_id) == str(approver_id)
-        if is_creator and not allow_self_approve:
+        if is_creator:
             raise FormWorkflowValidationError(
                 "You cannot approve your own form submission."
             )
@@ -1053,18 +1072,10 @@ class FormService:
         is_latest_submitter = latest_submit is not None and str(
             latest_submit.triggered_by_id
         ) == str(approver_id)
-        if is_latest_submitter and not allow_self_approve:
+        if is_latest_submitter:
             raise FormWorkflowValidationError(
                 "You cannot approve a form you most recently submitted."
             )
-
-        return FormService._transition_form_status(
-            db,
-            form,
-            action="approve",
-            to_status="published",
-            triggered_by_id=approver_id,
-        )
 
     @staticmethod
     def reject_form(
@@ -1086,8 +1097,16 @@ class FormService:
         )
 
     @staticmethod
-    def publish_form(db: Session, form_id: UUID, user_id: UUID) -> Form:
+    def publish_form(
+        db: Session,
+        form_id: UUID,
+        user_id: UUID,
+        allow_self_approve: bool = False,
+    ) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
+        FormService._validate_approval_separation_of_duties(
+            db, form, user_id, allow_self_approve
+        )
         return FormService._transition_form_status(
             db,
             form,

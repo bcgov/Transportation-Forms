@@ -240,7 +240,11 @@ async def submit_form_for_review(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
         )
-    if not authorization.can_submit(form_check):
+    # In-scope callers who can read the form receive the service's 400 for an
+    # invalid state; everyone else gets 403 so hidden states are not revealed.
+    if not authorization.has_submit_scope(form_check) or (
+        form_check.status != "draft" and not authorization.can_read(form_check)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions for this action",
@@ -319,8 +323,16 @@ async def publish_form(
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
     """Legacy endpoint retained for backward compatibility. Use /approve instead."""
+    allow_self_approve = await has_permission(
+        current_user.sub, _PERM_APPROVE_SELF, db
+    )
     try:
-        form = FormService.publish_form(db, UUID(form_id), UUID(current_user.sub))
+        form = FormService.publish_form(
+            db,
+            UUID(form_id),
+            UUID(current_user.sub),
+            allow_self_approve=allow_self_approve,
+        )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
         _rollback_unexpected(db, exc)

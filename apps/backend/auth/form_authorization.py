@@ -102,11 +102,22 @@ class FormAuthorizationContext:
         is_draft = getattr(form, "status", None) == "draft"
         return is_draft and self._has_scoped_permission("form:edit", form)
 
+    def can_change_business_area(self, form: Any) -> bool:
+        return self.can_edit(form) and not (
+            "form:edit:business_area" in self.permissions
+            and getattr(form, "created_by_id", None) != self.user_id
+            and not self.is_admin()
+        )
+
+    def has_submit_scope(self, form: Any) -> bool:
+        """Whether the user's edit and submit scopes cover this form, ignoring state."""
+        return self._has_scoped_permission(
+            "form:edit", form
+        ) and self._has_scoped_permission("form:submit_for_review", form)
+
     def can_submit(self, form: Any) -> bool:
-        return (
-            getattr(form, "status", None) == "draft"
-            and self._has_scoped_permission("form:edit", form)
-            and self._has_scoped_permission("form:submit_for_review", form)
+        return getattr(form, "status", None) == "draft" and self.has_submit_scope(
+            form
         )
 
     def can_view_workflow_state(self) -> bool:
@@ -122,6 +133,8 @@ class FormAuthorizationContext:
             actions.append("edit")
         if self.can_submit(form):
             actions.append("submit_for_review")
+        if self.can_change_business_area(form):
+            actions.append("change_business_area")
         if form_status == "published" and "form:archive" in self.permissions:
             actions.append("archive")
         if form_status == "archived" and "form:archive" in self.permissions:

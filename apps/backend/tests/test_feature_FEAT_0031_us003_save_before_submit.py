@@ -173,26 +173,59 @@ def test_missing_version_and_invalid_business_area_do_not_submit(
 
 
 @pytest.mark.integration
-def test_non_owner_cannot_save_or_submit(
-    client, db, admin_token_headers, staff_user, draft
-):
-    draft.created_by_id = staff_user.id
+def test_non_owner_cannot_save_or_submit(db, user_factory, draft):
+    # FEAT-0032 US-002 lets admin act on any Draft, so the non-owner here is a
+    # legacy staff user whose edit/submit permissions are owner-scoped.
+    actor = user_factory(email=f"non-owner-{uuid.uuid4().hex}@example.com")
+    permissions = ["form:read", "form:edit", "form:submit_for_review"]
+    role = Role(
+        id=uuid.uuid4(),
+        name=f"legacy_editor_{uuid.uuid4().hex}",
+        permissions=permissions,
+        is_active=True,
+    )
+    db.add(role)
+    db.add(UserRole(id=uuid.uuid4(), user_id=actor.id, role_id=role.id))
     db.flush()
-    update = client.put(
-        f"/api/v1/forms/{draft.id}",
-        json={"title": "Unauthorized"},
-        headers=admin_token_headers,
+    token = TokenData(
+        sub=str(actor.id),
+        email=actor.email,
+        name="Legacy editor",
+        roles=[role.name],
+        token_type="access",
+        permissions=permissions,
     )
-    submit = client.post(
-        f"/api/v1/staff/forms/{draft.id}/submit",
-        json={"expected_version": 0},
-        headers=admin_token_headers,
-    )
-    assert update.status_code == 403
-    assert submit.status_code == 403
-    db.refresh(draft)
-    assert draft.title == "Original title"
-    assert draft.status == "draft"
+    previous_db = app.dependency_overrides.get(get_db)
+    previous_user = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: token
+    try:
+        client = TestClient(app)
+        update = client.put(
+            f"/api/v1/forms/{draft.id}", json={"title": "Unauthorized"}
+        )
+        submit = client.post(
+            f"/api/v1/staff/forms/{draft.id}/submit",
+            json={"expected_version": 0},
+        )
+        assert update.status_code == 403
+        assert update.json() == {"detail": "Insufficient permissions for this action"}
+        assert submit.status_code == 403
+        assert submit.json() == {"detail": "Insufficient permissions for this action"}
+        db.refresh(draft)
+        assert draft.title == "Original title"
+        assert draft.status == "draft"
+        assert draft.current_version == 0
+        assert db.query(FormWorkflow).filter_by(form_id=draft.id).count() == 0
+    finally:
+        if previous_db is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db
+        if previous_user is None:
+            app.dependency_overrides.pop(get_current_user, None)
+        else:
+            app.dependency_overrides[get_current_user] = previous_user
 
 
 @pytest.mark.integration

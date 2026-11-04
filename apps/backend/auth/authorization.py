@@ -122,7 +122,13 @@ async def get_user_permissions(user_id: str, db: Session) -> Set[str]:
                     effective_role_permissions = get_inherited_permissions(
                         permissions
                     )
-                    if "form:read" in role_permissions:
+                    if (
+                        "form:read" in role_permissions
+                        and not any(
+                            permission.startswith("form:read_unpublished:")
+                            for permission in role_permissions
+                        )
+                    ):
                         all_permissions.add("form:read_unpublished:any")
                     if "form:edit" in effective_role_permissions:
                         all_permissions.add("form:edit:own")

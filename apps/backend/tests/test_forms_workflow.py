@@ -362,6 +362,77 @@ class TestFormWorkflowApi:
         assert resp.status_code == 403
 
     @pytest.mark.integration
+    @pytest.mark.parametrize(
+        ("endpoint", "permissions", "expected_status"),
+        [
+            (
+                "approve",
+                ["form:approve", "form:review"],
+                400,
+            ),
+            (
+                "publish",
+                ["form:approve", "form:review"],
+                400,
+            ),
+            (
+                "approve",
+                ["form:approve", "form:review", "form:approve-self"],
+                200,
+            ),
+            (
+                "publish",
+                ["form:approve", "form:review", "form:approve-self"],
+                200,
+            ),
+        ],
+    )
+    def test_latest_submitter_endpoint_honors_self_approval_permission(
+        self,
+        db,
+        user_factory,
+        client_factory,
+        endpoint,
+        permissions,
+        expected_status,
+    ):
+        creator = _create_user(
+            user_factory, f"creator-{endpoint}-{expected_status}@example.com"
+        )
+        submitter = _create_user(
+            user_factory, f"submitter-{endpoint}-{expected_status}@example.com"
+        )
+        form = _create_form(db, creator.id, status="pending_review")
+        db.add(
+            FormWorkflow(
+                id=uuid.uuid4(),
+                form_id=form.id,
+                action="submit",
+                from_status="draft",
+                to_status="pending_review",
+                triggered_by_id=submitter.id,
+            )
+        )
+        db.flush()
+
+        submitter_client = client_factory(
+            submitter,
+            ["reviewer"],
+            permissions=permissions,
+        )
+        response = submitter_client.post(
+            f"/api/v1/staff/forms/{form.id}/{endpoint}"
+        )
+
+        assert response.status_code == expected_status
+        db.refresh(form)
+        if expected_status == 400:
+            assert "most recently submitted" in response.json()["detail"].lower()
+            assert form.status == "pending_review"
+        else:
+            assert form.status == "published"
+
+    @pytest.mark.integration
     def test_pending_review_form_cannot_be_edited(
         self, db, user_factory, client_factory
     ):

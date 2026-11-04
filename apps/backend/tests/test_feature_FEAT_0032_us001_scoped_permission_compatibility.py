@@ -174,6 +174,24 @@ async def test_legacy_permissions_keep_owner_access_and_admin_draft_override(
     assert "form:submit_for_review:any" in admin_permissions
 
 
+@pytest.mark.asyncio
+async def test_explicit_unpublished_read_scope_does_not_expand_to_any(
+    db, user_factory
+):
+    user = user_factory()
+    scoped_role = _new_role(
+        db,
+        ["form:read", "form:read_unpublished:business_area"],
+    )
+    db.add(UserRole(id=uuid.uuid4(), user_id=user.id, role_id=scoped_role.id))
+    db.flush()
+
+    permissions = await get_user_permissions(str(user.id), db)
+
+    assert "form:read_unpublished:business_area" in permissions
+    assert "form:read_unpublished:any" not in permissions
+
+
 @pytest.mark.parametrize(
     ("permissions", "owner", "area_id", "state", "can_edit", "can_submit"),
     [
@@ -263,6 +281,44 @@ def test_scoped_actions_require_matching_scope_and_draft_state(
     assert context.can_submit(form) is can_submit
 
 
+def test_business_area_change_action_matches_field_authorization():
+    actor_id = uuid.uuid4()
+    active_area_id = uuid.uuid4()
+    manager = FormAuthorizationContext(
+        user_id=actor_id,
+        permissions=frozenset({"form:edit:business_area"}),
+        active_business_area_ids=frozenset({active_area_id}),
+        role_names=frozenset({"business_area_manager"}),
+    )
+    non_owner_draft = SimpleNamespace(
+        created_by_id=uuid.uuid4(),
+        business_area_id=active_area_id,
+        status="draft",
+    )
+    owner_draft = SimpleNamespace(
+        created_by_id=actor_id,
+        business_area_id=active_area_id,
+        status="draft",
+    )
+    admin = FormAuthorizationContext(
+        user_id=actor_id,
+        permissions=frozenset(
+            {"form:edit:any", "form:edit:business_area"}
+        ),
+        active_business_area_ids=frozenset(),
+        role_names=frozenset({"admin"}),
+    )
+
+    assert manager.can_edit(non_owner_draft) is True
+    assert manager.can_change_business_area(non_owner_draft) is False
+    assert "change_business_area" not in manager.available_actions(non_owner_draft)
+
+    assert manager.can_change_business_area(owner_draft) is True
+    assert "change_business_area" in manager.available_actions(owner_draft)
+    assert admin.can_change_business_area(non_owner_draft) is True
+    assert "change_business_area" in admin.available_actions(non_owner_draft)
+
+
 def test_workflow_state_visibility_does_not_grant_mutation():
     context = FormAuthorizationContext(
         user_id=uuid.uuid4(),
@@ -309,6 +365,7 @@ def test_business_area_manager_list_detail_and_update_share_actions(db, user_fac
         )
     )
     in_scope_draft = _new_form(db, owner, business_area=active_area)
+    owned_in_scope_draft = _new_form(db, manager, business_area=active_area)
     out_of_scope_draft = _new_form(db, owner, business_area=other_area)
     deleted_area_draft = _new_form(db, owner, business_area=deleted_area)
     published = _new_form(db, owner, status="published", business_area=other_area)
@@ -321,14 +378,24 @@ def test_business_area_manager_list_detail_and_update_share_actions(db, user_fac
         items = {item["id"]: item for item in response.json()["items"]}
         assert set(items) == {
             str(in_scope_draft.id),
+            str(owned_in_scope_draft.id),
             str(published.id),
         }
         actions = items[str(in_scope_draft.id)]["available_actions"]
         assert actions == ["edit", "submit_for_review"]
+        owned_actions = items[str(owned_in_scope_draft.id)]["available_actions"]
+        assert owned_actions == [
+            "edit",
+            "submit_for_review",
+            "change_business_area",
+        ]
 
         detail = client.get(f"/api/v1/forms/{in_scope_draft.id}")
         assert detail.status_code == 200
         assert detail.json()["available_actions"] == actions
+        owned_detail = client.get(f"/api/v1/forms/{owned_in_scope_draft.id}")
+        assert owned_detail.status_code == 200
+        assert owned_detail.json()["available_actions"] == owned_actions
 
         denied_detail = client.get(f"/api/v1/forms/{out_of_scope_draft.id}")
         assert denied_detail.status_code == 403
@@ -349,6 +416,15 @@ def test_business_area_manager_list_detail_and_update_share_actions(db, user_fac
         assert area_change.status_code == 403
         db.refresh(in_scope_draft)
         assert in_scope_draft.business_area_id == active_area.id
+
+        owned_area_change = client.put(
+            f"/api/v1/forms/{owned_in_scope_draft.id}",
+            json={"business_area_id": str(other_area.id)},
+        )
+        assert owned_area_change.status_code == 200
+        db.refresh(owned_in_scope_draft)
+        assert owned_in_scope_draft.business_area_id == other_area.id
+        assert owned_area_change.json()["available_actions"] == []
 
         updated = client.put(
             f"/api/v1/forms/{in_scope_draft.id}",

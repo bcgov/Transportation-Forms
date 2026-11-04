@@ -34,3 +34,12 @@ def test_other_or_denied_routes_still_reenter_the_authorization_guards() -> None
     )
     assert "resetFormState" not in body
     assert "showEditView" not in body
+
+
+def test_session_expiry_navigation_handles_route_failures() -> None:
+    source = ROUTER.read_text(encoding="utf-8")
+    assert "void navigateTo(ROUTES.HOME).catch(() => {" in source
+    assert (
+        "Unable to return to the Forms page. Refresh the page and try again."
+        in source
+    )

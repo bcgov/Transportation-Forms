@@ -410,8 +410,33 @@ def test_manager_submission_requires_approved_reservation(
     assert db.query(FormWorkflow).filter(FormWorkflow.form_id == form.id).count() == 0
 
 
-@pytest.mark.parametrize("form_status", ["pending_review", "published", "archived"])
-def test_manager_cannot_edit_or_submit_non_draft(form_status, manager_context, db):
+@pytest.mark.parametrize(
+    ("form_status", "edit_detail", "submit_status", "submit_detail"),
+    [
+        (
+            "pending_review",
+            "Form cannot be edited while it is in Pending Review state",
+            400,
+            "Form is already in 'pending_review' state",
+        ),
+        (
+            "published",
+            "Published and Archived forms cannot be updated",
+            400,
+            "Invalid transition from 'published' to 'pending_review'",
+        ),
+        # Archived forms are unreadable for managers, so no state is revealed.
+        (
+            "archived",
+            "Insufficient permissions for this action",
+            403,
+            "Insufficient permissions for this action",
+        ),
+    ],
+)
+def test_manager_cannot_edit_or_submit_non_draft(
+    form_status, edit_detail, submit_status, submit_detail, manager_context, db
+):
     client, _, owner, active_area, _, _ = manager_context
     form = _form(db, owner, active_area, status=form_status)
 
@@ -424,7 +449,9 @@ def test_manager_cannot_edit_or_submit_non_draft(form_status, manager_context, d
     )
 
     assert edited.status_code == 403
-    assert submitted.status_code == 403
+    assert edited.json() == {"detail": edit_detail}
+    assert submitted.status_code == submit_status
+    assert submitted.json() == {"detail": submit_detail}
     db.refresh(form)
     assert form.status == form_status
     assert form.title == "Scoped form"
@@ -436,9 +463,15 @@ def test_manager_out_of_scope_update_does_not_reveal_pending_state(manager_conte
     form = _form(db, owner, other_area, status="pending_review")
 
     response = client.put(f"/api/v1/forms/{form.id}", json={"title": "Denied update"})
+    submitted = client.post(
+        f"/api/v1/staff/forms/{form.id}/submit",
+        json={"expected_version": form.current_version},
+    )
 
     assert response.status_code == 403
     assert response.json() == {"detail": "Insufficient permissions for this action"}
+    assert submitted.status_code == 403
+    assert submitted.json() == {"detail": "Insufficient permissions for this action"}
 
 
 @pytest.mark.parametrize(

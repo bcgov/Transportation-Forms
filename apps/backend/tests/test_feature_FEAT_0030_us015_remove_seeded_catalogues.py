@@ -29,7 +29,7 @@ def test_normal_seeding_leaves_catalogues_empty_and_preserves_other_defaults(
     assert {
         role.name
         for role in db.query(Role).filter(Role.is_system.is_(True)).all()
-    } == {"admin", "staff_viewer"}
+    } == {"admin", "business_area_manager", "staff_viewer"}
     demo_user = (
         db.query(User).filter_by(email="demo@example.com").one_or_none()
     )

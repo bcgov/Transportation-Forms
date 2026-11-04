@@ -43,6 +43,26 @@ let _submitInProgress = false;
 let _submitNeedsReload = false;
 let _formRequestController = null;
 
+// Server actions that have a control on the editor page, per form status.
+const EDITOR_ACTIONS_BY_STATUS = {
+    draft: ['edit', 'submit_for_review', 'delete'],
+    published: ['archive', 'unpublish', 'revert'],
+    archived: ['restore'],
+};
+const EDITOR_UNAVAILABLE_MESSAGE =
+    'This form cannot be opened in the editor. Use View details on the Forms list to see it.';
+
+function _canOpenInEditor(status, availableActions) {
+    const editorActions = EDITOR_ACTIONS_BY_STATUS[status] ?? [];
+    return editorActions.some(action => availableActions.includes(action));
+}
+
+function _leaveUnavailableEditor() {
+    resetFormState();
+    showAlert(EDITOR_UNAVAILABLE_MESSAGE, 'warning');
+    _navigate(ROUTES.FORMS_LIST);
+}
+
 async function _handleFormAuthorizationRefreshed() {
     _currentFormAvailableActions = [];
     clearAuditHistory();
@@ -78,9 +98,17 @@ async function _handleFormAuthorizationRefreshed() {
         _currentFormAvailableActions = Array.isArray(form.available_actions)
             ? form.available_actions
             : [];
+        if (!_canOpenInEditor(form.status, _currentFormAvailableActions)) {
+            _leaveUnavailableEditor();
+            return;
+        }
         _currentFormStatus = form.status;
         _updateWorkflowButtons(_currentFormStatus);
-        _setFormFieldsLocked(!_currentFormAvailableActions.includes('edit'));
+        const canEdit = _currentFormAvailableActions.includes('edit');
+        const canChangeBusinessArea = _currentFormAvailableActions.includes(
+            'change_business_area',
+        );
+        _setFormFieldsLocked(!canEdit, !canChangeBusinessArea);
         loadAuditHistory(formId);
     } catch (_error) {
         if (controller.signal.aborted) return;
@@ -302,7 +330,10 @@ function _updateWorkflowButtons(status, availableActions = _currentFormAvailable
         if (archiveFormBtn && actions.has('archive')) {
             archiveFormBtn.style.display = '';
         }
-        if (unpublishFormBtn && actions.has('revert')) {
+        if (
+            unpublishFormBtn
+            && (actions.has('unpublish') || actions.has('revert'))
+        ) {
             unpublishFormBtn.style.display = '';
         }
     } else if (status === 'archived') {
@@ -319,17 +350,21 @@ function _updateWorkflowButtons(status, availableActions = _currentFormAvailable
 /**
  * Lock or unlock all form fields.
  * @param {boolean} locked
+ * @param {boolean} businessAreaLocked
  */
-function _setFormFieldsLocked(locked) {
+function _setFormFieldsLocked(locked, businessAreaLocked = locked) {
     const selectors = [
         '#title', '#description', '#formSource', '#formSourceUrl',
         '#effectiveDate', '#isPublic', '#collectsPersonalInfo',
-        '#businessAreaInput', '#formNumber',
+        '#formNumber',
     ];
     selectors.forEach(sel => {
         const el = document.querySelector(sel);
         if (el) el.disabled = locked;
     });
+    const businessAreaInput = document.getElementById('businessAreaInput');
+    if (businessAreaInput) businessAreaInput.disabled = businessAreaLocked;
+    if (businessAreaLocked) closeBusinessAreaDropdown();
     const fileInput = document.getElementById('fileInput');
     if (fileInput) fileInput.disabled = locked;
     const dropZone = document.getElementById('dropZone');
@@ -520,8 +555,44 @@ async function _archiveForm() {
     }
 }
 
+async function _unpublishForm() {
+    if (!_currentFormId) return;
+    const btn = document.getElementById('unpublishFormBtn');
+    if (!btn) return;
+
+    btn.disabled = true;
+    try {
+        const response = await fetch(
+            `${API_BASE}/staff/forms/${_currentFormId}/unpublish`,
+            {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getAuthToken()}` },
+            },
+        );
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to unpublish form');
+        }
+        showAlert('Form has been unpublished and returned to Draft.', 'success');
+        _navigate(ROUTES.FORMS_LIST);
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 // FEAT-0016: Open Unpublish confirmation modal
 function _openFormUnpublishModal() {
+    const canUnpublish = _currentFormAvailableActions.includes('unpublish');
+    const canRevert = _currentFormAvailableActions.includes('revert');
+    if (canUnpublish && !canRevert) {
+        if (!confirm('Unpublish this form and return it to Draft status?')) return;
+        void _unpublishForm();
+        return;
+    }
+    if (!canRevert) return;
+
     const reasonField = document.getElementById('formUnpublishReason');
     const errorDiv = document.getElementById('formUnpublishError');
     if (reasonField) {
@@ -693,6 +764,12 @@ async function _loadFormForEdit(formId) {
         _currentFormAvailableActions = Array.isArray(form.available_actions)
             ? form.available_actions
             : [];
+        // Pending Review and action-less forms are viewed through the details
+        // drawer; never render their content in the editor.
+        if (!_canOpenInEditor(form.status, _currentFormAvailableActions)) {
+            _leaveUnavailableEditor();
+            return;
+        }
         _currentFormVersion = form.current_version;
 
         // Scalar fields
@@ -731,7 +808,10 @@ async function _loadFormForEdit(formId) {
         _savedBusinessAreaId = form.business_area?.id || null;
         _updateWorkflowButtons(form.status, _currentFormAvailableActions);
         const isLocked = !_currentFormAvailableActions.includes('edit');
-        _setFormFieldsLocked(isLocked);
+        const isBusinessAreaLocked = !_currentFormAvailableActions.includes(
+            'change_business_area',
+        );
+        _setFormFieldsLocked(isLocked, isBusinessAreaLocked);
 
         // Label the submit button based on status
         const submitBtn = document.getElementById('submitBtn');

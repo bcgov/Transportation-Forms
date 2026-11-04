@@ -12,9 +12,12 @@ def _route_guard(source: str, condition: str) -> str:
 def test_edit_route_accepts_scoped_manager_or_existing_edit_permission() -> None:
     source = ROUTER.read_text(encoding="utf-8")
     guard = _route_guard(source, "if (path.startsWith('/edit/')) {")
-    assert guard == (
+    assert " ".join(guard.split()) == (
         "return hasPermission('form:edit') || "
-        "hasPermission('form:edit:business_area');"
+        "hasPermission('form:edit:own') || "
+        "hasPermission('form:edit:business_area') || "
+        "hasPermission('form:edit:any') || "
+        "hasPermission('form:approve');"
     )
     assert "if (!hasValidAuthorizationContext())" in source
 

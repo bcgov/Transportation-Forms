@@ -826,10 +826,8 @@ async def update_form(
         if (
             form_check
             and "business_area_id" in request.model_fields_set
-            and "form:edit:business_area" in authorization.permissions
-            and str(form_check.created_by_id) != current_user.sub
-            and not authorization.is_admin()
             and requested_business_area_id != form_check.business_area_id
+            and not authorization.can_change_business_area(form_check)
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

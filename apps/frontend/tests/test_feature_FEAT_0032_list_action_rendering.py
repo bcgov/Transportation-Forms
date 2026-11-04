@@ -55,12 +55,13 @@ def test_list_items_are_normalized_before_rendering():
     assert ".map(_normalizeFormItem)" in _forms_list_source()
 
 
-def test_published_card_offers_edit_entry_point_when_revert_is_available():
+def test_published_card_offers_edit_entry_point_for_unpublish_or_revert():
     body = _function_body(
         _forms_list_source(), "export function _renderFormActionButtons(form)"
     )
 
     assert "availableActions.has('edit')" in body
+    assert "status === 'published' && availableActions.has('unpublish')" in body
     assert "status === 'published' && availableActions.has('revert')" in body
     assert "if (canOpenEditor)" in body
     assert 'data-route="/edit/${id}"' in body

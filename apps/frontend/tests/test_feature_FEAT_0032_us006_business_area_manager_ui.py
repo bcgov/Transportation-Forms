@@ -89,8 +89,15 @@ def test_editor_refresh_revalidates_actions_without_overwriting_unsaved_fields()
     assert body.index("_setFormFieldsLocked(true)") < body.index("await fetch(")
     assert "form.available_actions" in body
     assert (
-        "_setFormFieldsLocked(!_currentFormAvailableActions.includes('edit'))" in body
+        "const canEdit = _currentFormAvailableActions.includes('edit');" in body
     )
+    assert re.search(
+        r"const canChangeBusinessArea = "
+        r"_currentFormAvailableActions\.includes\(\s*"
+        r"'change_business_area',?\s*\);",
+        body,
+    )
+    assert "_setFormFieldsLocked(!canEdit, !canChangeBusinessArea);" in body
     assert "controller.signal.aborted || _currentFormId !== formId" in body
     assert "response.status === 403 || response.status === 404" in body
     assert "_submitNeedsReload = true" in body
@@ -108,6 +115,33 @@ def test_editor_discards_form_responses_after_navigation_or_reset():
     reset = _function_body(source, "export function resetFormState()")
     assert "_formRequestController?.abort()" in reset
     assert "window.addEventListener('app:route-changing'" in source
+
+
+def test_direct_editor_url_without_editor_action_redirects_with_toast():
+    source = _source("js/views/forms-create.js")
+    mapping = source.split("const EDITOR_ACTIONS_BY_STATUS = {", 1)[1].split("};", 1)[0]
+    assert "draft: ['edit', 'submit_for_review', 'delete']" in mapping
+    assert "published: ['archive', 'unpublish', 'revert']" in mapping
+    assert "archived: ['restore']" in mapping
+    assert "pending_review" not in mapping
+
+    can_open = _function_body(source, "function _canOpenInEditor(status, availableActions)")
+    assert "EDITOR_ACTIONS_BY_STATUS[status] ?? []" in can_open
+    assert "availableActions.includes(action)" in can_open
+
+    leave = _function_body(source, "function _leaveUnavailableEditor()")
+    assert leave.index("resetFormState()") < leave.index("showAlert(")
+    assert "showAlert(EDITOR_UNAVAILABLE_MESSAGE, 'warning')" in leave
+    assert leave.rstrip().endswith("_navigate(ROUTES.FORMS_LIST);")
+
+    guard = "if (!_canOpenInEditor(form.status, _currentFormAvailableActions)) {"
+    load = _function_body(source, "async function _loadFormForEdit(formId)")
+    # The guard must run before any form content is written to the page.
+    assert load.index(guard) < load.index("document.getElementById('title').value")
+    assert load.index(guard) < load.index("restoreUploadState(")
+    assert "_leaveUnavailableEditor();\n            return;" in load
+    refresh = _function_body(source, "async function _handleFormAuthorizationRefreshed()")
+    assert refresh.index(guard) < refresh.index("_currentFormStatus = form.status")
 
 
 def test_sidebar_requires_navigation_permission_without_blocking_forms_access():
@@ -160,6 +194,7 @@ def test_published_card_status_and_actions_have_no_client_action_fallback():
     assert "const availableActions = new Set(form.available_actions);" in actions
     assert (
         "const canOpenEditor = availableActions.has('edit') "
+        "|| (status === 'published' && availableActions.has('unpublish')) "
         "|| (status === 'published' && availableActions.has('revert'));"
     ) in re.sub(r"\s+", " ", actions)
     action_gates = (
@@ -175,6 +210,27 @@ def test_published_card_status_and_actions_have_no_client_action_fallback():
         assert gated_button.count("buttons.push(") == 1
     assert actions.count("buttons.push(") == len(action_gates)
     assert actions.rstrip().endswith("return buttons.join('\\n');")
+
+
+def test_unpublish_without_revert_uses_the_unpublish_endpoint():
+    source = _source("js/views/forms-create.js")
+    buttons = _function_body(
+        source,
+        "function _updateWorkflowButtons(status, "
+        "availableActions = _currentFormAvailableActions)",
+    )
+    published = _function_body(buttons, "else if (status === 'published')")
+    assert "actions.has('unpublish') || actions.has('revert')" in published
+
+    opener = _function_body(source, "function _openFormUnpublishModal()")
+    assert "_currentFormAvailableActions.includes('unpublish')" in opener
+    assert "_currentFormAvailableActions.includes('revert')" in opener
+    assert "confirm('Unpublish this form and return it to Draft status?')" in opener
+
+    unpublish = _function_body(source, "async function _unpublishForm()")
+    assert "/staff/forms/${_currentFormId}/unpublish" in unpublish
+    assert "method: 'POST'" in unpublish
+    assert "_navigate(ROUTES.FORMS_LIST);" in unpublish
 
 
 def test_draft_save_and_submit_visibility_uses_server_actions():
@@ -211,13 +267,21 @@ def test_loaded_draft_fields_unlock_only_from_server_edit_action():
     assert load.index("_currentFormAvailableActions =") < load.index(
         "_updateWorkflowButtons(form.status, _currentFormAvailableActions);"
     )
+    assert "const isLocked = !_currentFormAvailableActions.includes('edit');" in load
     assert re.search(
-        r"const isLocked = !_currentFormAvailableActions\.includes\('edit'\);"
-        r"\s*_setFormFieldsLocked\(isLocked\);",
+        r"const isBusinessAreaLocked = "
+        r"!_currentFormAvailableActions\.includes\(\s*"
+        r"'change_business_area',?\s*\);",
         load,
     )
-    locking = _function_body(source, "function _setFormFieldsLocked(locked)")
+    assert "_setFormFieldsLocked(isLocked, isBusinessAreaLocked);" in load
+    locking = _function_body(
+        source,
+        "function _setFormFieldsLocked(locked, businessAreaLocked = locked)",
+    )
     assert "if (el) el.disabled = locked;" in locking
+    assert "businessAreaInput.disabled = businessAreaLocked;" in locking
+    assert "if (businessAreaLocked) closeBusinessAreaDropdown();" in locking
     assert "if (fileInput) fileInput.disabled = locked;" in locking
     assert "setKeywordsLocked(locked);" in locking
 

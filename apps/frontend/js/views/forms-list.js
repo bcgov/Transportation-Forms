@@ -456,6 +456,7 @@ export function _renderFormActionButtons(form) {
 
     // Published forms are read-only via the API; Edit opens the editor for its Unpublish control.
     const canOpenEditor = availableActions.has('edit')
+        || (status === 'published' && availableActions.has('unpublish'))
         || (status === 'published' && availableActions.has('revert'));
     if (canOpenEditor) {
         buttons.push(`<button class="forms-result-card__action" type="button"

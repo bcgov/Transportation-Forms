@@ -255,8 +255,24 @@ def test_admin_invalid_update_payload_keeps_draft_unchanged(db, user_factory):
         _cleanup_client()
 
 
-@pytest.mark.parametrize("form_status", ["pending_review", "archived"])
-def test_admin_cannot_edit_or_submit_non_draft_forms(db, user_factory, form_status):
+@pytest.mark.parametrize(
+    ("form_status", "update_detail", "submit_detail"),
+    [
+        (
+            "pending_review",
+            "Form cannot be edited while it is in Pending Review state",
+            "Form is already in 'pending_review' state",
+        ),
+        (
+            "archived",
+            "Published and Archived forms cannot be updated",
+            "Invalid transition from 'archived' to 'pending_review'",
+        ),
+    ],
+)
+def test_admin_cannot_edit_or_submit_non_draft_forms(
+    db, user_factory, form_status, update_detail, submit_detail
+):
     admin_user = user_factory()
     owner = user_factory()
     form = _new_form(db, owner, status=form_status)
@@ -273,10 +289,17 @@ def test_admin_cannot_edit_or_submit_non_draft_forms(db, user_factory, form_stat
         )
 
         assert update_response.status_code == 403
-        assert submit_response.status_code == 403
+        assert update_response.json() == {"detail": update_detail}
+        # Admin can read the form, so the state rejection is a 400 as on master.
+        assert submit_response.status_code == 400
+        assert submit_response.json() == {"detail": submit_detail}
         db.refresh(form)
         assert form.status == form_status
         assert form.title == original_title
+        assert (
+            db.query(FormWorkflow).filter(FormWorkflow.form_id == form.id).count()
+            == 0
+        )
     finally:
         _cleanup_client()
 
