@@ -30,6 +30,10 @@ from pydantic import (
 from sqlalchemy.orm import Session
 
 from backend.auth.authorization import require_permission
+from backend.auth.form_authorization import (
+    allowed_unpublished_area_ids,
+    load_form_authorization_context,
+)
 from backend.database import get_db
 from backend.auth.dependencies import get_current_user
 from backend.auth.jwt_handler import TokenData
@@ -49,6 +53,8 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 _KEYWORD_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+_INVALID_FORM_ID = "Invalid form ID format"
+_INSUFFICIENT_PERMISSIONS = "Insufficient permissions for this action"
 
 
 def _validate_keywords(keywords: Optional[List[str]]) -> Optional[List[str]]:
@@ -201,6 +207,13 @@ class FormUpdateRequest(BaseModel):
         description="Short file-type label (e.g. 'pdf', 'docx', 'unknown')",
     )
 
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, description: Optional[str]) -> Optional[str]:
+        if description is not None and not description.strip():
+            raise ValueError("description is required")
+        return description
+
     @field_validator("keywords")
     @classmethod
     def validate_keywords(cls, keywords: Optional[List[str]]) -> Optional[List[str]]:
@@ -252,6 +265,7 @@ class FormResponse(BaseModel):
     collects_personal_info: str
     created_at: str
     updated_at: str
+    available_actions: List[str] = Field(default_factory=list)
 
 
 class FormDetailResponse(FormResponse):
@@ -307,7 +321,7 @@ def _active_roles(user: TokenData, db: Session) -> list[Role]:
     except (AttributeError, TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
+            detail=_INSUFFICIENT_PERMISSIONS,
         ) from exc
 
     roles = (
@@ -326,13 +340,13 @@ def _active_roles(user: TokenData, db: Session) -> list[Role]:
         if not isinstance(role.name, str) or not role.name.strip():
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions for this action",
+                detail=_INSUFFICIENT_PERMISSIONS,
             )
         normalized_names.append(role.name.strip().lower())
     if len(normalized_names) != len(set(normalized_names)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions for this action",
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
     return roles
 
@@ -391,7 +405,7 @@ def _safe_attachment_filename(filename: str) -> str:
 )
 async def upload_form_attachment(
     file: UploadFile = File(..., description="Form attachment file to upload"),
-    current_user: TokenData = Depends(get_current_user),
+    _current_user: TokenData = Depends(require_permission("forms", "create")),
 ) -> FileUploadResponse:
     """
     Upload a form attachment file to S3 object storage and return its object key.
@@ -401,8 +415,61 @@ async def upload_form_attachment(
 
     - **file**: The file to upload (PDF, DOCX, etc.)
     """
+    return await _store_form_attachment(file)
+
+
+@router.post(
+    "/{form_id}/upload",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_scoped_form_attachment(
+    form_id: str,
+    file: UploadFile = File(..., description="Form attachment file to upload"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FileUploadResponse:
+    try:
+        form_uuid = UUID(form_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_FORM_ID
+        ) from None
+
+    form = FormService.get_form_by_id(db, form_uuid)
+    if not form:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+        )
+
+    authorization = await load_form_authorization_context(current_user.sub, db)
+    if not authorization.can_edit(form):
+        if form.status == "archived" and not authorization.can_read(form):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_INSUFFICIENT_PERMISSIONS,
+        )
+
+    return await _store_form_attachment(file, form_id=form_uuid)
+
+
+_MAX_SCOPED_ATTACHMENT_BYTES = 25 * 1024 * 1024
+
+
+async def _store_form_attachment(
+    file: UploadFile, *, form_id: Optional[UUID] = None
+) -> FileUploadResponse:
     # Read file bytes
-    file_bytes = await file.read()
+    file_bytes = await file.read(
+        _MAX_SCOPED_ATTACHMENT_BYTES + 1 if form_id is not None else -1
+    )
+    if form_id is not None and len(file_bytes) > _MAX_SCOPED_ATTACHMENT_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="Attachment is too large",
+        )
     if not file_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty"
@@ -412,11 +479,19 @@ async def upload_form_attachment(
     original_filename = file.filename or "attachment"
 
     try:
-        object_key, object_key_ref = s3_service.upload_file(
-            file_bytes=file_bytes,
-            original_filename=original_filename,
-            content_type=content_type,
-        )
+        if form_id is None:
+            object_key, object_key_ref = s3_service.upload_file(
+                file_bytes=file_bytes,
+                original_filename=original_filename,
+                content_type=content_type,
+            )
+        else:
+            object_key, object_key_ref = s3_service.upload_file(
+                file_bytes=file_bytes,
+                original_filename=original_filename,
+                content_type=content_type,
+                form_id=form_id,
+            )
         # FEAT-0002: derive file type from MIME
         file_type = s3_service.derive_file_type(content_type)
         return FileUploadResponse(
@@ -482,7 +557,10 @@ async def create_form(
             collects_personal_info=request.collects_personal_info,
         )
 
-        return FormResponse(**FormService.get_form_with_details(db, form.id))
+        authorization = await load_form_authorization_context(current_user.sub, db)
+        form_data = FormService.get_form_with_details(db, form.id)
+        form_data["available_actions"] = authorization.available_actions(form)
+        return FormResponse(**form_data)
 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -505,11 +583,18 @@ async def autocomplete_forms(    q: str = Query(
     db: Session = Depends(get_db),
 ) -> FormAutocompleteResponse:
     """Return autocomplete suggestions for form titles/keywords."""
+    authorization = await load_form_authorization_context(current_user.sub, db)
+    scoped_areas = (
+        None
+        if authorization.has_unpublished_any_access()
+        else allowed_unpublished_area_ids(authorization)
+    )
     suggestions = FormService.get_autocomplete_suggestions(
         db=db,
         query_text=q,
         max_suggestions=max_suggestions,
         published_only=_is_staff_viewer_only(current_user, db),
+        unpublished_area_ids=scoped_areas,
     )
     return FormAutocompleteResponse(query=q, suggestions=suggestions)
 
@@ -542,16 +627,26 @@ async def download_form_attachment(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid form ID format",
+            detail=_INVALID_FORM_ID,
         )
 
     form = FormService.get_form_by_id(db, form_uuid)
-    if not form or (
-        _is_staff_viewer_only(current_user, db) and form.status != "published"
-    ):
+    if not form:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Form not found",
+        )
+
+    authorization = await load_form_authorization_context(current_user.sub, db)
+    if not authorization.can_read(form):
+        if form.status == "archived" or _is_staff_viewer_only(current_user, db):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Form not found",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
 
     if form.form_source != "Download" or not form.form_attachment_url:
@@ -659,26 +754,35 @@ async def get_form(
     """Get a form by ID."""
     try:
         form_uuid = UUID(form_id)
-        form_data = FormService.get_form_with_details(db, form_uuid)
+        form = FormService.get_form_by_id(db, form_uuid)
 
+        if not form:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+            )
+
+        authorization = await load_form_authorization_context(current_user.sub, db)
+        if not authorization.can_read(form):
+            if form.status == "archived" or _is_staff_viewer_only(current_user, db):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+                )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=_INSUFFICIENT_PERMISSIONS,
+            )
+
+        form_data = FormService.get_form_with_details(db, form_uuid)
         if not form_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
-
-        if (
-            _is_staff_viewer_only(current_user, db)
-            and form_data.get("status") != "published"
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
-            )
-
+        form_data["available_actions"] = authorization.available_actions(form)
         return FormDetailResponse(**form_data)
 
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_FORM_ID
         )
 
 
@@ -686,7 +790,7 @@ async def get_form(
 async def update_form(
     form_id: str,
     request: FormUpdateRequest,
-    current_user: TokenData = Depends(require_permission("forms", "update")),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FormResponse:
     """
@@ -699,19 +803,37 @@ async def update_form(
 
         # BR-003: Prevent structural edits while form is in Pending Review state
         form_check = FormService.get_form_by_id(db, form_uuid)
-        if form_check and str(form_check.status) == "pending_review":
+        authorization = await load_form_authorization_context(current_user.sub, db)
+        if form_check and not authorization.can_edit(form_check):
+            if authorization.can_read(form_check):
+                if form_check.status in {"published", "archived"}:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Published and Archived forms cannot be updated",
+                    )
+                if form_check.status == "pending_review":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Form cannot be edited while it is in Pending Review state",
+                    )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Form cannot be edited while it is in Pending Review state",
+                detail=_INSUFFICIENT_PERMISSIONS,
             )
+        requested_business_area_id = (
+            UUID(request.business_area_id)
+            if request.business_area_id
+            else None
+        )
         if (
             form_check
-            and form_check.status == "draft"
-            and str(form_check.created_by_id) != current_user.sub
+            and "business_area_id" in request.model_fields_set
+            and requested_business_area_id != form_check.business_area_id
+            and not authorization.can_change_business_area(form_check)
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the form creator can edit this draft",
+                detail="Only the form owner can change its business area",
             )
 
         # Build update kwargs
@@ -749,6 +871,10 @@ async def update_form(
                 form_id=form_uuid,
                 updated_by_id=UUID(current_user.sub),
                 expected_version=request.expected_version,
+                allow_non_owner_draft=bool(
+                    form_check and authorization.can_edit(form_check)
+                ),
+                authorization=authorization,
                 **update_data,
             )
         except FormWorkflowConflictError as exc:
@@ -775,7 +901,9 @@ async def update_form(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
             )
 
-        return FormResponse(**FormService.get_form_with_details(db, form.id))
+        form_data = FormService.get_form_with_details(db, form.id)
+        form_data["available_actions"] = authorization.available_actions(form)
+        return FormResponse(**form_data)
 
     except ValueError as e:
         if "invalid literal" in str(e).lower():
@@ -802,7 +930,7 @@ async def delete_form(
         form_uuid = UUID(form_id)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_FORM_ID
         )
 
     # ── Fetch form ───────────────────────────────────────────────────────
@@ -838,6 +966,56 @@ async def delete_form(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
         )
+
+
+_LIST_LIMITS = {24, 25, 48, 50, 96, 100}
+_LIST_STATUSES = {"draft", "pending_review", "published", "archived"}
+_LIST_SOURCES = {"Link", "Download"}
+
+
+def _reject_unknown_values(
+    name: str, values: Optional[List[str]], allowed: set[str]
+) -> None:
+    invalid = [value for value in values or [] if value not in allowed]
+    if invalid:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid {name} value(s): {', '.join(invalid)}. "
+            f"Allowed: {', '.join(sorted(allowed))}",
+        )
+
+
+def _validate_list_query(
+    limit: int,
+    sort_field: str,
+    sort_order: str,
+    status_filter: Optional[List[str]],
+    form_source: Optional[List[str]],
+) -> None:
+    if limit not in _LIST_LIMITS:
+        raise HTTPException(
+            status_code=422,
+            detail="limit must be one of: 24, 25, 48, 50, 96, 100",
+        )
+    if sort_field == "suggested" and sort_order != "desc":
+        raise HTTPException(
+            status_code=422,
+            detail="suggested sort supports descending order only",
+        )
+    _reject_unknown_values("status", status_filter, _LIST_STATUSES)
+    _reject_unknown_values("form_source", form_source, _LIST_SOURCES)
+
+
+def _parse_business_area_ids(values: Optional[List[str]]) -> Optional[List[UUID]]:
+    if not values:
+        return None
+    try:
+        return [UUID(value) for value in values]
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid business area ID format",
+        ) from None
 
 
 @router.get("", response_model=FormListResponse)
@@ -884,49 +1062,14 @@ async def list_forms(
     - **sort_order**: Sort ascending (asc) or descending (desc)
     - **sort_field**: Sort by suggested (default), title, or form_number
     """
-    if limit not in {24, 25, 48, 50, 96, 100}:
-        raise HTTPException(
-            status_code=422,
-            detail="limit must be one of: 24, 25, 48, 50, 96, 100",
-        )
+    _validate_list_query(limit, sort_field, sort_order, status_filter, form_source)
+    business_area_uuid_list = _parse_business_area_ids(business_area_ids)
 
-    if sort_field == "suggested" and sort_order != "desc":
-        raise HTTPException(
-            status_code=422,
-            detail="suggested sort supports descending order only",
-        )
-
-    # Validate status values
-    VALID_STATUSES = {"draft", "pending_review", "published", "archived"}
-    if status_filter:
-        invalid = [s for s in status_filter if s not in VALID_STATUSES]
-        if invalid:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid status value(s): {', '.join(invalid)}. "
-                f"Allowed: {', '.join(sorted(VALID_STATUSES))}",
-            )
-
-    # Validate form_source values
-    VALID_SOURCES = {"Link", "Download"}
-    if form_source:
-        invalid_src = [s for s in form_source if s not in VALID_SOURCES]
-        if invalid_src:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid form_source value(s): {', '.join(invalid_src)}. "
-                f"Allowed: {', '.join(sorted(VALID_SOURCES))}",
-            )
-
-    business_area_uuid_list: Optional[List[UUID]] = None
-    if business_area_ids:
-        try:
-            business_area_uuid_list = [UUID(value) for value in business_area_ids]
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid business area ID format",
-            )
+    authorization = await load_form_authorization_context(current_user.sub, db)
+    unpublished_access = authorization.has_unpublished_any_access()
+    scoped_unpublished_areas = (
+        None if unpublished_access else allowed_unpublished_area_ids(authorization)
+    )
 
     forms, total = FormService.list_forms(
         db=db,
@@ -943,11 +1086,15 @@ async def list_forms(
         is_public=is_public,
         sort_order=sort_order,
         sort_field=sort_field,
+        unpublished_area_ids=scoped_unpublished_areas,
+        allow_unpublished_any=unpublished_access,
     )
 
-    items = [
-        FormResponse(**FormService.get_form_with_details(db, form.id)) for form in forms
-    ]
+    items = []
+    for form in forms:
+        form_data = FormService.get_form_with_details(db, form.id)
+        form_data["available_actions"] = authorization.available_actions(form)
+        items.append(FormResponse(**form_data))
 
     return FormListResponse(
         total=total,
@@ -984,7 +1131,7 @@ async def archive_form(
 
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_FORM_ID
         )
 
 
@@ -1011,5 +1158,5 @@ async def unarchive_form(
 
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_FORM_ID
         )

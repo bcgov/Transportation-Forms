@@ -24,7 +24,7 @@ import {
     getAuthToken,
     hasPermission,
     hasPortalRoles,
-    isAdminUser,
+    isBusinessAreaManager,
 } from '../auth.js';
 import { getCurrentUser } from '../state.js';
 import { openFormDetailsDrawer, downloadFormAttachment } from '../shared/form-details-drawer.js';
@@ -50,7 +50,9 @@ const DEFAULT_RESULTS_LAYOUT = 'list';
 const RESULTS_LAYOUTS = new Set(['list', 'grid']);
 const RESULTS_LAYOUT_STORAGE_PREFIX = 'transportation-forms:forms-layout:v1:';
 const FORM_WORKFLOW_STATES = new Set(['draft', 'pending_review', 'published', 'archived']);
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const KNOWN_FORM_ACTIONS = new Set([
+    'edit', 'submit_for_review', 'archive', 'restore', 'delete', 'unpublish', 'revert',
+]);
 
 // ── Module-private setup flag & navigate callback ─────────────────────────────
 let _initialized = false;
@@ -106,9 +108,9 @@ function _resetFormsListLifecycle() {
 }
 
 function _removeUnavailableWorkflowFilters() {
-    if (canPresentFormWorkflowMetadata()) return false;
+    const visibleFilterKeys = new Set(_getVisibleFilterOptions().map(option => option.key));
     const retainedFilters = _selectedFilterChips.filter(
-        chip => chip.category !== 'Workflow State'
+        chip => visibleFilterKeys.has(chip.key)
     );
     if (retainedFilters.length === _selectedFilterChips.length) return false;
     _selectedFilterChips = retainedFilters;
@@ -119,12 +121,16 @@ function _removeUnavailableWorkflowFilters() {
 }
 
 function _handleFormsAuthorizationRefreshed() {
+    _formsRequestController?.abort();
+    _autocompleteRequestController?.abort();
+    clearTimeout(_autocompleteDebounceTimer);
+    _dismissSearchSuggestions();
+    document.getElementById('formsList')?.replaceChildren();
     _removeUnavailableWorkflowFilters();
     _renderFiltersMenu();
-    if (!canPresentFormWorkflowMetadata()) {
-        document.querySelectorAll('#formsList .forms-result-card__status').forEach(
-            statusElement => statusElement.remove()
-        );
+    if (document.getElementById('listView')?.style.display === 'block'
+        && hasPortalRoles() && hasPermission('form:read')) {
+        void loadForms(0);
     }
 }
 
@@ -163,7 +169,12 @@ function _boundedString(value, maxLength) {
     return typeof value === 'string' ? value.slice(0, maxLength) : '';
 }
 
-function _normalizeFormItem(item) {
+function _normalizeAvailableActions(actions) {
+    if (!Array.isArray(actions)) return [];
+    return actions.filter(action => typeof action === 'string' && KNOWN_FORM_ACTIONS.has(action));
+}
+
+export function _normalizeFormItem(item) {
     const reservation = item.form_number_reservation;
     const createdBy = item.created_by;
     const businessArea = item.business_area;
@@ -200,6 +211,7 @@ function _normalizeFormItem(item) {
         created_by: createdBy && typeof createdBy === 'object' ? {
             id: _boundedString(createdBy.id, MAX_FORM_ID_LENGTH),
         } : null,
+        available_actions: _normalizeAvailableActions(item.available_actions),
     };
 }
 
@@ -437,25 +449,22 @@ export function _renderFormActionButtons(form) {
     const id = _escapeAttribute(form.id);
     const formLabel = _escapeAttribute(getFormNumberDisplay(form));
     const status = form.status;
-    const user = getCurrentUser();
     const isKnownStatus = FORM_WORKFLOW_STATES.has(status);
-    if (!isKnownStatus || !user || !Array.isArray(user.permissions)) return '';
-    const userId = user?.id;
-    const creatorId = form.created_by?.id;
-    if (typeof userId !== 'string' || !UUID_PATTERN.test(userId)
-        || typeof creatorId !== 'string' || !UUID_PATTERN.test(creatorId)) return '';
-    const isOwner = creatorId === userId;
+    if (!isKnownStatus || !Array.isArray(form.available_actions)) return '';
+    const availableActions = new Set(form.available_actions);
 
-    // Edit — draft + published, form:edit
-    if (((status === 'draft' && isOwner) || status === 'published') && hasPermission('form:edit')) {
+    // Published forms are read-only via the API; Edit opens the editor for its Unpublish control.
+    const canOpenEditor = availableActions.has('edit')
+        || (status === 'published' && availableActions.has('unpublish'))
+        || (status === 'published' && availableActions.has('revert'));
+    if (canOpenEditor) {
         buttons.push(`<button class="forms-result-card__action" type="button"
             data-action="navigate" data-route="/edit/${id}"
             aria-label="Edit form ${formLabel}">
             <i class="fas fa-edit" aria-hidden="true"></i> Edit</button>`);
     }
 
-    // Submit — draft only, creator only, with edit and submit permissions
-    if (status === 'draft' && isOwner && hasPermission('form:edit') && hasPermission('form:submit_for_review')) {
+    if (availableActions.has('submit_for_review')) {
         buttons.push(`<button class="forms-result-card__action forms-result-card__action--submit" type="button"
             data-action="submit-form" data-form-id="${id}"
             data-form-title="${_escapeAttribute(form.title)}"
@@ -463,8 +472,7 @@ export function _renderFormActionButtons(form) {
             <i class="fas fa-paper-plane" aria-hidden="true"></i> Submit</button>`);
     }
 
-    // Archive — published only, form:archive
-    if (status === 'published' && hasPermission('form:archive')) {
+    if (availableActions.has('archive')) {
         buttons.push(`<button class="forms-result-card__action" type="button"
             data-action="archive-form" data-form-id="${id}"
             data-form-title="${_escapeAttribute(form.title)}"
@@ -472,8 +480,7 @@ export function _renderFormActionButtons(form) {
             <i class="fas fa-archive" aria-hidden="true"></i> Archive</button>`);
     }
 
-    // Restore — archived only, form:approve
-    if (status === 'archived' && hasPermission('form:approve')) {
+    if (availableActions.has('restore')) {
         buttons.push(`<button class="forms-result-card__action" type="button"
             data-action="restore-form" data-form-id="${id}"
             data-form-title="${_escapeAttribute(form.title)}"
@@ -481,8 +488,7 @@ export function _renderFormActionButtons(form) {
             <i class="fas fa-undo" aria-hidden="true"></i> Restore</button>`);
     }
 
-    // Delete — draft only, form:delete, owner or admin (matches backend enforcement)
-    if (status === 'draft' && hasPermission('form:delete') && (isOwner || isAdminUser())) {
+    if (availableActions.has('delete')) {
         buttons.push(`<button class="forms-result-card__action forms-result-card__action--danger" type="button"
             data-action="delete-form" data-form-id="${id}"
             data-form-title="${_escapeAttribute(form.title)}"
@@ -1024,6 +1030,9 @@ function _getVisibleFilterOptions() {
             option => option.category !== 'Workflow State'
         );
     }
+    if (isBusinessAreaManager() && !hasPermission('form:read_unpublished:any')) {
+        return _FILTER_OPTIONS.filter(option => option.apiValue !== 'archived');
+    }
     return _FILTER_OPTIONS;
 }
 
@@ -1188,4 +1197,3 @@ function _renderActiveFilters() {
     }
     container.hidden = selected.length === 0;
 }
-

@@ -9,14 +9,22 @@ class TestDatabaseSeeds:
     def test_seed_roles_creates_core_roles(self, db: Session):
         seed_roles(db)
         roles = db.query(Role).filter(Role.is_system.is_(True)).all()
-        assert {role.name for role in roles} == {"admin", "staff_viewer"}
+        assert {role.name for role in roles} == {
+            "admin",
+            "staff_viewer",
+            "business_area_manager",
+        }
 
     def test_seed_roles_idempotent(self, db: Session):
         # Running it twice shouldn't crash or duplicate system roles
         seed_roles(db)
         seed_roles(db)
         roles = db.query(Role).filter(Role.is_system.is_(True)).all()
-        assert {role.name for role in roles} == {"admin", "staff_viewer"}
+        assert {role.name for role in roles} == {
+            "admin",
+            "staff_viewer",
+            "business_area_manager",
+        }
 
     def test_seed_initial_admin(self, db: Session):
         from backend.models import User

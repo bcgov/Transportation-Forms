@@ -85,6 +85,7 @@ class TestFormWorkflowService:
         """FEAT-0001: approve_form transitions directly to published."""
         creator = _create_user(user_factory, "creator-happy@example.com")
         reviewer = _create_user(user_factory, "reviewer-happy@example.com")
+        approver = _create_user(user_factory, "approver-happy@example.com")
         form = _create_form(db, creator.id, status="draft")
         form_id = uuid.UUID(str(form.id))
 
@@ -92,10 +93,10 @@ class TestFormWorkflowService:
         assert str(submitted.status) == "pending_review"
 
         # FEAT-0001: approve now goes directly to published
-        published = FormService.approve_form(db, form_id, reviewer.id)
+        published = FormService.approve_form(db, form_id, approver.id)
         assert str(published.status) == "published"
 
-        archived = FormService.archive_form(db, form_id, user_id=reviewer.id)
+        archived = FormService.archive_form(db, form_id, user_id=approver.id)
         assert archived is not None
         assert str(archived.status) == "archived"
 
@@ -317,7 +318,10 @@ class TestFormWorkflowApi:
         form = _create_form(db, creator.id, status="draft")
         # staff_viewer has no form:submit_for_review
         no_submit_client = client_factory(creator, ["staff_viewer"])
-        resp = no_submit_client.post(f"/api/v1/staff/forms/{form.id}/submit")
+        resp = no_submit_client.post(
+            f"/api/v1/staff/forms/{form.id}/submit",
+            json={"expected_version": form.current_version},
+        )
         assert resp.status_code == 403
 
     @pytest.mark.integration
@@ -356,6 +360,77 @@ class TestFormWorkflowApi:
         )
         resp = limited_client.post(f"/api/v1/staff/forms/{form.id}/approve")
         assert resp.status_code == 403
+
+    @pytest.mark.integration
+    @pytest.mark.parametrize(
+        ("endpoint", "permissions", "expected_status"),
+        [
+            (
+                "approve",
+                ["form:approve", "form:review"],
+                400,
+            ),
+            (
+                "publish",
+                ["form:approve", "form:review"],
+                400,
+            ),
+            (
+                "approve",
+                ["form:approve", "form:review", "form:approve-self"],
+                200,
+            ),
+            (
+                "publish",
+                ["form:approve", "form:review", "form:approve-self"],
+                200,
+            ),
+        ],
+    )
+    def test_latest_submitter_endpoint_honors_self_approval_permission(
+        self,
+        db,
+        user_factory,
+        client_factory,
+        endpoint,
+        permissions,
+        expected_status,
+    ):
+        creator = _create_user(
+            user_factory, f"creator-{endpoint}-{expected_status}@example.com"
+        )
+        submitter = _create_user(
+            user_factory, f"submitter-{endpoint}-{expected_status}@example.com"
+        )
+        form = _create_form(db, creator.id, status="pending_review")
+        db.add(
+            FormWorkflow(
+                id=uuid.uuid4(),
+                form_id=form.id,
+                action="submit",
+                from_status="draft",
+                to_status="pending_review",
+                triggered_by_id=submitter.id,
+            )
+        )
+        db.flush()
+
+        submitter_client = client_factory(
+            submitter,
+            ["reviewer"],
+            permissions=permissions,
+        )
+        response = submitter_client.post(
+            f"/api/v1/staff/forms/{form.id}/{endpoint}"
+        )
+
+        assert response.status_code == expected_status
+        db.refresh(form)
+        if expected_status == 400:
+            assert "most recently submitted" in response.json()["detail"].lower()
+            assert form.status == "pending_review"
+        else:
+            assert form.status == "published"
 
     @pytest.mark.integration
     def test_pending_review_form_cannot_be_edited(

@@ -21,17 +21,28 @@ class Permission(str, Enum):
     # Form Management Permissions
     FORM_CREATE = "form:create"
     FORM_READ = "form:read"
+    FORM_READ_UNPUBLISHED_BUSINESS_AREA = "form:read_unpublished:business_area"
+    FORM_READ_UNPUBLISHED_ANY = "form:read_unpublished:any"
     FORM_EDIT = "form:edit"
+    FORM_EDIT_OWN = "form:edit:own"
+    FORM_EDIT_BUSINESS_AREA = "form:edit:business_area"
+    FORM_EDIT_ANY = "form:edit:any"
     FORM_DELETE = "form:delete"
     FORM_ARCHIVE = "form:archive"
     FORM_AUDIT = "form:audit"
 
     # Form Workflow Permissions
     FORM_SUBMIT_FOR_REVIEW = "form:submit_for_review"
+    FORM_SUBMIT_FOR_REVIEW_OWN = "form:submit_for_review:own"
+    FORM_SUBMIT_FOR_REVIEW_BUSINESS_AREA = (
+        "form:submit_for_review:business_area"
+    )
+    FORM_SUBMIT_FOR_REVIEW_ANY = "form:submit_for_review:any"
     FORM_REVIEW = "form:review"
     FORM_APPROVE = "form:approve"
     FORM_APPROVE_SELF = "form:approve-self"  # FEAT-0007: allows a creator to approve their own submission
     FORM_PUBLISH = "form:publish"
+    FORM_VIEW_WORKFLOW_STATE = "form:view_workflow_state"
 
     # Business Area Permissions
     BUSINESS_AREA_CREATE = "business_area:create"
@@ -112,10 +123,19 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.FORM_ARCHIVE,
             Permission.FORM_AUDIT,
             Permission.FORM_SUBMIT_FOR_REVIEW,
+            Permission.FORM_SUBMIT_FOR_REVIEW_OWN,
+            Permission.FORM_SUBMIT_FOR_REVIEW_BUSINESS_AREA,
+            Permission.FORM_SUBMIT_FOR_REVIEW_ANY,
             Permission.FORM_REVIEW,
             Permission.FORM_APPROVE,
             Permission.FORM_APPROVE_SELF,  # FEAT-0007
             Permission.FORM_PUBLISH,
+            Permission.FORM_READ_UNPUBLISHED_BUSINESS_AREA,
+            Permission.FORM_READ_UNPUBLISHED_ANY,
+            Permission.FORM_EDIT_OWN,
+            Permission.FORM_EDIT_BUSINESS_AREA,
+            Permission.FORM_EDIT_ANY,
+            Permission.FORM_VIEW_WORKFLOW_STATE,
             # All business area permissions
             Permission.BUSINESS_AREA_CREATE,
             Permission.BUSINESS_AREA_READ,
@@ -177,6 +197,19 @@ DEFAULT_ROLES: Dict[str, Dict[str, any]] = {
             Permission.BUSINESS_AREA_READ,
             # Categories (read only)
             Permission.CATEGORY_READ,
+        ],
+    },
+    "business_area_manager": {
+        "description": "Business Area Manager with scoped form capabilities",
+        "is_system": True,
+        "permissions": [
+            Permission.FORM_READ,
+            Permission.BUSINESS_AREA_READ,
+            Permission.CATEGORY_READ,
+            Permission.FORM_READ_UNPUBLISHED_BUSINESS_AREA,
+            Permission.FORM_EDIT_BUSINESS_AREA,
+            Permission.FORM_SUBMIT_FOR_REVIEW_BUSINESS_AREA,
+            Permission.FORM_VIEW_WORKFLOW_STATE,
         ],
     },
 }

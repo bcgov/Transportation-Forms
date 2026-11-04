@@ -205,8 +205,8 @@ def test_roles_list_uses_live_role_read_not_token_claims(
         (
             "post",
             f"/api/v1/staff/forms/{uuid.uuid4()}/submit",
-            ["form:submit_for_review"],
-            None,
+            ["form:edit", "form:submit_for_review"],
+            {"expected_version": 1},
             404,
         ),
         (
@@ -254,7 +254,7 @@ def test_roles_list_uses_live_role_read_not_token_claims(
         (
             "post",
             f"/api/v1/staff/forms/{uuid.uuid4()}/restore",
-            ["form:approve"],
+            ["form:archive"],
             None,
             404,
         ),

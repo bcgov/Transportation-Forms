@@ -98,7 +98,7 @@ def test_forms_actions_reuse_the_existing_policy_and_handlers() -> None:
     assert "export function _renderFormActionButtons(form)" in forms
     assert "export async function handleFormWorkflowAction(actionElement)" in forms
     assert "FORM_WORKFLOW_STATES.has(status)" in forms
-    assert "typeof creatorId !== 'string' || !UUID_PATTERN.test(creatorId)" in forms
+    assert "!Array.isArray(form.available_actions)) return '';" in forms
 
 
 def test_approvals_actions_retain_permissions_self_denial_and_bridge() -> None:
@@ -163,9 +163,8 @@ def test_malformed_ownership_identifiers_fail_closed() -> None:
     assert "const UUID_PATTERN" in drawer
     assert "UUID_PATTERN.test(currentUserId)" in drawer
     assert "UUID_PATTERN.test(creatorId)" in drawer
-    assert "const UUID_PATTERN" in forms
-    assert "UUID_PATTERN.test(userId)" in forms
-    assert "UUID_PATTERN.test(creatorId)" in forms
+    # FEAT-0032: list ownership is decided server-side; malformed actions are dropped.
+    assert "typeof action === 'string' && KNOWN_FORM_ACTIONS.has(action)" in forms
 
 
 def test_drawer_fails_closed_for_races_and_authorization_changes() -> None:

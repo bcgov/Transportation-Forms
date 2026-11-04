@@ -1,9 +1,10 @@
 """
 Seed default roles and permissions to the database.
 
-This script creates the two system roles with their associated permissions:
+This script creates the system roles with their associated permissions:
 - admin: Full system access
 - staff_viewer: Read-only access to published forms
+- business_area_manager: Business-area-scoped form access
 """
 
 from backend.auth.permissions import DEFAULT_ROLES
@@ -16,10 +17,6 @@ class _InvalidDefaultRoleState(Exception):
     pass
 
 
-def _is_valid_default_role(role: Role) -> bool:
-    return bool(role.is_system) and bool(role.is_active)
-
-
 def _rollback(db: Session) -> bool:
     try:
         db.rollback()
@@ -30,7 +27,7 @@ def _rollback(db: Session) -> bool:
 
 def seed_default_roles(db: Session) -> dict:
     """
-    Create missing default roles without changing existing role configuration.
+    Create missing default roles and reconcile the seeded Business Area Manager.
 
     Args:
         db: Database session
@@ -54,6 +51,7 @@ def seed_default_roles(db: Session) -> dict:
         try:
             existing_roles = {}
             missing_roles = []
+            updated_roles = []
 
             for role_name, role_config in DEFAULT_ROLES.items():
                 existing_role = (
@@ -66,9 +64,31 @@ def seed_default_roles(db: Session) -> dict:
                 )
 
                 if existing_role:
-                    if not _is_valid_default_role(existing_role):
+                    if (
+                        not existing_role.is_system
+                        or (
+                            not existing_role.is_active
+                            and role_name != "business_area_manager"
+                        )
+                    ):
                         raise _InvalidDefaultRoleState
                     existing_roles[role_name] = existing_role
+                    if role_name == "business_area_manager":
+                        expected_permissions = [
+                            p.value if hasattr(p, "value") else str(p)
+                            for p in role_config["permissions"]
+                        ]
+                        if (
+                            not existing_role.is_active
+                            or existing_role.description
+                            != role_config["description"]
+                            or existing_role.permissions
+                            != expected_permissions
+                        ):
+                            existing_role.is_active = True
+                            existing_role.description = role_config["description"]
+                            existing_role.permissions = expected_permissions
+                            updated_roles.append((role_name, existing_role))
                 else:
                     missing_roles.append((role_name, role_config))
 
@@ -88,18 +108,22 @@ def seed_default_roles(db: Session) -> dict:
 
                 created_roles.append((role_name, role_config, new_role))
 
-            if created_roles:
+            if created_roles or updated_roles:
                 db.commit()
 
             results = {
                 "created": len(created_roles),
-                "updated": 0,
+                "updated": len(updated_roles),
                 "existing": len(existing_roles),
                 "failed": 0,
                 "roles": [
                     {
                         "name": role_name,
-                        "status": "existing",
+                        "status": (
+                            "updated"
+                            if role_name in {name for name, _ in updated_roles}
+                            else "existing"
+                        ),
                         "id": str(role.id),
                     }
                     for role_name, role in existing_roles.items()

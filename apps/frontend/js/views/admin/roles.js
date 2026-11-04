@@ -1,6 +1,6 @@
 // frontend/js/views/admin/roles.js
 // Admin roles management view — list, create, detail (edit/delete), and cache.
-import { API_BASE, ROUTES } from '../../constants.js';
+import { API_BASE, ROLE_DISPLAY_NAMES, ROUTES } from '../../constants.js';
 import { escapeHtml, formatDateTime, showAlert, getErrorDetail, parsePermissions } from '../../utils.js';
 import { getCurrentUser } from '../../state.js';
 import { getAuthToken } from '../../auth.js';
@@ -155,7 +155,9 @@ export async function loadRolesPage(skip = _rolesPageSkip) {
                     <tbody>
                         ${items.map(role => `
                             <tr>
-                                <td><strong>${escapeHtml(role.name)}</strong></td>
+                                <td><strong>${escapeHtml(
+                                    ROLE_DISPLAY_NAMES.get(role.name) || role.name
+                                )}</strong></td>
                                 <td>${escapeHtml(role.description || '-')}</td>
                                 <td>${role.user_count || 0}</td>
                                 <td>${(role.permissions || []).map(p =>

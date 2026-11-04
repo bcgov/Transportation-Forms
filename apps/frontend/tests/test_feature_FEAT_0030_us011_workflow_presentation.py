@@ -10,13 +10,14 @@ def _source(relative_path: str) -> str:
     return (FRONTEND_DIR / relative_path).read_text(encoding="utf-8")
 
 
-def test_one_fail_closed_effective_permission_decision_is_shared() -> None:
+def test_workflow_state_visibility_is_separate_from_mutation_permissions() -> None:
     auth = _source("js/auth.js")
     forms = _source("js/views/forms-list.js")
     drawer = _source("js/shared/form-details-drawer.js")
 
     assert "export function canPresentFormWorkflowMetadata()" in auth
-    assert "return hasPermission('form:edit');" in auth
+    assert "hasPermission('form:view_workflow_state')" in auth
+    assert "hasPermission('form:edit')" in auth
     assert "canPresentFormWorkflowMetadata" in forms
     assert "canPresentFormWorkflowMetadata" in drawer
     assert "isStaffViewerOnly" not in forms
@@ -34,7 +35,8 @@ def test_stale_filters_are_pruned_before_request_serialization() -> None:
     forms = _source("js/views/forms-list.js")
 
     assert "function _removeUnavailableWorkflowFilters()" in forms
-    assert "chip.category !== 'Workflow State'" in forms
+    assert "new Set(_getVisibleFilterOptions().map(option => option.key))" in forms
+    assert "chip => visibleFilterKeys.has(chip.key)" in forms
     assert (
         "const workflowSelectionRemoved = "
         "_removeUnavailableWorkflowFilters();"
@@ -59,7 +61,14 @@ def test_permission_refresh_preserves_unrelated_state() -> None:
         "window.addEventListener('auth:authorization-refreshed', "
         "_resetFormsListLifecycle);"
     ) not in forms
-    assert "statusElement.remove()" in forms
+    handler = forms[
+        forms.index("function _handleFormsAuthorizationRefreshed()") : forms.index(
+            "window.addEventListener('app:route-changing'"
+        )
+    ]
+    assert handler.index("replaceChildren()") < handler.index("loadForms(0)")
+    assert "_selectedFilterChips = []" not in handler
+    assert "_selectedBusinessAreaIds = []" not in handler
 
 
 def test_card_status_markup_is_emitted_only_for_edit_capable_users() -> None:

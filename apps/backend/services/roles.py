@@ -33,7 +33,7 @@ class RoleConflictError(ValueError):
 class RoleService:
     """Business logic for admin role management."""
 
-    SYSTEM_ROLE_NAMES = {"admin", "staff_viewer"}
+    SYSTEM_ROLE_NAMES = {"admin", "staff_viewer", "business_area_manager"}
 
     @staticmethod
     def list_roles(

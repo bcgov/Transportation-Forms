@@ -71,19 +71,18 @@ def test_list_view_shim_awaits_preference_restoration():
 
 def test_action_visibility_remains_fail_closed_and_state_aware():
     forms_js = _source("js/views/forms-list.js")
+    # FEAT-0032: visibility comes from the server's available_actions.
     fail_closed_guard = (
-        "if (!isKnownStatus || !user || "
-        "!Array.isArray(user.permissions))"
+        "if (!isKnownStatus || !Array.isArray(form.available_actions)) return '';"
     )
 
     assert "FORM_WORKFLOW_STATES.has(status)" in forms_js
     assert fail_closed_guard in forms_js
-    assert "status === 'draft' && isOwner" in forms_js
-    assert "status === 'published'" in forms_js
-    assert "hasPermission('form:archive')" in forms_js
-    assert "status === 'archived'" in forms_js
-    assert "hasPermission('form:approve')" in forms_js
-    assert "status === 'draft' && hasPermission('form:delete')" in forms_js
+    assert "availableActions.has('edit')" in forms_js
+    assert "status === 'published' && availableActions.has('revert')" in forms_js
+    assert "availableActions.has('archive')" in forms_js
+    assert "availableActions.has('restore')" in forms_js
+    assert "availableActions.has('delete')" in forms_js
     assert 'aria-label="Edit form ${formLabel}"' in forms_js
     assert 'aria-label="Delete form ${formLabel}"' in forms_js
 

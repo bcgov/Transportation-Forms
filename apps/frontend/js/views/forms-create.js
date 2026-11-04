@@ -17,19 +17,19 @@ import {
     getUploadedFileUrl,
     getUploadedFileFilename,
     getUploadedFileType,
+    setUploadFormId,
     clearUploadState,
     restoreUploadState,
 } from './file-upload.js';
 import { loadBusinessAreas, initBusinessAreaCombobox, getBusinessAreaOptions, resetBusinessAreas, closeBusinessAreaDropdown } from './business-areas.js';
-import { getAuthToken, hasPermission, isAdminUser } from '../auth.js';
-import { getCurrentUser } from '../state.js';
+import { getAuthToken, hasPermission } from '../auth.js';
 import { loadAuditHistory, clearAuditHistory } from './form-audit-history.js';
 
 // ─── Module-private state ─────────────────────────────────────────────────────
 
 let _currentFormId = null;
 let _currentFormStatus = null;
-let _currentFormCreatedById = null;  // FEAT-0013: track form creator for ownership checks
+let _currentFormAvailableActions = [];
 let _formNumberReservationId = null;
 let _formNumberReservations = [];
 let _workflowListenersAttached = false;
@@ -41,6 +41,100 @@ let _loadedFormSnapshot = null;
 let _currentFormVersion = null;
 let _submitInProgress = false;
 let _submitNeedsReload = false;
+let _formRequestController = null;
+
+// Server actions that have a control on the editor page, per form status.
+const EDITOR_ACTIONS_BY_STATUS = {
+    draft: ['edit', 'submit_for_review', 'delete'],
+    published: ['archive', 'unpublish', 'revert'],
+    archived: ['restore'],
+};
+// Editor workflow buttons per status, each revealed by any of its server actions.
+const WORKFLOW_BUTTONS_BY_STATUS = {
+    draft: { submitForReviewBtn: ['submit_for_review'], deleteFormBtn: ['delete'] },
+    published: { archiveFormBtn: ['archive'], unpublishFormBtn: ['unpublish', 'revert'] },
+    archived: { restoreFormBtn: ['restore'] },
+};
+const WORKFLOW_BUTTON_IDS = Object.values(WORKFLOW_BUTTONS_BY_STATUS).flatMap(Object.keys);
+const EDITOR_UNAVAILABLE_MESSAGE =
+    'This form cannot be opened in the editor. Use View details on the Forms list to see it.';
+
+function _forStatus(table, status, fallback) {
+    return Object.hasOwn(table, status) ? table[status] : fallback;
+}
+
+function _canOpenInEditor(status, availableActions) {
+    const editorActions = _forStatus(EDITOR_ACTIONS_BY_STATUS, status, []);
+    return editorActions.some(action => availableActions.includes(action));
+}
+
+function _leaveUnavailableEditor() {
+    resetFormState();
+    showAlert(EDITOR_UNAVAILABLE_MESSAGE, 'warning');
+    _navigate(ROUTES.FORMS_LIST);
+}
+
+async function _handleFormAuthorizationRefreshed() {
+    _currentFormAvailableActions = [];
+    clearAuditHistory();
+    _setFormFieldsLocked(true);
+    _updateWorkflowButtons(_currentFormStatus, []);
+    const formId = _currentFormId;
+    if (!window.location.pathname.startsWith('/edit/') || !formId) {
+        _formRequestController?.abort();
+        if (window.location.pathname === ROUTES.FORM_CREATE) {
+            _setFormFieldsLocked(!hasPermission('form:create'));
+        }
+        return;
+    }
+    if (_loadedFormSnapshot === null) {
+        await _loadFormForEdit(formId);
+        return;
+    }
+
+    _formRequestController?.abort();
+    const controller = new AbortController();
+    _formRequestController = controller;
+    try {
+        const response = await fetch(`${API_BASE}/forms/${formId}`, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (response.status === 403 || response.status === 404) {
+            resetFormState();
+            _navigate(ROUTES.FORMS_LIST);
+            return;
+        }
+        if (!response.ok) throw new Error('Unable to verify form access.');
+        const form = await response.json();
+        if (controller.signal.aborted || _currentFormId !== formId) return;
+        _currentFormAvailableActions = Array.isArray(form.available_actions)
+            ? form.available_actions
+            : [];
+        if (!_canOpenInEditor(form.status, _currentFormAvailableActions)) {
+            _leaveUnavailableEditor();
+            return;
+        }
+        _currentFormStatus = form.status;
+        _updateWorkflowButtons(_currentFormStatus);
+        const canEdit = _currentFormAvailableActions.includes('edit');
+        const canChangeBusinessArea = _currentFormAvailableActions.includes(
+            'change_business_area',
+        );
+        _setFormFieldsLocked(!canEdit, !canChangeBusinessArea);
+        loadAuditHistory(formId);
+    } catch {
+        // Keep the editor locked; the user must reload before saving or submitting.
+        if (controller.signal.aborted) return;
+        _submitNeedsReload = true;
+        _updateBusinessAreaActions();
+        _showSubmitMessage('Unable to verify form access.', 'warning');
+    }
+}
+
+window.addEventListener('auth:authorization-refreshed', _handleFormAuthorizationRefreshed);
+window.addEventListener('app:route-changing', event => {
+    const path = event.detail?.path || '';
+    if (!path.startsWith('/edit/')) _formRequestController?.abort();
+});
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
@@ -212,77 +306,49 @@ function _initWorkflowButtonListeners() {
  * Show/hide and label workflow action buttons based on form status and user permissions.
  * @param {string|null} status  Current form status, or null for create mode.
  */
-function _updateWorkflowButtons(status) {
-    const saveDraftBtn = document.getElementById('submitBtn');
-    const submitForReviewBtn = document.getElementById('submitForReviewBtn');
-    const archiveFormBtn = document.getElementById('archiveFormBtn');
-    const deleteFormBtn = document.getElementById('deleteFormBtn');
-    const restoreFormBtn = document.getElementById('restoreFormBtn');
-    const unpublishFormBtn = document.getElementById('unpublishFormBtn');
+function _setDisplayed(element, visible) {
+    if (element) element.style.display = visible ? '' : 'none';
+}
 
-    // Default: hide all workflow extras
-    [submitForReviewBtn, archiveFormBtn, deleteFormBtn, restoreFormBtn, unpublishFormBtn].forEach(el => {
-        if (el) el.style.display = 'none';
-    });
+function _updateWorkflowButtons(status, availableActions = _currentFormAvailableActions) {
+    const saveDraftBtn = document.getElementById('submitBtn');
+    WORKFLOW_BUTTON_IDS.forEach(id => _setDisplayed(document.getElementById(id), false));
 
     if (!status) {
         // Create mode — just show "Save draft"
-        if (saveDraftBtn) saveDraftBtn.style.display = hasPermission('form:create') ? '' : 'none';
+        _setDisplayed(saveDraftBtn, hasPermission('form:create'));
         return;
     }
 
-    // FEAT-0013: Determine ownership for submit button
-    const user = getCurrentUser();
-    const userId = user?.id || '';
-    const isOwner = _currentFormCreatedById === userId;
-
-    if (status === 'draft') {
-        if (saveDraftBtn) saveDraftBtn.style.display = isOwner && hasPermission('form:edit') ? '' : 'none';
-        if (submitForReviewBtn && isOwner && hasPermission('form:edit') && hasPermission('form:submit_for_review')) {
-            submitForReviewBtn.style.display = '';
-        }
-        // FEAT-0013: Delete button for draft forms (owner or admin only)
-        if (deleteFormBtn && hasPermission('form:delete') && (isOwner || isAdminUser())) {
-            deleteFormBtn.style.display = '';
-        }
-    } else if (status === 'pending_review') {
-        // Locked — no save/edit actions available to creators
-        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-    } else if (status === 'published') {
-        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-        if (archiveFormBtn && hasPermission('form:archive')) {
-            archiveFormBtn.style.display = '';
-        }
-        // FEAT-0016: Unpublish button — requires both form:create and form:edit
-        if (unpublishFormBtn && hasPermission('form:create') && hasPermission('form:edit')) {
-            unpublishFormBtn.style.display = '';
-        }
-    } else if (status === 'archived') {
-        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-        // FEAT-0013: Restore button for archived forms
-        if (restoreFormBtn && hasPermission('form:approve')) {
-            restoreFormBtn.style.display = '';
-        }
-    } else {
-        // unknown — no actions
-        if (saveDraftBtn) saveDraftBtn.style.display = 'none';
-    }
+    const actions = new Set(Array.isArray(availableActions) ? availableActions : []);
+    _setDisplayed(saveDraftBtn, status === 'draft' && actions.has('edit'));
+    const buttons = _forStatus(WORKFLOW_BUTTONS_BY_STATUS, status, {});
+    Object.entries(buttons).forEach(([id, revealingActions]) => {
+        _setDisplayed(
+            document.getElementById(id),
+            revealingActions.some(action => actions.has(action)),
+        );
+    });
 }
 
 /**
  * Lock or unlock all form fields.
  * @param {boolean} locked
+ * @param {boolean} businessAreaLocked
  */
-function _setFormFieldsLocked(locked) {
+function _setFormFieldsLocked(locked, businessAreaLocked = locked) {
     const selectors = [
         '#title', '#description', '#formSource', '#formSourceUrl',
         '#effectiveDate', '#isPublic', '#collectsPersonalInfo',
-        '#businessAreaInput', '#formNumber',
+        '#formNumber',
     ];
     selectors.forEach(sel => {
         const el = document.querySelector(sel);
         if (el) el.disabled = locked;
     });
+    const businessAreaInput = document.getElementById('businessAreaInput');
+    if (businessAreaInput) businessAreaInput.disabled = businessAreaLocked;
+    if (businessAreaLocked) closeBusinessAreaDropdown();
     const fileInput = document.getElementById('fileInput');
     if (fileInput) fileInput.disabled = locked;
     const dropZone = document.getElementById('dropZone');
@@ -311,6 +377,7 @@ function _showSubmitMessage(message, type = 'info') {
 
 function _markSubmitted() {
     _currentFormStatus = 'pending_review';
+    _currentFormAvailableActions = [];
     _updateWorkflowButtons(_currentFormStatus);
     _setFormFieldsLocked(true);
     document.getElementById('formStatusBadge').textContent = 'Pending Review';
@@ -349,8 +416,7 @@ function _showSubmitError(message) {
 
 async function _submitFormForReview() {
     if (!_currentFormId || _currentFormStatus !== 'draft' || _submitInProgress || _submitNeedsReload
-        || _currentFormCreatedById !== getCurrentUser()?.id
-        || !hasPermission('form:edit') || !hasPermission('form:submit_for_review')) return;
+        || !_currentFormAvailableActions.includes('submit_for_review')) return;
 
     clearAllFieldErrors();
     const { firstInvalidField, formData } = _validatedFormData();
@@ -473,8 +539,44 @@ async function _archiveForm() {
     }
 }
 
+async function _unpublishForm() {
+    if (!_currentFormId) return;
+    const btn = document.getElementById('unpublishFormBtn');
+    if (!btn) return;
+
+    btn.disabled = true;
+    try {
+        const response = await fetch(
+            `${API_BASE}/staff/forms/${_currentFormId}/unpublish`,
+            {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getAuthToken()}` },
+            },
+        );
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to unpublish form');
+        }
+        showAlert('Form has been unpublished and returned to Draft.', 'success');
+        _navigate(ROUTES.FORMS_LIST);
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 // FEAT-0016: Open Unpublish confirmation modal
 function _openFormUnpublishModal() {
+    const canUnpublish = _currentFormAvailableActions.includes('unpublish');
+    const canRevert = _currentFormAvailableActions.includes('revert');
+    if (canUnpublish && !canRevert) {
+        if (!confirm('Unpublish this form and return it to Draft status?')) return;
+        void _unpublishForm();
+        return;
+    }
+    if (!canRevert) return;
+
     const reasonField = document.getElementById('formUnpublishReason');
     const errorDiv = document.getElementById('formUnpublishError');
     if (reasonField) {
@@ -614,6 +716,7 @@ export async function showCreateView() {
  */
 export async function showEditView(formId) {
     resetFormState();
+    setUploadFormId(formId);
 
     // Sub-module init
     initKeywords();
@@ -625,84 +728,107 @@ export async function showEditView(formId) {
     await _loadFormForEdit(formId);
 }
 
+/** Write a loaded form's stored values into the editor fields. */
+function _populateFormFields(form) {
+    document.getElementById('title').value = form.title;
+    document.getElementById('description').value = form.description || '';
+    document.getElementById('isPublic').checked = form.is_public;
+    document.getElementById('collectsPersonalInfo').value = form.collects_personal_info || 'No';
+    document.getElementById('effectiveDate').value = form.effective_date
+        ? form.effective_date.split('T')[0]
+        : '';
+    document.getElementById('formSource').value = form.form_source || '';
+    document.getElementById('formSourceUrl').value = form.form_source_url || '';
+
+    // TASK-415: Show read-only form number in edit mode
+    document.getElementById('formNumberSelectContainer').style.display = 'none';
+    document.getElementById('formNumberRequiredStar').style.display = 'none';
+    document.getElementById('formNumberReadonlyContainer').style.display = 'block';
+    document.getElementById('formNumberReadonly').textContent = getFormNumberDisplay(form) || 'N/A';
+    document.getElementById('formNumber').required = false;
+
+    // TASK-416: Restore attachment state when editing a Download-type form
+    if (form.form_source === 'Download' && form.form_attachment_url) {
+        restoreUploadState(
+            form.form_attachment_url,
+            form.form_attachment_filename || 'Attachment',
+            form.file_type || null,
+        );
+    }
+    _onFormSourceChange();
+
+    setKeywords(form.keywords || []);
+    _loadedKeywords = getKeywords();
+}
+
+/** Render the editor heading, breadcrumb, status badge and page title for a loaded form. */
+function _renderFormHeader(form) {
+    const submitBtn = document.getElementById('submitBtn');
+    if (form.status === 'draft') {
+        if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-save"></i> Save draft';
+        document.getElementById('formPageHeading').textContent = 'Edit Form';
+    } else {
+        if (submitBtn) submitBtn.style.display = 'none';
+        document.getElementById('formPageHeading').textContent = 'View Form';
+    }
+    const formNumber = getFormNumberDisplay(form);
+    document.getElementById('formBreadcrumbCurrent').textContent = formNumber || 'Edit Form';
+    document.getElementById('formPageSubtitle').textContent = `${formNumber || 'Form'}: ${form.title}`;
+    const badge = document.getElementById('formStatusBadge');
+    badge.textContent = form.status.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
+    badge.style.display = '';
+    document.getElementById('pageTitle').textContent = `Edit Form - ${form.title} - BC Gov`;
+}
+
 /**
  * Fetch an existing form from the API and populate all form fields.
  * @param {string} formId
  */
 async function _loadFormForEdit(formId) {
+    _formRequestController?.abort();
+    const controller = new AbortController();
+    _formRequestController = controller;
+    _currentFormId = formId;
+    _setFormFieldsLocked(true);
     try {
-        const response = await fetch(`${API_BASE}/forms/${formId}`);
+        const response = await fetch(`${API_BASE}/forms/${formId}`, { signal: controller.signal });
         if (!response.ok) throw new Error('Form not found');
         const form = await response.json();
+        if (controller.signal.aborted) return;
 
         _currentFormId = formId;
-        _currentFormCreatedById = form.created_by?.id || null;  // FEAT-0013
-        _currentFormVersion = form.current_version;
-
-        // Scalar fields
-        document.getElementById('title').value = form.title;
-        document.getElementById('description').value = form.description || '';
-        document.getElementById('isPublic').checked = form.is_public;
-        document.getElementById('collectsPersonalInfo').value = form.collects_personal_info || 'No';
-        document.getElementById('effectiveDate').value = form.effective_date
-            ? form.effective_date.split('T')[0]
-            : '';
-        document.getElementById('formSource').value = form.form_source || '';
-        document.getElementById('formSourceUrl').value = form.form_source_url || '';
-
-        // TASK-415: Show read-only form number in edit mode
-        document.getElementById('formNumberSelectContainer').style.display = 'none';
-        document.getElementById('formNumberRequiredStar').style.display = 'none';
-        document.getElementById('formNumberReadonlyContainer').style.display = 'block';
-        document.getElementById('formNumberReadonly').textContent = getFormNumberDisplay(form) || 'N/A';
-        document.getElementById('formNumber').required = false;
-
-        // TASK-416: Restore attachment state when editing a Download-type form
-        if (form.form_source === 'Download' && form.form_attachment_url) {
-            restoreUploadState(
-                form.form_attachment_url,
-                form.form_attachment_filename || 'Attachment',
-                form.file_type || null,
-            );
+        _currentFormAvailableActions = Array.isArray(form.available_actions)
+            ? form.available_actions
+            : [];
+        // Pending Review and action-less forms are viewed through the details
+        // drawer; never render their content in the editor.
+        if (!_canOpenInEditor(form.status, _currentFormAvailableActions)) {
+            _leaveUnavailableEditor();
+            return;
         }
-        _onFormSourceChange();
-
-        setKeywords(form.keywords || []);
-        _loadedKeywords = getKeywords();
+        _currentFormVersion = form.current_version;
+        _populateFormFields(form);
 
         // Workflow button state and field locking (FEAT-0001)
         _currentFormStatus = form.status;
         _savedBusinessAreaId = form.business_area?.id || null;
-        _updateWorkflowButtons(form.status);
-        const isLocked = form.status !== 'draft' || !hasPermission('form:edit')
-            || _currentFormCreatedById !== getCurrentUser()?.id;
-        _setFormFieldsLocked(isLocked);
-
-        // Label the submit button based on status
-        const submitBtn = document.getElementById('submitBtn');
-        if (form.status === 'draft') {
-            if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-save"></i> Save draft';
-            document.getElementById('formPageHeading').textContent = 'Edit Form';
-        } else {
-            if (submitBtn) submitBtn.style.display = 'none';
-            document.getElementById('formPageHeading').textContent =
-                form.status === 'pending_review' ? 'Review Form' : 'View Form';
-        }
-        document.getElementById('formBreadcrumbCurrent').textContent = getFormNumberDisplay(form) || 'Edit Form';
-        document.getElementById('formPageSubtitle').textContent =
-            `${getFormNumberDisplay(form) || 'Form'}: ${form.title}`;
-        const badge = document.getElementById('formStatusBadge');
-        badge.textContent = form.status.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
-        badge.style.display = '';
-        document.getElementById('pageTitle').textContent = `Edit Form - ${form.title} - BC Gov`;
+        _updateWorkflowButtons(form.status, _currentFormAvailableActions);
+        const isLocked = !_currentFormAvailableActions.includes('edit');
+        const isBusinessAreaLocked = !_currentFormAvailableActions.includes(
+            'change_business_area',
+        );
+        _setFormFieldsLocked(isLocked, isBusinessAreaLocked);
+        _renderFormHeader(form);
 
         document.getElementById('listView').style.display = 'none';
         document.getElementById('createView').style.display = 'block';
         window.scrollTo(0, 0);
         loadAuditHistory(formId);
         await _loadFormBusinessAreas(form.business_area);
+        if (controller.signal.aborted) return;
         _loadedFormSnapshot = JSON.stringify(_collectFormData());
     } catch (error) {
+        if (controller.signal.aborted) return;
         showAlert('Error loading form: ' + error.message, 'danger');
         setTimeout(() => _navigate(ROUTES.FORMS_LIST), 2000);
     }
@@ -881,6 +1007,8 @@ export async function handleFormSubmit(event) {
  * Called at the start of both showCreateView() and showEditView().
  */
 export function resetFormState() {
+    _formRequestController?.abort();
+    _formRequestController = null;
     clearAuditHistory();
     const form = document.getElementById('formCreate');
     if (form) form.reset();
@@ -897,7 +1025,8 @@ export function resetFormState() {
     _submitNeedsReload = false;
     _currentFormId = null;
     _currentFormStatus = null;
-    _currentFormCreatedById = null;  // FEAT-0013
+    _currentFormAvailableActions = [];
+    setUploadFormId(null);
     clearUploadState();
     _formNumberReservationId = null;
 

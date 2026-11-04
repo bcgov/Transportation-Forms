@@ -11,9 +11,10 @@ from urllib.parse import urlsplit, urlunsplit
 import logging
 import re
 from sqlalchemy.orm import Session
-from sqlalchemy import asc, case, desc, text, func as sa_func
+from sqlalchemy import and_, asc, case, desc, or_, text, func as sa_func
 from sqlalchemy.exc import OperationalError
 
+from backend.auth.form_authorization import FormAuthorizationContext
 from backend.models import (
     BusinessArea,
     Form,
@@ -53,11 +54,15 @@ _ACTIVITY_FIELDS = (
     "file_type", "form_number_reservation_id",
 )
 _OBJECT_KEY = re.compile(r"uploads/[A-Za-z0-9_./-]+")
+_FORM_BOUND_KEY_SUFFIX = re.compile(
+    r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(?:\.[a-z0-9]{1,10})?\Z"
+)
 _SENSITIVE_PAIR = re.compile(
     r"(?i)\b(token|secret|password|api[_-]?key|signature|credential)"
     r"\s*[:=]\s*[^\s,;&]+"
 )
 _EMBEDDED_URL = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
+_INSUFFICIENT_PERMISSIONS = "Insufficient permissions for this action"
 
 
 def _safe_text(value: str) -> str:
@@ -221,6 +226,26 @@ class FormService:
     # =====================================================================
 
     @staticmethod
+    def _require_unused_create_attachment(db: Session, form_attachment_url: str) -> None:
+        """Reject form-scoped or already-linked attachments on form creation."""
+        object_key = FormService._extract_s3_object_key(form_attachment_url)
+        if not object_key:
+            return
+        if object_key.startswith("uploads/forms/"):
+            raise ValueError("Form-scoped attachments cannot be used to create forms")
+        in_use = (
+            db.query(Form.id).filter(
+                Form.deleted_at.is_(None),
+                Form.form_attachment_url.contains(object_key, autoescape=True),
+            ).first()
+            or db.query(FormVersion.id).filter(
+                FormVersion.s3_key == object_key,
+            ).first()
+        )
+        if in_use:
+            raise ValueError("Attachment is already associated with another form")
+
+    @staticmethod
     def create_form(
         db: Session,
         title: str,
@@ -305,6 +330,9 @@ class FormService:
             if existing_form:
                 raise ValueError("Reservation is already used by another form")
 
+        if form_attachment_url:
+            FormService._require_unused_create_attachment(db, form_attachment_url)
+
         # Create the form
         form = Form(
             title=title,
@@ -385,6 +413,8 @@ class FormService:
         is_public: Optional[bool] = None,
         sort_order: str = "desc",
         sort_field: str = "suggested",
+        unpublished_area_ids: Optional[set[UUID]] = None,
+        allow_unpublished_any: bool = False,
     ) -> tuple[List[Form], int]:
         """
         List forms with filters and pagination.
@@ -400,6 +430,8 @@ class FormService:
             is_public: Filter by public status
             sort_order: asc or desc
             sort_field: suggested, title, or form_number
+            unpublished_area_ids: Active areas allowed for scoped unpublished reads.
+            allow_unpublished_any: Whether all unpublished forms are readable.
 
         Returns:
             Tuple of (list of Form objects, total count)
@@ -461,6 +493,21 @@ class FormService:
         # Apply filters
         if status:
             query = query.filter(Form.status.in_(status))
+
+        if unpublished_area_ids is not None or allow_unpublished_any:
+            visibility_filters = [Form.status == "published"]
+            if allow_unpublished_any:
+                visibility_filters.append(
+                    Form.status.in_(["draft", "pending_review", "archived"])
+                )
+            elif unpublished_area_ids:
+                visibility_filters.append(
+                    and_(
+                        Form.status.in_(["draft", "pending_review"]),
+                        Form.business_area_id.in_(unpublished_area_ids),
+                    )
+                )
+            query = query.filter(or_(*visibility_filters))
 
         if business_area_ids:
             query = query.filter(Form.business_area_id.in_(business_area_ids))
@@ -524,6 +571,7 @@ class FormService:
         query_text: str,
         max_suggestions: int = 10,
         published_only: bool = False,
+        unpublished_area_ids: Optional[set[UUID]] = None,
     ) -> List[str]:
         """Get autocomplete suggestions from form titles, keywords, and form numbers."""
         normalized_query = (query_text or "").strip()
@@ -534,13 +582,25 @@ class FormService:
         like_pattern = f"%{escaped_q}%"
 
         sql = text("""
+            WITH visible_forms AS (
+                SELECT f.id, f.title, f.keywords, f.form_number_reservation_id
+                FROM forms f
+                WHERE f.deleted_at IS NULL
+                  AND (:published_only = FALSE OR f.status = 'published')
+                  AND (
+                      :scope_unpublished = FALSE
+                      OR f.status = 'published'
+                      OR (
+                          f.status IN ('draft', 'pending_review')
+                          AND f.business_area_id = ANY(CAST(:unpublished_area_ids AS uuid[]))
+                      )
+                  )
+            )
             SELECT suggestion
             FROM (
                 SELECT DISTINCT f.title AS suggestion
-                FROM forms f
-                WHERE f.deleted_at IS NULL
-                                    AND (:published_only = FALSE OR f.status = 'published')
-                  AND f.title ILIKE :pattern ESCAPE '\\'
+                FROM visible_forms f
+                WHERE f.title ILIKE :pattern ESCAPE '\\'
 
                 UNION
 
@@ -548,18 +608,14 @@ class FormService:
                     jsonb_array_elements_text(
                         COALESCE(f.keywords::jsonb, '[]'::jsonb)
                     ) AS suggestion
-                FROM forms f
-                WHERE f.deleted_at IS NULL
-                                    AND (:published_only = FALSE OR f.status = 'published')
+                FROM visible_forms f
 
                 UNION
 
                 SELECT DISTINCT fnr.full_form_number AS suggestion
                 FROM form_number_reservations fnr
-                JOIN forms f ON f.form_number_reservation_id = fnr.id
-                WHERE f.deleted_at IS NULL
-                                    AND (:published_only = FALSE OR f.status = 'published')
-                  AND fnr.full_form_number ILIKE :pattern ESCAPE '\\'
+                JOIN visible_forms f ON f.form_number_reservation_id = fnr.id
+                WHERE fnr.full_form_number ILIKE :pattern ESCAPE '\\'
             ) s
             WHERE s.suggestion ILIKE :pattern ESCAPE '\\'
             ORDER BY s.suggestion ASC
@@ -572,6 +628,8 @@ class FormService:
                 "pattern": like_pattern,
                 "max_suggestions": min(max(max_suggestions, 1), 10),
                 "published_only": published_only,
+                "scope_unpublished": unpublished_area_ids is not None,
+                "unpublished_area_ids": list(unpublished_area_ids or ()),
             },
         ).fetchall()
 
@@ -583,8 +641,13 @@ class FormService:
 
     @staticmethod
     def update_form(
-        db: Session, form_id: UUID, updated_by_id: UUID,
-        expected_version: Optional[int] = None, **kwargs
+        db: Session,
+        form_id: UUID,
+        updated_by_id: UUID,
+        expected_version: Optional[int] = None,
+        allow_non_owner_draft: bool = False,
+        authorization: Optional[FormAuthorizationContext] = None,
+        **kwargs,
     ) -> Optional[Form]:
         """
         Update a form's content and advance its version without changing status.
@@ -605,7 +668,33 @@ class FormService:
         if not form:
             return None
 
-        if form.status == "draft" and form.created_by_id != updated_by_id:
+        if authorization is not None:
+            if authorization.user_id != updated_by_id or not authorization.can_edit(form):
+                raise PermissionError(_INSUFFICIENT_PERMISSIONS)
+            if (
+                "business_area_id" in kwargs
+                and kwargs["business_area_id"] != form.business_area_id
+                and not authorization.can_change_business_area(form)
+            ):
+                raise PermissionError("Only the form owner can change its business area")
+            if (
+                "form:edit:business_area" in authorization.permissions
+                and "form:edit:any" not in authorization.permissions
+                and "form_attachment_url" in kwargs
+                and kwargs["form_attachment_url"] not in (None, form.form_attachment_url)
+            ):
+                reference = kwargs["form_attachment_url"]
+                prefix = f"uploads/forms/{form.id}/"
+                if (
+                    not isinstance(reference, str)
+                    or not reference.startswith(prefix)
+                    or not _FORM_BOUND_KEY_SUFFIX.fullmatch(reference[len(prefix):])
+                ):
+                    raise PermissionError(_INSUFFICIENT_PERMISSIONS)
+
+        if form.status == "draft" and (
+            form.created_by_id != updated_by_id and not allow_non_owner_draft
+        ):
             raise PermissionError("Only the form creator can edit this draft")
         if form.status == "pending_review":
             raise PermissionError(
@@ -664,6 +753,25 @@ class FormService:
             return form
         form.current_version += 1
 
+        old_key = None
+        shared_old_key = False
+        if "form_attachment_url" in changed_fields and old_values["form_attachment_url"]:
+            old_key = FormService._extract_s3_object_key(
+                old_values["form_attachment_url"]
+            )
+            if old_key:
+                shared_old_key = bool(
+                    db.query(Form.id).filter(
+                        Form.id != form.id,
+                        Form.deleted_at.is_(None),
+                        Form.form_attachment_url.contains(old_key, autoescape=True),
+                    ).first()
+                    or db.query(FormVersion.id).filter(
+                        FormVersion.form_id != form.id,
+                        FormVersion.s3_key == old_key,
+                    ).first()
+                )
+
         # FEAT-0005 BUGFIX (2026-06-11): when the attachment changes on an
         # already-published form, the `form_versions` row that backs the
         # ``public_forms_v`` database view becomes stale (its s3_key now
@@ -704,14 +812,17 @@ class FormService:
         db.refresh(form)
         # External cleanup cannot be part of the database transaction. Do not
         # delete the old object until both the form and required audit are durable.
-        if "form_attachment_url" in changed_fields and old_values["form_attachment_url"]:
-            old_key = FormService._extract_s3_object_key(old_values["form_attachment_url"])
-            if old_key:
-                try:
-                    s3_service.delete_file(old_key)
-                except Exception:
-                    # Retain orphaned storage rather than report a committed save as failed.
-                    logger.warning("Superseded form attachment cleanup failed")
+        scoped_manager_edit = (
+            authorization is not None
+            and "form:edit:business_area" in authorization.permissions
+            and "form:edit:any" not in authorization.permissions
+        )
+        if old_key and not shared_old_key and not scoped_manager_edit:
+            try:
+                s3_service.delete_file(old_key)
+            except Exception:
+                # Retain orphaned storage rather than report a committed save as failed.
+                logger.warning("Superseded form attachment cleanup failed")
 
         return form
 
@@ -875,14 +986,28 @@ class FormService:
 
     @staticmethod
     def submit_form_for_review(
-        db: Session, form_id: UUID, user_id: UUID, expected_version: Optional[int] = None
+        db: Session,
+        form_id: UUID,
+        user_id: UUID,
+        expected_version: Optional[int] = None,
+        authorization: Optional[FormAuthorizationContext] = None,
     ) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
+        if authorization is not None and (
+            authorization.user_id != user_id
+            or not authorization.has_submit_scope(form)
+        ):
+            raise PermissionError(_INSUFFICIENT_PERMISSIONS)
+        FormService._validate_workflow_transition(form.status, "pending_review")
         if expected_version is not None and form.current_version != expected_version:
             raise FormWorkflowConflictError(
                 "Form version changed; reload and reconcile before submitting"
             )
         FormService._require_active_business_area(db, form.business_area_id)
+        if not form.title or not form.title.strip():
+            raise FormWorkflowValidationError("Form title is required")
+        if not form.description or not form.description.strip():
+            raise FormWorkflowValidationError("Form description is required")
 
         if form.form_number_reservation_id:
             reservation = (
@@ -915,13 +1040,9 @@ class FormService:
         allow_self_approve: bool = False,
     ) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
-
-        # BR-002: Separation of duties.
-        # Bypassed only when the caller explicitly holds form:approve-self (FEAT-0007).
-        if str(form.created_by_id) == str(approver_id) and not allow_self_approve:
-            raise FormWorkflowValidationError(
-                "You cannot approve your own form submission."
-            )
+        FormService._validate_approval_separation_of_duties(
+            db, form, approver_id, allow_self_approve
+        )
 
         return FormService._transition_form_status(
             db,
@@ -930,6 +1051,40 @@ class FormService:
             to_status="published",
             triggered_by_id=approver_id,
         )
+
+    @staticmethod
+    def _validate_approval_separation_of_duties(
+        db: Session,
+        form: Form,
+        approver_id: UUID,
+        allow_self_approve: bool,
+    ) -> None:
+        if allow_self_approve:
+            return
+
+        is_creator = str(form.created_by_id) == str(approver_id)
+        if is_creator:
+            raise FormWorkflowValidationError(
+                "You cannot approve your own form submission."
+            )
+
+        latest_submit = (
+            db.query(FormWorkflow)
+            .filter(
+                FormWorkflow.form_id == form.id,
+                FormWorkflow.action == "submit",
+                FormWorkflow.deleted_at.is_(None),
+            )
+            .order_by(desc(FormWorkflow.created_at))
+            .first()
+        )
+        is_latest_submitter = latest_submit is not None and str(
+            latest_submit.triggered_by_id
+        ) == str(approver_id)
+        if is_latest_submitter:
+            raise FormWorkflowValidationError(
+                "You cannot approve a form you most recently submitted."
+            )
 
     @staticmethod
     def reject_form(
@@ -951,8 +1106,16 @@ class FormService:
         )
 
     @staticmethod
-    def publish_form(db: Session, form_id: UUID, user_id: UUID) -> Form:
+    def publish_form(
+        db: Session,
+        form_id: UUID,
+        user_id: UUID,
+        allow_self_approve: bool = False,
+    ) -> Form:
         form = FormService._get_form_for_transition(db, form_id, lock=True)
+        FormService._validate_approval_separation_of_duties(
+            db, form, user_id, allow_self_approve
+        )
         return FormService._transition_form_status(
             db,
             form,

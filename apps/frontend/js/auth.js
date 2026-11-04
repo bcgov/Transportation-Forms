@@ -193,6 +193,13 @@ export function isStaffViewerOnly() {
   return context?.roles.length === 1 && context.roles[0] === 'staff_viewer';
 }
 
+export function isBusinessAreaManager() {
+  const context = _getAuthorizationContext();
+  return context?.roles.includes('business_area_manager') ?? false;
+}
+
+window.addEventListener('auth:authorization-refreshed', updateAuthUi);
+
 /**
  * Returns true when the current user's JWT permissions array contains the
  * specified granular permission string (e.g. 'form:approve').
@@ -209,7 +216,10 @@ export function hasPermission(permission) {
  * Returns true only when workflow metadata may be presented in the Forms UI.
  */
 export function canPresentFormWorkflowMetadata() {
-  return hasPermission('form:edit');
+  return (
+    hasPermission('form:view_workflow_state') ||
+    hasPermission('form:edit')
+  );
 }
 
 /**

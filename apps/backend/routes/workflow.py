@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.auth.authorization import has_permission, require_all_permissions
+from backend.auth.dependencies import get_current_user
+from backend.auth.form_authorization import load_form_authorization_context
 from backend.auth.jwt_handler import TokenData
 from backend.database import get_db
 from backend.models import AuditLog, Form, FormWorkflow, User
@@ -22,13 +24,13 @@ router = APIRouter(prefix="/staff/forms", tags=["Form Workflow"])
 
 # ─── Granular permission constants (BR-006) ───────────────────────────────────
 
-_PERM_SUBMIT = "form:submit_for_review"
 _PERM_APPROVE = "form:approve"
 _PERM_APPROVE_SELF = "form:approve-self"  # FEAT-0007
 _PERM_REVIEW = "form:review"
 _PERM_ARCHIVE = "form:archive"
 _PERM_CREATE = "form:create"  # FEAT-0016
 _PERM_EDIT = "form:edit"  # FEAT-0016
+_INSUFFICIENT_PERMISSIONS = "Insufficient permissions for this action"
 
 
 # ─── Pydantic models ──────────────────────────────────────────────────────────
@@ -121,6 +123,11 @@ def _handle_workflow_error(exc: Exception) -> NoReturn:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if isinstance(exc, FormWorkflowValidationError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    if isinstance(exc, PermissionError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_INSUFFICIENT_PERMISSIONS,
+        )
     if isinstance(exc, ValueError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form ID format"
@@ -137,7 +144,7 @@ def _rollback_unexpected(db: Session, exc: Exception) -> None:
     if not isinstance(
         exc, (
             FormNotFoundError, FormWorkflowConflictError,
-            FormWorkflowValidationError, ValueError,
+            FormWorkflowValidationError, PermissionError, ValueError,
         ),
     ):
         db.rollback()
@@ -209,31 +216,48 @@ async def list_pending_approvals(
 async def submit_form_for_review(
     form_id: str,
     request: SubmitRequest,
-    current_user: TokenData = Depends(require_all_permissions(_PERM_EDIT, _PERM_SUBMIT)),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
-    # FEAT-0013 / US-004: Only the form creator may submit for review (no admin bypass).
     try:
         form_uuid = UUID(form_id)
     except ValueError as exc:
         _handle_workflow_error(exc)
 
-    form_check = db.query(Form).filter(
-        Form.id == form_uuid, Form.deleted_at.is_(None)
-    ).first()
+    authorization = await load_form_authorization_context(current_user.sub, db)
+    if not (
+        authorization.has_any_scoped_permission("form:edit")
+        and authorization.has_any_scoped_permission("form:submit_for_review")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_INSUFFICIENT_PERMISSIONS,
+        )
+
+    form_check = (
+        db.query(Form).filter(Form.id == form_uuid, Form.deleted_at.is_(None)).first()
+    )
     if not form_check:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
         )
-    if str(form_check.created_by_id) != current_user.sub:
+    # In-scope callers who can read the form receive the service's 400 for an
+    # invalid state; everyone else gets 403 so hidden states are not revealed.
+    if not authorization.has_submit_scope(form_check) or (
+        form_check.status != "draft" and not authorization.can_read(form_check)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the form creator can submit for review",
+            detail=_INSUFFICIENT_PERMISSIONS,
         )
 
     try:
         form = FormService.submit_form_for_review(
-            db, form_uuid, UUID(current_user.sub), request.expected_version
+            db,
+            form_uuid,
+            UUID(current_user.sub),
+            request.expected_version,
+            authorization=authorization,
         )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
@@ -300,8 +324,16 @@ async def publish_form(
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
     """Legacy endpoint retained for backward compatibility. Use /approve instead."""
+    allow_self_approve = await has_permission(
+        current_user.sub, _PERM_APPROVE_SELF, db
+    )
     try:
-        form = FormService.publish_form(db, UUID(form_id), UUID(current_user.sub))
+        form = FormService.publish_form(
+            db,
+            UUID(form_id),
+            UUID(current_user.sub),
+            allow_self_approve=allow_self_approve,
+        )
         return _to_status_response(form)
     except Exception as exc:  # noqa: BLE001
         _rollback_unexpected(db, exc)
@@ -370,7 +402,7 @@ async def archive_form(
 @router.post("/{form_id}/restore", response_model=WorkflowStatusResponse)
 async def restore_form(
     form_id: str,
-    current_user: TokenData = Depends(require_all_permissions(_PERM_APPROVE)),
+    current_user: TokenData = Depends(require_all_permissions(_PERM_ARCHIVE)),
     db: Session = Depends(get_db),
 ) -> WorkflowStatusResponse:
     try:

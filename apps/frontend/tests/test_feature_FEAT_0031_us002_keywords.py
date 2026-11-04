@@ -49,7 +49,7 @@ def test_keyword_controls_and_feedback_are_accessible_and_locked():
     assert "input.disabled" in widget
     assert "setKeywordsLocked(locked)" in form
     assert "!hasPermission('form:create')" in form
-    assert "!hasPermission('form:edit')" in form
+    assert "!_currentFormAvailableActions.includes('edit')" in form
 
 
 def test_unchanged_legacy_keywords_are_not_resubmitted_on_edit():
