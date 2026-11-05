@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>bcgov/renovate-config"
+    "github>bcgov/renovate-config#2026.9.26"
   ],
   "description": ["Automerge is off by default; matching packageRules can enable it."],
   "automerge": false,
