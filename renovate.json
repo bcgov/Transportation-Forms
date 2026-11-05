@@ -2,5 +2,10 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "github>bcgov/renovate-config"
-  ]
+  ],
+  "description": ["Automerge is off by default; matching packageRules can enable it."],
+  "automerge": false,
+  "pip_requirements": {
+    "managerFilePatterns": ["/^constraints\\.txt$/"]
+  }
 }
