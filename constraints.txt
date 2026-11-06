@@ -22,7 +22,7 @@ azure-core==1.41.0
 azure-identity==1.25.3
 babel==2.18.0
 bandit==1.9.4
-black==26.5.1
+black==26.10.1
 boto3==1.43.15
 botocore==1.43.15
 certifi==2026.5.20
