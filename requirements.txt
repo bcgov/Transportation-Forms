@@ -29,7 +29,7 @@ python-keycloak==7.1.1
 
 # Azure AD / OIDC (Phase 2 - User lookup only, not authentication)
 azure-identity==1.25.3
-msal==1.36.0
+msal==1.39.0
 
 # AWS S3
 boto3==1.43.15
