@@ -1,9 +1,9 @@
-﻿# syntax=docker/dockerfile:1.7
+﻿# syntax=docker/dockerfile:1.28
 # public-frontend image
 # Single-stage vanilla NGINX build
 
 # Stage 1: Runtime
-FROM nginx:1.31.1-alpine AS runtime
+FROM nginx:1.31.7-alpine AS runtime
 
 # Adapt for OpenShift's arbitrary-UID security model (OpenShift assigns a
 # random UID at runtime; we run as non-root group 0).
