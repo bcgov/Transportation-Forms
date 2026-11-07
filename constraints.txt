@@ -14,7 +14,7 @@ aiofiles==25.1.0
 alabaster==1.0.0
 alembic==1.18.4
 annotated-doc==0.0.4
-annotated-types==0.7.0
+annotated-types==0.8.0
 anyio==4.13.0
 astroid==4.0.4
 asttokens==3.0.1
@@ -89,7 +89,7 @@ psycopg-binary==3.3.4
 pure_eval==0.2.3
 pycodestyle==2.14.0
 pycparser==3.0
-pydantic_core==2.46.4
+pydantic_core==2.50.2
 pydantic==2.13.4
 pydantic-extra-types==2.11.1
 pydantic-settings==2.14.2
